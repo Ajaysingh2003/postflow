@@ -112,7 +112,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    security_opt: *security_options
+    networks:
+      default:
+        aliases:
+          - postgres
 
   redis:
     image: redis:7-alpine
@@ -126,6 +129,10 @@ services:
       timeout: 3s
       retries: 10
     security_opt: *security_options
+    networks:
+      default:
+        aliases:
+          - redis
 
   clamav:
     image: clamav/clamav-debian:1.5.4
@@ -138,3 +145,8 @@ volumes:
   postgres_data:
   redis_data:
   clamav_data:
+
+networks:
+  default:
+    name: postflow_default
+

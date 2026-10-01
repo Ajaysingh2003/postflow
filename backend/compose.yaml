@@ -1,0 +1,140 @@
+name: postflow
+
+services:
+  migrate:
+    build:
+      context: .
+      target: runtime
+    command: ["migrate"]
+    restart: "no"
+    env_file:
+      - path: ./.env
+        required: false
+    environment: &app_environment
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:-change-me}@postgres:5432/postflow
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt: &security_options
+      - no-new-privileges:true
+    read_only: true
+    tmpfs: &app_tmpfs
+      - /tmp:size=64m,mode=1777
+
+  api:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: ./.env
+        required: false
+    environment: *app_environment
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro
+    depends_on: &app_dependencies
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt: *security_options
+    read_only: true
+    tmpfs: *app_tmpfs
+    stop_grace_period: 30s
+
+  worker:
+    build:
+      context: .
+      target: runtime
+    command: ["worker"]
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: ./.env
+        required: false
+    environment: *app_environment
+    volumes:
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro
+    depends_on: *app_dependencies
+    security_opt: *security_options
+    read_only: true
+    tmpfs: *app_tmpfs
+    stop_grace_period: 60s
+
+  scheduler:
+    build:
+      context: .
+      target: runtime
+    command: ["scheduler"]
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: ./.env
+        required: false
+    environment: *app_environment
+    volumes:
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro
+    depends_on: *app_dependencies
+    security_opt: *security_options
+    read_only: true
+    tmpfs: *app_tmpfs
+    stop_grace_period: 60s
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postflow
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d postflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt: *security_options
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    security_opt: *security_options
+
+  clamav:
+    image: clamav/clamav-debian:1.5.4
+    restart: unless-stopped
+    volumes:
+      - clamav_data:/var/lib/clamav
+    security_opt: *security_options
+
+volumes:
+  postgres_data:
+  redis_data:
+  clamav_data:

@@ -1,0 +1,43 @@
+# ruff: noqa: I001
+
+import os
+import tempfile
+
+import pytest
+from fastapi.testclient import TestClient
+
+
+database_fd, database_path = tempfile.mkstemp(suffix=".db")
+os.close(database_fd)
+os.environ["APP_ENV"] = "test"
+os.environ["DATABASE_URL"] = f"sqlite:///{database_path}"
+os.environ["APP_SECRET"] = "test-secret-that-is-long-enough-for-tests"
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
+from app.db import models as _models  # noqa: F401
+from app.db.base import Base
+from app.db.session import engine
+from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def reset_database():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+@pytest.fixture
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def auth(client: TestClient) -> dict[str, str]:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": "owner@example.com", "password": "correct horse battery", "name": "Owner"},
+    )
+    assert response.status_code == 201, response.text
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}

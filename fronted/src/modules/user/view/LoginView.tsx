@@ -33,26 +33,32 @@ function LoginView() {
   const isLoading = googleSignIn.isPending;
 
   return (
-    <div className="flex min-h-[calc(100dvh-9rem)] w-full flex-col">
+    <div className="flex   min-h-[calc(100dvh-4rem)] w-full flex-col">
       <div className="flex flex-1 w-full items-center justify-center p-4">
-        <div className="flex w-full max-w-xs flex-col items-center justify-center gap-2">
+        <div className="flexz card-shadow block bg-background p-6 mt-4 card w-full sm:w-98 relative z-10  rounded-lg  flex-col items-center justify-center ">
           {/* Heading */}
-          <div className="text-center space-y-1">
+          <div className=" space-y-1">
             <h2 className="text-2xl font-semibold tracking-tight text-foreground font-heading">
-              Welcome back
+              Sign in to Postflow
             </h2>
-            <p className="text-xs text-muted-foreground">
-              Choose your preferred sign-in method
+            <p className="text-[14px] font-medium text-muted-foreground">
+              Don't have an account?{" "}
+              <a
+                href="/auth/register"
+                className="font-medium text-brand-primary underline-offset-4 hover:underline"
+              >
+                Sign up
+              </a>
             </p>
           </div>
 
           {/* Social Auth Providers */}
-          <div className="mt-3 flex w-full flex-col gap-2">
+          <div className="mt-6 grid grid-cols-2 gap-2">
             <Button
               type="button"
               variant="outline"
               disabled={isLoading}
-              className="relative w-full rounded-md border-border !bg-primary text-foreground hover:bg-muted/50 transition-zcolors"
+              className="relative w-full font-medium rounded-md border-border !bg-primary text-foreground hover:bg-muted/50 transition-zcolors"
               onClick={() => googleSignIn.mutate()}
             >
               {googleSignIn.isPending ? (
@@ -66,7 +72,27 @@ function LoginView() {
                   className="mr-2 shrink-0"
                 />
               )}
-              <span className="text-xs font-medium">Continue with Google</span>
+              <span className="text-xs font-medium">Google</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLoading}
+              className="relative w-full font-medium rounded-md border-border !bg-primary text-foreground hover:bg-muted/50 transition-zcolors"
+              onClick={() => googleSignIn.mutate()}
+            >
+              {googleSignIn.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                <Image
+                  src="/channels/x.jpeg"
+                  height={16}
+                  width={16}
+                  alt="X logo"
+                  className="mr-2 shrink-0"
+                />
+              )}
+              <span className="text-xs font-medium">X</span>
             </Button>
 
           </div>

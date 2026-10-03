@@ -9,7 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.safe_http import PublicTransport
+from app.core.security import as_utc
 from app.db.session import SessionLocal
+from app.modules.channels.adapters.management import MastodonManagement
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -21,10 +24,11 @@ from app.modules.channels.base import (
 )
 from app.modules.channels.models import ConnectedAccount, MastodonApp
 from app.modules.channels.oauth import decrypt_token, encrypt_token
+from app.modules.channels.support import AdapterHTTP
 
 logger = logging.getLogger(__name__)
 
-MASTODON_DEFAULT_SCOPES = "read write push"
+MASTODON_DEFAULT_SCOPES = "read:accounts read:statuses write:statuses write:media"
 DEFAULT_INSTANCE_CHAR_LIMIT = 500
 DEFAULT_INSTANCE_MEDIA_LIMIT = 4
 
@@ -39,7 +43,7 @@ def normalize_domain(domain: str) -> str:
     return clean.rstrip("/").split("/")[0]
 
 
-class MastodonAdapter:
+class MastodonAdapter(MastodonManagement):
     """
     Platform adapter for Mastodon.
     Registers an OAuth app dynamically on the user's specific instance,
@@ -58,7 +62,7 @@ class MastodonAdapter:
         settings = get_settings()
         self.client_name = client_name
         self.website = website
-        self.redirect_base_url = settings.oauth_redirect_base_url
+        self.redirect_base_url = settings.oauth_callback_url(self.platform)
         self._http_client = http_client
 
         self.capabilities = Capabilities(
@@ -67,7 +71,13 @@ class MastodonAdapter:
             max_text_length=500,  # Vanilla default, dynamically verified per instance
             text_length_type="characters",
             supports_media=True,
-            supported_media_types=["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"],
+            supported_media_types=[
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "image/gif",
+                "video/mp4",
+            ],
             max_media_count=4,  # Vanilla default, dynamically verified per instance
             supports_video=True,
             max_video_duration_seconds=300,
@@ -83,10 +93,12 @@ class MastodonAdapter:
             supports_scheduling=True,
         )
 
+    from app.modules.channels.adapters.media import upload_mastodon as prepare_media
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._http_client is not None:
             return self._http_client
-        return httpx.AsyncClient(timeout=30.0)
+        return AdapterHTTP(self.platform, transport=PublicTransport(), trust_env=False)
 
     async def get_or_register_app(
         self,
@@ -120,7 +132,9 @@ class MastodonAdapter:
                 await client.aclose()
 
         if resp.status_code not in {200, 201}:
-            logger.error("Failed to register app on Mastodon instance '%s': %s", clean_domain, resp.text)
+            logger.error(
+                "Failed to register app on Mastodon instance '%s': %s", clean_domain, resp.text
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Could not register application on Mastodon instance '{clean_domain}': {resp.text}",
@@ -165,6 +179,8 @@ class MastodonAdapter:
                     "max_media_attachments": max_media,
                     "title": data.get("title", clean_domain),
                     "version": data.get("version"),
+                    "polls": data.get("configuration", {}).get("polls", {}),
+                    "fetched_at": datetime.now(UTC).isoformat(),
                 }
 
             # Fallback to v1
@@ -177,6 +193,8 @@ class MastodonAdapter:
                     "max_media_attachments": max_media,
                     "title": data_v1.get("title", clean_domain),
                     "version": data_v1.get("version"),
+                    "polls": data_v1.get("configuration", {}).get("polls", {}),
+                    "fetched_at": datetime.now(UTC).isoformat(),
                 }
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not fetch instance config for '%s': %s", clean_domain, exc)
@@ -184,11 +202,7 @@ class MastodonAdapter:
             if self._http_client is None:
                 await client.aclose()
 
-        return {
-            "max_characters": max_chars,
-            "max_media_attachments": max_media,
-            "title": clean_domain,
-        }
+        raise HTTPException(503, "Cannot read limits from this Mastodon instance")
 
     async def build_auth_url(self, workspace_id: str, state: str, **opts: Any) -> AuthStart:
         """
@@ -221,6 +235,8 @@ class MastodonAdapter:
             "scope": app.scopes,
             "state": state,
         }
+        if opts.get("code_challenge"):
+            params.update(code_challenge=opts["code_challenge"], code_challenge_method="S256")
         auth_url = f"https://{clean_domain}/oauth/authorize?{urllib.parse.urlencode(params)}"
         return AuthStart(
             auth_url=auth_url,
@@ -281,6 +297,7 @@ class MastodonAdapter:
                     "client_id": client_id,
                     "client_secret": client_secret,
                     "grant_type": "authorization_code",
+                    "code_verifier": opts.get("code_verifier") or "",
                     "code": code,
                     "redirect_uri": redirect_uri,
                     "scope": scopes,
@@ -291,7 +308,9 @@ class MastodonAdapter:
                 await client.aclose()
 
         if token_resp.status_code != 200:
-            logger.error("Mastodon token exchange failed on '%s': %s", clean_domain, token_resp.text)
+            logger.error(
+                "Mastodon token exchange failed on '%s': %s", clean_domain, token_resp.text
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Mastodon token exchange failed: {token_resp.text}",
@@ -317,7 +336,9 @@ class MastodonAdapter:
             account_type="profile",
             encrypted_access_token=encrypt_token(access_token),
             encrypted_refresh_token=None,  # Mastodon standard bearer tokens are long-lived
-            token_expires_at=datetime.now(UTC) + timedelta(days=365),
+            token_expires_at=(datetime.now(UTC) + timedelta(seconds=token_data["expires_in"]))
+            if token_data.get("expires_in")
+            else None,
             granted_scopes=scopes.split(" "),
             status="active",
             account_metadata={
@@ -326,6 +347,7 @@ class MastodonAdapter:
                 "user_id": user_id,
                 "acct": acct,
                 "avatar": user_info.get("avatar"),
+                "avatar_url": user_info.get("avatar"),
                 "instance_config": instance_cfg,
             },
         )
@@ -390,7 +412,7 @@ class MastodonAdapter:
 
         client = await self._get_client()
         try:
-            await client.post(
+            resp = await client.post(
                 f"https://{domain}/oauth/revoke",
                 data={
                     "client_id": client_id,
@@ -398,8 +420,10 @@ class MastodonAdapter:
                     "token": raw_access,
                 },
             )
-        except Exception as exc:  # noqa: BLE001
+            resp.raise_for_status()
+        except Exception as exc:
             logger.warning("Error revoking Mastodon token on '%s': %s", domain, exc)
+            raise
         finally:
             if self._http_client is None:
                 await client.aclose()
@@ -408,6 +432,30 @@ class MastodonAdapter:
         """Mastodon publishes to the authenticated user's home timeline."""
         return []
 
+    async def prepare_validation(self, variant, db):
+        account = getattr(variant, "validation_account", None)
+        if not account or not account.account_metadata.get("instance_domain"):
+            return
+        config = account.account_metadata.get("instance_config", {})
+        fetched = config.get("fetched_at")
+        if fetched and as_utc(datetime.fromisoformat(fetched)) > datetime.now(UTC) - timedelta(
+            hours=24
+        ):
+            return
+        config = await self.fetch_instance_config(account.account_metadata["instance_domain"])
+        account.account_metadata = {**account.account_metadata, "instance_config": config}
+        db.add(account)
+        db.flush()
+
+    def account_capabilities(self, account):
+        config = account.account_metadata.get("instance_config", {})
+        return self.capabilities.model_copy(
+            update={
+                "max_text_length": config.get("max_characters", 500),
+                "max_media_count": config.get("max_media_attachments", 4),
+            }
+        )
+
     async def validate(self, variant: Any) -> list[Issue]:
         """
         Validate post text and media against the instance's dynamic limits.
@@ -415,18 +463,27 @@ class MastodonAdapter:
         issues: list[Issue] = []
         payload = getattr(variant, "payload", {})
         if not isinstance(payload, dict):
-            return [Issue(field="payload", message="Invalid variant payload format", severity="error")]
+            return [
+                Issue(field="payload", message="Invalid variant payload format", severity="error")
+            ]
 
+        if "thread" in payload:
+            from app.modules.channels.adapters.threading import validate_thread
+
+            return await validate_thread(self, variant)
         text = payload.get("text", "")
         if not text and not payload.get("media_ids"):
-            issues.append(Issue(field="text", message="Mastodon post cannot be empty", severity="error"))
+            issues.append(
+                Issue(field="text", message="Mastodon post cannot be empty", severity="error")
+            )
 
         # Read dynamic limit from instance_config if stored on variant/payload
-        instance_cfg = payload.get("instance_config", {})
+        account = getattr(variant, "validation_account", None)
+        instance_cfg = account.account_metadata.get("instance_config", {}) if account else {}
         max_chars = instance_cfg.get("max_characters", self.capabilities.max_text_length)
         max_media = instance_cfg.get("max_media_attachments", self.capabilities.max_media_count)
 
-        if len(text) > max_chars:
+        if len(text) + len(payload.get("spoiler_text") or "") > max_chars:
             issues.append(
                 Issue(
                     field="text",
@@ -436,6 +493,26 @@ class MastodonAdapter:
                 )
             )
 
+        poll = payload.get("poll")
+        if poll:
+            limits = instance_cfg.get("polls", {})
+            options = poll.get("options", [])
+            if (
+                not 2 <= len(options) <= limits.get("max_options", 4)
+                or any(
+                    not item or len(item) > limits.get("max_characters_per_option", 50)
+                    for item in options
+                )
+                or not limits.get("min_expiration", 300)
+                <= poll.get("expires_in", 86400)
+                <= limits.get("max_expiration", 2629746)
+                or payload.get("media_ids")
+            ):
+                issues.append(
+                    Issue(
+                        field="poll", message="Invalid poll options, duration or conflicting media"
+                    )
+                )
         media_ids = payload.get("media_ids", [])
         if len(media_ids) > max_media:
             issues.append(
@@ -454,6 +531,15 @@ class MastodonAdapter:
         Publish status toot via POST https://{instance}/api/v1/statuses.
         Supports spoiler_text (content warning) and visibility.
         """
+        if "thread" in variant.payload:
+            from app.modules.channels.adapters.threading import publish_thread
+
+            return await publish_thread(
+                self,
+                account,
+                variant,
+                lambda rows: {"in_reply_to_id": rows[-1]["id"]} if rows else {},
+            )
         raw_access = decrypt_token(account.encrypted_access_token)
         domain = account.account_metadata.get("instance_domain")
         if not raw_access or not domain:
@@ -481,6 +567,12 @@ class MastodonAdapter:
             data["media_ids[]"] = [str(m) for m in media_ids]
         if in_reply_to_id:
             data["in_reply_to_id"] = str(in_reply_to_id)
+        if payload.get("poll"):
+            poll = payload["poll"]
+            data["poll[options][]"] = poll["options"]
+            data["poll[expires_in]"] = poll.get("expires_in", 86400)
+            data["poll[multiple]"] = str(poll.get("multiple", False)).lower()
+            data["poll[hide_totals]"] = str(poll.get("hide_totals", False)).lower()
 
         headers = {
             "Authorization": f"Bearer {raw_access}",
@@ -501,6 +593,7 @@ class MastodonAdapter:
                 success=False,
                 error_message=f"Network error: {exc}",
                 is_retryable=True,
+                outcome_unknown=isinstance(exc, httpx.TransportError),
             )
         finally:
             if self._http_client is None:
@@ -508,8 +601,11 @@ class MastodonAdapter:
 
         if resp.status_code in {200, 201}:
             res_json = resp.json()
-            status_id = str(res_json.get("id"))
-            status_url = res_json.get("url") or f"https://{domain}/@{account.account_metadata.get('username')}/{status_id}"
+            status_id = str(res_json["id"]) if res_json.get("id") else None
+            status_url = (
+                res_json.get("url")
+                or f"https://{domain}/@{account.account_metadata.get('username')}/{status_id}"
+            )
             return PublishResult(
                 success=True,
                 external_post_id=status_id,
@@ -517,7 +613,7 @@ class MastodonAdapter:
                 raw_response=res_json,
             )
 
-        is_retryable = resp.status_code in {429, 500, 502, 503, 504}
+        is_retryable = resp.status_code == 429
         error_msg = f"Mastodon API error (HTTP {resp.status_code}): {resp.text}"
         logger.warning("Mastodon publish failed on '%s': %s", domain, error_msg)
 
@@ -526,6 +622,9 @@ class MastodonAdapter:
             error_message=error_msg,
             raw_response={"status_code": resp.status_code, "body": resp.text},
             is_retryable=is_retryable,
+            status_code=resp.status_code,
+            auth_error=resp.status_code == 401,
+            outcome_unknown=resp.status_code >= 500,
         )
 
     async def delete_post(self, account: ConnectedAccount, external_post_id: str) -> None:
@@ -548,8 +647,12 @@ class MastodonAdapter:
                 await client.aclose()
 
         if resp.status_code not in {200, 204, 404}:
-            logger.warning("Failed to delete Mastodon status %s on %s: %s", external_post_id, domain, resp.text)
-            raise RuntimeError(f"Failed to delete Mastodon status (HTTP {resp.status_code}): {resp.text}")
+            logger.warning(
+                "Failed to delete Mastodon status %s on %s: %s", external_post_id, domain, resp.text
+            )
+            raise RuntimeError(
+                f"Failed to delete Mastodon status (HTTP {resp.status_code}): {resp.text}"
+            )
 
     async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
         """
@@ -571,8 +674,13 @@ class MastodonAdapter:
                 await client.aclose()
 
         if resp.status_code != 200:
-            logger.warning("Failed to fetch Mastodon metrics for %s on %s: %s", external_post_id, domain, resp.text)
-            return Metrics()
+            logger.warning(
+                "Failed to fetch Mastodon metrics for %s on %s: %s",
+                external_post_id,
+                domain,
+                resp.text,
+            )
+            raise RuntimeError("Metrics request failed or is unsupported")
 
         data = resp.json()
         favs = data.get("favourites_count", 0)
@@ -582,13 +690,17 @@ class MastodonAdapter:
         total_engagements = favs + reblogs + replies
 
         return Metrics(
-            impressions=total_engagements,
-            reach=total_engagements,
+            impressions=0,
+            reach=0,
             engagements=total_engagements,
             likes=favs,
             comments=replies,
             shares_reposts=reblogs,
-            extras={"visibility": data.get("visibility"), "replies_count": replies},
+            extras={
+                "visibility": data.get("visibility"),
+                "replies_count": replies,
+                "unavailable_metrics": ["impressions", "reach", "clicks"],
+            },
         )
 
     async def fetch_account_metrics(self, account: ConnectedAccount) -> AccountMetrics:
@@ -612,7 +724,7 @@ class MastodonAdapter:
 
         if resp.status_code != 200:
             logger.warning("Failed to fetch Mastodon account metrics on %s: %s", domain, resp.text)
-            return AccountMetrics()
+            raise RuntimeError("Account metrics request failed or is unsupported")
 
         data = resp.json()
         followers = data.get("followers_count", 0)

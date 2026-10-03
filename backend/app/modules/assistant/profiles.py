@@ -204,3 +204,121 @@ ALL_PROFILES: dict[str, AssistantProfile] = {
     "instagram": INSTAGRAM_PROFILE,
     "shared": SHARED_PROFILE,
 }
+
+
+# Each profile owns the translation of its structured writing outputs into
+# real draft payloads. Outlines, risk assessments and alt-text suggestions are
+# advisory objects, not fictitious posts.
+def text_payloads(fields, payload_field="text"):
+    def build(output, inputs, context):
+        values = []
+        for name in fields:
+            value = output.get(name)
+            if isinstance(value, str):
+                values.append(value)
+            elif isinstance(value, list):
+                values.extend(v for v in value if isinstance(v, str))
+        if output.get("rewritten_text"):
+            values.append(output["rewritten_text"])
+        return [{**context, payload_field: text} for text in values]
+
+    return build
+
+
+def reddit_payloads(output, inputs, context):
+    base = {
+        **context,
+        "subreddit": inputs.get("subreddit") or context.get("subreddit", ""),
+        "post_type": output.get("post_type", "text"),
+    }
+    if output.get("titles"):
+        return [
+            {**base, "title": title, "body": inputs.get("draft", "")} for title in output["titles"]
+        ]
+    if output.get("title") or output.get("rewritten_text"):
+        return [
+            {
+                **base,
+                "title": output.get("title") or context.get("title", ""),
+                "body": output.get("body")
+                or output.get("rewritten_body")
+                or output.get("rewritten_text", ""),
+            }
+        ]
+    return [
+        {**context.get(angle.get("subreddit", ""), {}), **angle, "post_type": "text"}
+        for angle in (output.get("adapted_posts") or [])
+    ]
+
+
+def linkedin_payloads(output, inputs, context):
+    if output.get("question") and output.get("options"):
+        return [
+            {
+                **context,
+                "text": output.get("intro_text", ""),
+                "poll": {
+                    "question": output["question"],
+                    "options": output["options"],
+                    "duration": "SEVEN_DAYS",
+                },
+            }
+        ]
+    return text_payloads(["full_post", "first_comment", "alternatives"])(output, inputs, context)
+
+
+X_PROFILE.payload_builder = text_payloads(
+    ["tweets", "hooks", "compressed_post", "replies", "quote_posts", "summary_post", "text"]
+)
+LINKEDIN_PROFILE.payload_builder = linkedin_payloads
+REDDIT_PROFILE.payload_builder = reddit_payloads
+BLUESKY_PROFILE.payload_builder = text_payloads(["post", "posts"])
+MASTODON_PROFILE.payload_builder = text_payloads(["content"])
+FACEBOOK_PROFILE.payload_builder = text_payloads(
+    ["post_copy", "questions", "caption", "cta_options"]
+)
+INSTAGRAM_PROFILE.payload_builder = text_payloads(["caption"], "caption")
+THREADS_PROFILE = AssistantProfile(
+    platform="threads",
+    display_name="Threads",
+    system_instructions="Write conversational Threads posts within 500 characters. Use accessible media descriptions.",
+    character_limit=500,
+    feature_ids=["threads_post"],
+    payload_builder=text_payloads(["post_copy"]),
+)
+ALL_PROFILES["threads"] = THREADS_PROFILE
+
+
+async def prepare_reddit_input(inputs, db):
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    from fastapi import HTTPException
+    from sqlalchemy import select
+
+    from app.core.security import as_utc
+    from app.modules.channels.models import SubredditProfile
+
+    if not inputs.get("subreddit") or not db:
+        return
+    name = inputs["subreddit"].strip().removeprefix("r/").lower()
+    subreddit = db.scalar(select(SubredditProfile).where(SubredditProfile.name == name))
+    if (
+        not subreddit
+        or not subreddit.fetched_at
+        or as_utc(subreddit.fetched_at) < datetime.now(UTC) - timedelta(hours=24)
+    ):
+        raise HTTPException(422, "Fresh cached subreddit rules are required for this feature")
+    inputs["rules_summary"] = json.dumps(
+        {
+            "rules": subreddit.rules,
+            "title_requirements": subreddit.title_requirements,
+            "allowed_types": subreddit.allowed_post_types,
+            "flair_required": subreddit.flair_required,
+        }
+    )
+    if "available_flairs" in inputs:
+        inputs["available_flairs"] = [f.get("text", "") for f in subreddit.available_flairs]
+
+
+REDDIT_PROFILE.prepare_input = prepare_reddit_input

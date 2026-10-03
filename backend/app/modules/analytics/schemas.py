@@ -89,8 +89,8 @@ class PostAnalyticsResponse(BaseModel):
 
 class LimitUsageDetail(BaseModel):
     used: int
-    limit: int
-    remaining: int
+    limit: int | None
+    remaining: int | None
 
 
 class PlanLimitsResponse(BaseModel):

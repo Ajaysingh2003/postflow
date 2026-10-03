@@ -1,72 +1,48 @@
-# postflow Backend
+# postflow backend
 
-FastAPI modular monolith backend for **postflow**, a multi-channel social media scheduling and writing platform supporting X, LinkedIn, Reddit, Bluesky, Mastodon, Facebook Pages, Instagram Business/Creator, and Threads.
+FastAPI, SQLAlchemy 2, Alembic and Pydantic Settings, with a database-backed polling publisher and Redis for shared outbound limits. PostgreSQL is used by Compose; SQLite supports local development.
 
-## Key Capabilities
+Eight adapters are registered: X, LinkedIn, Reddit, Bluesky, Mastodon, Facebook Pages, Instagram professional accounts, and Threads. Provider requests are covered by mocked tests; this is not a claim of production access or successful live publishing. See [implementation status](IMPLEMENTATION_STATUS.md) and the [repair and provider report](docs/backend-repairs-2026-10-02.md).
 
-- **Official OAuth & Adapters**: Dedicated adapters for X, LinkedIn, Reddit, Bluesky, Mastodon, Facebook, and Instagram adhering strictly to official APIs and developer policies. No scraping, no unofficial endpoints.
-- **Publishing Pipeline**: Per-variant scheduling, distributed sliding-window rate limiting, idempotency keys, exponential backoff retries, and comprehensive audit logs in `publish_attempts`.
-- **Platform-Aware AI Assistant**: Feature registry and per-platform profiles providing 32 distinct writing and formatting tools (threads, carousels, subreddit compliance checks, alt text, hooks, voice tone training).
-- **Multi-Tenant Workspaces & RBAC**: Tenant-scoped data access, role enforcement (`owner`, `admin`, `editor`, `billing`, `member`), session management with Argon2id and SHA-256 token hashing.
-- **Analytics & Billing**: Plan limits enforcement for connected accounts, scheduled queue size, and assistant usage; aggregated metrics across platforms and variants.
-- **Cryptographic Security**: Stored OAuth tokens and secrets encrypted at rest via Fernet; untrusted external URLs safely encapsulated during AI workflows.
+## Run locally
 
-## Architecture
+From `backend`:
 
-```
-backend/app/
-  core/            # Config, security, crypto, Redis client, rate limits
-  db/              # SQLAlchemy session, engine, model base
-  jobs/            # Background job runners (publishing, profile sync, metrics)
-  modules/
-    identity/      # Users, auth, sessions, password reset, Google sign-in
-    workspaces/    # Multi-tenant workspaces, members, invitations
-    billing/       # Plans, subscriptions, usage ledger, entitlements
-    channels/      # Base protocol, registry, OAuth handling, platform adapters
-    content/       # Posts, variants, ideas, pillars
-    media/         # Asset management, R2 storage, validation
-    publishing/    # Queue dispatch, scheduler, execution pipeline, rate limiter
-    assistant/     # Feature registry, platform profiles, LLM client, voice profiles
-    analytics/     # Metrics aggregation, overview, and synchronization
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+cp .env.example .env
+# Set APP_SECRET and the provider/storage/email configuration you need.
+.venv/bin/alembic upgrade head
+.venv/bin/uvicorn app.main:app --reload --port 18000
 ```
 
-## Running the Application
+Run the publishing worker and maintenance scheduler in separate terminals:
 
-### Local Development
+```sh
+.venv/bin/python -c "from app.jobs.runner import run; run('worker')"
+.venv/bin/python -c "from app.jobs.runner import run; run('scheduler')"
+```
 
-1. Create a virtual environment and install dependencies:
-   ```sh
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -e '.[dev]'
-   ```
+Redis is required in production. Mock AI output is explicitly opt-in and prohibited in production. Real AI requires `LLM_PROVIDER_URL`, `LLM_PROVIDER_API_KEY` and `LLM_MODEL`. Uploads require R2/S3 and ClamAV. Verification, password-reset and invitation emails require SMTP with verified STARTTLS.
 
-2. Configure environment:
-   ```sh
-   cp .env.example .env
-   # Update APP_SECRET, DATABASE_URL, and OAuth credentials as required
-   ```
+Set `OAUTH_REDIRECT_BASE_URL` to your public API callback template, ending in `/api/v1/channels/{platform}/callback`. Register the concrete URL for each app. Bluesky needs a public HTTPS client-metadata URL and a P-256 client signing key; see the report.
 
-3. Run migrations and start the server:
-   ```sh
-   alembic upgrade head
-   uvicorn app.main:app --reload --port 18000
-   ```
-
-### Running with Docker Compose
+Compose runs the migrations before the API, worker and scheduler:
 
 ```sh
 docker compose up --build -d
 ```
 
-## Verification & Testing
-
-Run code formatting, linter, and the automated test suite:
+## Verify
 
 ```sh
-# Linting
-ruff check app tests migrations
-
-# Automated tests (132 passing tests)
-pytest tests/ -v
+.venv/bin/ruff check app tests migrations
+.venv/bin/pytest -o addopts='' -q
 ```
+
+The regression suite checks workspace isolation, publication claims and uncertain outcomes, media processing and resume, OAuth replay/DPoP, quota and AI usage accounting, analytics coverage, and an additive migration with existing records. `GET /health` and `GET /ready` provide basic health/database checks.
+
+The backend CI workflow runs SQLite checks on Python 3.12 and 3.14 and a separate PostgreSQL/Redis job. Optional service tests use an explicitly isolated database named `postflow_test` through `POSTFLOW_TEST_DATABASE_URL`; never point the test suite at application data.
+
+The new migration is additive. Existing application/production databases have not been reset or migrated by this repair task; run `alembic upgrade head` against the intended database before starting the updated application.

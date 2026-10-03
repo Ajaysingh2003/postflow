@@ -6,6 +6,7 @@ from app.modules.billing.models import (
     BillingCustomer,
     BillingWebhookEvent,
     EntitlementGrant,
+    Plan,
     Subscription,
     UsageLedger,
 )
@@ -16,6 +17,7 @@ from app.modules.channels.models import (
     SubredditProfile,
 )
 from app.modules.content.models import (
+    ContentTemplate,
     Post,
     PostVariant,
     PostVariantMedia,
@@ -42,6 +44,7 @@ __all__ = [
     "BillingCustomer",
     "BillingWebhookEvent",
     "ConnectedAccount",
+    "ContentTemplate",
     "EmailVerificationToken",
     "EntitlementGrant",
     "MastodonApp",
@@ -50,6 +53,7 @@ __all__ = [
     "OAuthState",
     "PasswordCredential",
     "PasswordResetToken",
+    "Plan",
     "Post",
     "PostVariant",
     "PostVariantMedia",

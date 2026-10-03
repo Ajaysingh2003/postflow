@@ -12,6 +12,11 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def as_utc(value: datetime) -> datetime:
+    """SQLite omits timezone information; persisted timestamps are always UTC."""
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
 def new_token(bytes_length: int = 32) -> str:
     return secrets.token_urlsafe(bytes_length)
 

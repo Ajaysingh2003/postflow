@@ -64,6 +64,7 @@ def init_default_adapters() -> None:
     from app.modules.channels.adapters.linkedin import LinkedInAdapter
     from app.modules.channels.adapters.mastodon import MastodonAdapter
     from app.modules.channels.adapters.reddit import RedditAdapter
+    from app.modules.channels.adapters.threads import ThreadsAdapter
     from app.modules.channels.adapters.x import XAdapter
 
     channel_registry.register(XAdapter())
@@ -73,6 +74,7 @@ def init_default_adapters() -> None:
     channel_registry.register(MastodonAdapter())
     channel_registry.register(FacebookAdapter())
     channel_registry.register(InstagramAdapter())
+    channel_registry.register(ThreadsAdapter())
 
 
 init_default_adapters()

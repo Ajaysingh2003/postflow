@@ -106,7 +106,6 @@ def update_me(
     )
 
 
-
 @router.post("/logout", status_code=204)
 def logout(credentials=Depends(bearer), db: Session = Depends(get_db)) -> None:
     if credentials:
@@ -140,6 +139,9 @@ def request_verification(
     if user.email_verified:
         return MessageResponse(message="Email is already verified")
     raw = _issue_one_time_token(db, EmailVerificationToken, user.id, 30)
+    from app.modules.identity.mail import deliver_token
+
+    deliver_token(user.email, raw, "verify-email")
     return MessageResponse(
         message="Verification instructions have been created",
         development_token=raw if get_settings().debug else None,
@@ -172,6 +174,10 @@ def forgot_password(
 ) -> MessageResponse:
     user = db.scalar(select(User).where(User.email == normalize_email(str(payload.email))))
     raw = _issue_one_time_token(db, PasswordResetToken, user.id, 20) if user else None
+    if raw:
+        from app.modules.identity.mail import deliver_token
+
+        deliver_token(user.email, raw, "reset-password")
     return MessageResponse(
         message="If the account exists, password reset instructions have been created",
         development_token=raw if raw and get_settings().debug else None,

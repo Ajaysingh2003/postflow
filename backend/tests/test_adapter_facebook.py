@@ -38,7 +38,12 @@ def mock_facebook_account():
             },
             "pages": [
                 {"id": "page_111", "name": "Acme Brand", "category": "Brand", "fan_count": 18500},
-                {"id": "page_222", "name": "Acme Support", "category": "Support", "fan_count": 4200},
+                {
+                    "id": "page_222",
+                    "name": "Acme Support",
+                    "category": "Support",
+                    "fan_count": 4200,
+                },
             ],
         },
     )
@@ -63,7 +68,7 @@ async def test_build_auth_url():
         state="fb_state_xyz",
         redirect_uri="https://postflow.ai/callback",
     )
-    assert "https://www.facebook.com/v21.0/dialog/oauth" in res.auth_url
+    assert "https://www.facebook.com/v23.0/dialog/oauth" in res.auth_url
     assert "client_id=fb_app_id_999" in res.auth_url
     assert "state=fb_state_xyz" in res.auth_url
     assert "pages_manage_posts" in res.auth_url
@@ -72,6 +77,7 @@ async def test_build_auth_url():
 @pytest.mark.anyio
 async def test_handle_callback_three_step_ladder():
     """Verify short-lived -> long-lived user token exchange and page tokens retrieval."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         url_str = str(request.url)
         # Step 1 & 2: Token exchange
@@ -178,7 +184,9 @@ async def test_validate():
     adapter = FacebookAdapter()
 
     # Valid post targeting a Page
-    issues = await adapter.validate(MockVariant({"page_id": "page_111", "text": "Exciting product update!"}))
+    issues = await adapter.validate(
+        MockVariant({"page_id": "page_111", "text": "Exciting product update!"})
+    )
     assert len(issues) == 0
 
     # Missing target Page ID
@@ -284,6 +292,7 @@ async def test_fetch_metrics(mock_facebook_account):
 @pytest.mark.anyio
 async def test_fetch_account_metrics(mock_facebook_account):
     """Verify whole-account (Page) follower and view analytics from original Meta Graph API source."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         url_str = str(request.url)
         if "/insights" in url_str:

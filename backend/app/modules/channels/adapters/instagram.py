@@ -8,6 +8,8 @@ import httpx
 from fastapi import HTTPException, status
 
 from app.core.config import get_settings
+from app.modules.channels.adapters.management import InstagramManagement
+from app.modules.channels.adapters.meta import graph_items
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -19,10 +21,11 @@ from app.modules.channels.base import (
 )
 from app.modules.channels.models import ConnectedAccount
 from app.modules.channels.oauth import decrypt_token, encrypt_token
+from app.modules.channels.support import AdapterHTTP
 
 logger = logging.getLogger(__name__)
 
-GRAPH_API_VERSION = "v21.0"
+GRAPH_API_VERSION = get_settings().graph_api_version
 GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 INSTAGRAM_OAUTH_DIALOG = f"https://www.facebook.com/{GRAPH_API_VERSION}/dialog/oauth"
 
@@ -36,7 +39,7 @@ INSTAGRAM_SCOPES = [
 ]
 
 
-class InstagramAdapter:
+class InstagramAdapter(InstagramManagement):
     """
     Platform adapter for Instagram Business/Creator accounts via Meta's official Graph API.
     Supports single feed images, multi-image carousels, and Reels via the two-step
@@ -44,6 +47,7 @@ class InstagramAdapter:
     """
 
     platform = "instagram"
+    required_credentials = ("app_id", "app_secret")
 
     def __init__(
         self,
@@ -52,11 +56,19 @@ class InstagramAdapter:
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         settings = get_settings()
-        self.app_id = app_id or settings.instagram_app_id or settings.facebook_app_id or "ig_app_id_placeholder"
-        self.app_secret = (
-            app_secret or settings.instagram_app_secret or settings.facebook_app_secret or "ig_app_secret_placeholder"
+        self.app_id = (
+            app_id
+            or settings.instagram_app_id
+            or settings.facebook_app_id
+            or "ig_app_id_placeholder"
         )
-        self.redirect_base_url = settings.oauth_redirect_base_url
+        self.app_secret = (
+            app_secret
+            or settings.instagram_app_secret
+            or settings.facebook_app_secret
+            or "ig_app_secret_placeholder"
+        )
+        self.redirect_base_url = settings.oauth_callback_url(self.platform)
         self._http_client = http_client
 
         self.capabilities = Capabilities(
@@ -65,13 +77,13 @@ class InstagramAdapter:
             max_text_length=2200,
             text_length_type="characters",
             supports_media=True,
-            supported_media_types=["image/jpeg", "image/png", "video/mp4", "video/quicktime"],
+            supported_media_types=["image/jpeg", "image/png", "image/webp", "video/mp4"],
             max_media_count=10,  # Carousels allow up to 10 images/videos
             supports_video=True,
             max_video_duration_seconds=900,  # Reels up to 15 mins
             supports_threads=False,
             supports_polls=False,
-            supports_alt_text=True,
+            supports_alt_text=False,
             max_alt_text_length=1000,
             supports_links=False,  # Feed captions do not render clickable hyperlinks
             supports_tags=True,
@@ -82,10 +94,12 @@ class InstagramAdapter:
             supports_scheduling=True,
         )
 
+    from app.modules.channels.adapters.media import instagram_urls as prepare_media
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._http_client is not None:
             return self._http_client
-        return httpx.AsyncClient(timeout=30.0)
+        return AdapterHTTP(self.platform)
 
     async def build_auth_url(self, workspace_id: str, state: str, **opts: Any) -> AuthStart:
         """
@@ -93,6 +107,8 @@ class InstagramAdapter:
         """
         redirect_uri = opts.get("redirect_uri") or self.redirect_base_url
         scopes = opts.get("scopes") or INSTAGRAM_SCOPES
+        if opts.get("manage_replies"):
+            scopes = list(dict.fromkeys([*scopes, "instagram_manage_comments"]))
 
         params = {
             "client_id": self.app_id,
@@ -106,7 +122,7 @@ class InstagramAdapter:
             auth_url=auth_url,
             state=state,
             code_verifier=None,
-            metadata={"redirect_uri": redirect_uri},
+            metadata={"redirect_uri": redirect_uri, "requested_scopes": scopes},
         )
 
     async def handle_callback(
@@ -173,7 +189,7 @@ class InstagramAdapter:
                     "access_token": user_access_token,
                 },
             )
-            pages_data = pages_resp.json().get("data", []) if pages_resp.status_code == 200 else []
+            pages_data = await graph_items(client, pages_resp)
 
             ig_accounts: list[dict[str, Any]] = []
             ig_tokens: dict[str, str] = {}
@@ -183,6 +199,7 @@ class InstagramAdapter:
                 ig_obj = page.get("instagram_business_account")
                 if ig_obj and ig_obj.get("id"):
                     ig_id = str(ig_obj["id"])
+                    ig_pic = ig_obj.get("profile_picture_url")
                     ig_accounts.append(
                         {
                             "id": ig_id,
@@ -190,6 +207,7 @@ class InstagramAdapter:
                             "name": ig_obj.get("name"),
                             "page_id": page.get("id"),
                             "followers_count": ig_obj.get("followers_count", 0),
+                            "profile_picture_url": ig_pic,
                         }
                     )
                     # The Page access token acts as the authenticated token for that Instagram account
@@ -203,6 +221,7 @@ class InstagramAdapter:
         primary_ig = ig_accounts[0] if ig_accounts else {}
         primary_username = primary_ig.get("username", "instagram_user")
         primary_id = primary_ig.get("id", "pending_ig_id")
+        primary_pic = primary_ig.get("profile_picture_url")
 
         return ConnectedAccount(
             workspace_id=workspace_id,
@@ -212,11 +231,13 @@ class InstagramAdapter:
             account_type="business",
             encrypted_access_token=encrypt_token(user_access_token),
             token_expires_at=datetime.now(UTC) + timedelta(seconds=expires_in),
-            granted_scopes=INSTAGRAM_SCOPES,
+            granted_scopes=opts.get("oauth_metadata", {}).get("requested_scopes", INSTAGRAM_SCOPES),
             status="active",
             account_metadata={
                 "primary_ig_id": primary_id,
                 "primary_username": primary_username,
+                "profile_picture_url": primary_pic,
+                "avatar_url": primary_pic,
                 "instagram_accounts": ig_accounts,
                 "ig_tokens": ig_tokens,
             },
@@ -241,7 +262,9 @@ class InstagramAdapter:
                     "fb_exchange_token": raw_user_token,
                 },
             )
-            new_token = resp.json().get("access_token", raw_user_token) if resp.status_code == 200 else raw_user_token
+            resp.raise_for_status()
+            new_token = resp.json()["access_token"]
+            expires_in = resp.json()["expires_in"]
 
             # Re-fetch linked Instagram accounts
             pages_resp = await client.get(
@@ -251,7 +274,8 @@ class InstagramAdapter:
                     "access_token": new_token,
                 },
             )
-            pages_data = pages_resp.json().get("data", []) if pages_resp.status_code == 200 else []
+            pages_resp.raise_for_status()
+            pages_data = await graph_items(client, pages_resp)
 
             ig_accounts: list[dict[str, Any]] = []
             ig_tokens: dict[str, str] = {}
@@ -277,7 +301,7 @@ class InstagramAdapter:
             meta["ig_tokens"] = ig_tokens
 
             account.encrypted_access_token = encrypt_token(new_token)
-            account.token_expires_at = datetime.now(UTC) + timedelta(days=60)
+            account.token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
             account.account_metadata = meta
             account.status = "active"
             return account
@@ -296,12 +320,14 @@ class InstagramAdapter:
 
         client = await self._get_client()
         try:
-            await client.delete(
+            resp = await client.delete(
                 f"{GRAPH_API_BASE}/me/permissions",
                 params={"access_token": raw_user_token},
             )
-        except Exception as exc:  # noqa: BLE001
+            resp.raise_for_status()
+        except Exception as exc:
             logger.warning("Error revoking Instagram permissions for %s: %s", account.id, exc)
+            raise
         finally:
             if self._http_client is None:
                 await client.aclose()
@@ -345,7 +371,9 @@ class InstagramAdapter:
         issues: list[Issue] = []
         payload = getattr(variant, "payload", {})
         if not isinstance(payload, dict):
-            return [Issue(field="payload", message="Invalid variant payload format", severity="error")]
+            return [
+                Issue(field="payload", message="Invalid variant payload format", severity="error")
+            ]
 
         # Target Instagram account is required
         target_id = payload.get("target_id") or payload.get("ig_user_id") or payload.get("target")
@@ -414,171 +442,137 @@ class InstagramAdapter:
 
         return issues
 
-    async def publish(self, account: ConnectedAccount, variant: Any) -> PublishResult:
-        """
-        Two-step container publishing pipeline:
-        Step 1: POST /{ig_user_id}/media (create container for image, Reel, or carousel).
-        Step 2: POST /{ig_user_id}/media_publish (publish the container).
-        """
-        payload = getattr(variant, "payload", {})
-        ig_user_id = (
+    async def publish(self, account, variant):
+        from app.modules.channels.adapters.media import save_state
+
+        payload = variant.payload
+        target = (
             payload.get("target_id")
             or payload.get("ig_user_id")
             or payload.get("target")
             or account.account_metadata.get("primary_ig_id")
         )
-        if not ig_user_id:
+        token = self._get_ig_token(account, str(target))
+        if not target or not token:
             return PublishResult(
                 success=False,
-                error_message="Cannot publish to Instagram: missing target account ID",
-                is_retryable=False,
+                error_message="A connected professional Instagram account is required",
             )
-
-        token = self._get_ig_token(account, str(ig_user_id))
-        if not token:
+        known = {str(a["id"]) for a in account.account_metadata.get("instagram_accounts", [])}
+        if known and str(target) not in known:
             return PublishResult(
-                success=False,
-                error_message="Missing decrypted access token for Instagram account",
-                is_retryable=False,
+                success=False, error_message="Instagram target is not connected to this account"
             )
-
-        caption = payload.get("caption") or payload.get("text", "")
-        media_type = payload.get("media_type") or ("REELS" if payload.get("video_url") else "IMAGE")
-
         client = await self._get_client()
+        state = getattr(variant, "publish_state", None) or {}
+        sending = False
         try:
-            # ----------------------------------------------------
-            # Step 1: Create Media Container
-            # ----------------------------------------------------
-            container_params: dict[str, Any] = {"access_token": token}
-            media_urls = payload.get("media_urls", [])
-
-            # Path A: Carousel (multiple items)
-            if len(media_urls) > 1 or payload.get("children"):
-                item_ids: list[str] = []
-                for item_url in media_urls:
-                    item_resp = await client.post(
-                        f"{GRAPH_API_BASE}/{ig_user_id}/media",
-                        data={
-                            "image_url": item_url,
-                            "is_carousel_item": "true",
-                            "access_token": token,
-                        },
+            creation = state.get("instagram_container")
+            if not creation:
+                urls = payload.get("media_urls") or [
+                    payload.get("video_url") or payload.get("image_url")
+                ]
+                types = payload.get("media_types") or [
+                    "video/mp4" if payload.get("video_url") else "image/jpeg"
+                ] * len(urls)
+                caption = payload.get("caption") or payload.get("text", "")
+                data = {"access_token": token, "caption": caption}
+                if len(urls) > 1 or payload.get("children"):
+                    children = list(
+                        state.get("instagram_children") or payload.get("children") or []
                     )
-                    if item_resp.status_code == 200:
-                        item_ids.append(item_resp.json().get("id"))
-                    else:
-                        return PublishResult(
-                            success=False,
-                            error_message=f"Failed to create carousel item container: {item_resp.text}",
-                            is_retryable=False,
+                    for index, url in enumerate(urls[len(children) :], start=len(children)):
+                        if not url:
+                            continue
+                        video = types[index].startswith("video/")
+                        child = {
+                            "access_token": token,
+                            "is_carousel_item": "true",
+                            "video_url" if video else "image_url": url,
+                        }
+                        if video:
+                            child["media_type"] = "VIDEO"
+                        response = await client.post(f"{GRAPH_API_BASE}/{target}/media", data=child)
+                        response.raise_for_status()
+                        children.append(response.json()["id"])
+                        await save_state(variant, instagram_children=children)
+                    for child in children:
+                        response = await client.get(
+                            f"{GRAPH_API_BASE}/{child}",
+                            params={"fields": "status_code,status", "access_token": token},
                         )
-
-                container_params.update(
-                    {
-                        "media_type": "CAROUSEL",
-                        "children": ",".join(item_ids),
-                        "caption": caption,
-                    }
-                )
-
-            # Path B: Reel (Video)
-            elif media_type.upper() in {"REELS", "VIDEO"} or payload.get("video_url"):
-                container_params.update(
-                    {
-                        "media_type": "REELS",
-                        "video_url": payload.get("video_url") or (media_urls[0] if media_urls else ""),
-                        "caption": caption,
-                    }
-                )
-
-            # Path C: Single Image
-            else:
-                image_url = payload.get("image_url") or (media_urls[0] if media_urls else "")
-                container_params.update(
-                    {
-                        "image_url": image_url,
-                        "caption": caption,
-                    }
-                )
-
-            # Request container creation
-            container_resp = await client.post(
-                f"{GRAPH_API_BASE}/{ig_user_id}/media",
-                data=container_params,
+                        response.raise_for_status()
+                        if response.json().get("status_code") != "FINISHED":
+                            return PublishResult(
+                                success=False,
+                                is_retryable=response.json().get("status_code") == "IN_PROGRESS",
+                                waiting_for_media=True,
+                                retry_after=60,
+                                error_message="Instagram carousel media is still processing",
+                            )
+                    data.update(media_type="CAROUSEL", children=",".join(children))
+                elif types[0].startswith("video/") or payload.get("media_type", "").upper() in {
+                    "REELS",
+                    "VIDEO",
+                }:
+                    data.update(media_type="REELS", video_url=urls[0])
+                else:
+                    data["image_url"] = urls[0]
+                response = await client.post(f"{GRAPH_API_BASE}/{target}/media", data=data)
+                response.raise_for_status()
+                creation = response.json()["id"]
+                await save_state(variant, instagram_container=creation)
+            response = await client.get(
+                f"{GRAPH_API_BASE}/{creation}",
+                params={"fields": "status_code,status", "access_token": token},
             )
-
-            if container_resp.status_code != 200:
-                is_retryable = container_resp.status_code in {429, 500, 502, 503, 504}
+            response.raise_for_status()
+            container_status = response.json().get("status_code")
+            if container_status != "FINISHED":
                 return PublishResult(
                     success=False,
-                    error_message=f"Failed to create Instagram container: {container_resp.text}",
-                    raw_response={"status_code": container_resp.status_code, "body": container_resp.text},
-                    is_retryable=is_retryable,
+                    is_retryable=container_status == "IN_PROGRESS",
+                    waiting_for_media=container_status == "IN_PROGRESS",
+                    retry_after=60,
+                    outcome_unknown=container_status == "PUBLISHED",
+                    error_message="Instagram container status: " + str(container_status),
                 )
-
-            creation_id = container_resp.json().get("id")
-
-            # ----------------------------------------------------
-            # Step 2: Publish the Container
-            # ----------------------------------------------------
-            publish_resp = await client.post(
-                f"{GRAPH_API_BASE}/{ig_user_id}/media_publish",
-                data={
-                    "creation_id": creation_id,
-                    "access_token": token,
-                },
+            sending = True
+            response = await client.post(
+                f"{GRAPH_API_BASE}/{target}/media_publish",
+                data={"creation_id": creation, "access_token": token},
             )
-
-            if publish_resp.status_code != 200:
-                is_retryable = publish_resp.status_code in {429, 500, 502, 503, 504}
-                return PublishResult(
-                    success=False,
-                    error_message=f"Failed to publish Instagram container: {publish_resp.text}",
-                    raw_response={"status_code": publish_resp.status_code, "body": publish_resp.text},
-                    is_retryable=is_retryable,
-                )
-
-            pub_json = publish_resp.json()
-            ig_media_id = pub_json.get("id", "")
-
-            # Attempt to fetch published media permalink
-            permalink_resp = await client.get(
-                f"{GRAPH_API_BASE}/{ig_media_id}",
-                params={"fields": "permalink", "access_token": token},
-            )
-            permalink = (
-                permalink_resp.json().get("permalink")
-                if permalink_resp.status_code == 200
-                else f"https://www.instagram.com/p/{ig_media_id}/"
-            )
-
+            response.raise_for_status()
             return PublishResult(
                 success=True,
-                external_post_id=ig_media_id,
-                external_url=permalink,
-                raw_response=pub_json,
+                external_post_id=str(response.json()["id"]),
+                raw_response=response.json(),
             )
-
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Network error in Instagram container pipeline for %s: %s", ig_user_id, exc)
+        except httpx.HTTPStatusError as exc:
+            code = exc.response.status_code
             return PublishResult(
                 success=False,
-                error_message=f"Network error: {exc}",
-                is_retryable=True,
+                status_code=code,
+                auth_error=code == 401 or exc.response.json().get("error", {}).get("code") == 190,
+                is_retryable=code == 429 or (code >= 500 and not sending),
+                outcome_unknown=sending and code >= 500,
+                error_message="Instagram API request failed",
+            )
+        except httpx.TransportError:
+            return PublishResult(
+                success=False,
+                is_retryable=not sending,
+                outcome_unknown=sending,
+                error_message="Instagram API connection interrupted",
             )
         finally:
             if self._http_client is None:
                 await client.aclose()
 
-    async def delete_post(self, account: ConnectedAccount, external_post_id: str) -> None:
-        """
-        Instagram Graph API does not provide an endpoint to delete published media for third-party apps.
-        Logs an informative warning and completes gracefully.
-        """
-        logger.warning(
-            "Instagram Graph API restricts automated deletion of published media %s.",
-            external_post_id,
+    async def delete_post(self, account, external_post_id):
+        raise HTTPException(
+            422,
+            "Instagram does not support deleting published media through this API; delete it in Instagram",
         )
 
     async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
@@ -595,7 +589,10 @@ class InstagramAdapter:
             # 1. Fetch public like and comment counts
             media_resp = await client.get(
                 f"{GRAPH_API_BASE}/{external_post_id}",
-                params={"fields": "like_count,comments_count,media_type,permalink", "access_token": token},
+                params={
+                    "fields": "like_count,comments_count,media_type,permalink",
+                    "access_token": token,
+                },
             )
             # 2. Fetch insights (impressions, reach, saved, shares)
             insights_resp = await client.get(
@@ -607,8 +604,10 @@ class InstagramAdapter:
                 await client.aclose()
 
         if media_resp.status_code != 200:
-            logger.warning("Failed to fetch Instagram metrics for %s: %s", external_post_id, media_resp.text)
-            return Metrics()
+            logger.warning(
+                "Failed to fetch Instagram metrics for %s: %s", external_post_id, media_resp.text
+            )
+            raise RuntimeError("Metrics request failed or is unsupported")
 
         media_data = media_resp.json()
         likes = media_data.get("like_count", 0)
@@ -619,6 +618,8 @@ class InstagramAdapter:
         saved = 0
         shares = 0
 
+        if insights_resp.status_code != 200:
+            raise RuntimeError("Insights are unavailable; no zero snapshot was recorded")
         if insights_resp.status_code == 200:
             for item in insights_resp.json().get("data", []):
                 name = item.get("name")
@@ -631,8 +632,6 @@ class InstagramAdapter:
                     saved = int(val)
                 elif name == "shares":
                     shares = int(val)
-
-        impressions = impressions or reach or (likes + comments)
 
         return Metrics(
             impressions=impressions,
@@ -677,8 +676,10 @@ class InstagramAdapter:
                 await client.aclose()
 
         if user_resp.status_code != 200:
-            logger.warning("Failed to fetch Instagram account stats for %s: %s", ig_user_id, user_resp.text)
-            return AccountMetrics()
+            logger.warning(
+                "Failed to fetch Instagram account stats for %s: %s", ig_user_id, user_resp.text
+            )
+            raise RuntimeError("Account metrics request failed or is unsupported")
 
         data = user_resp.json()
         followers = data.get("followers_count", 0)
@@ -689,6 +690,8 @@ class InstagramAdapter:
         profile_views = 0
         reach = 0
 
+        if insights_resp.status_code != 200:
+            raise RuntimeError("Insights are unavailable; no zero snapshot was recorded")
         if insights_resp.status_code == 200:
             for item in insights_resp.json().get("data", []):
                 name = item.get("name")

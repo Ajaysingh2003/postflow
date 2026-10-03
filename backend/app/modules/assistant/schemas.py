@@ -481,6 +481,7 @@ class FeatureInfoResponse(BaseModel):
     name: str
     description: str
     platforms: list[str]
+    input_schema: dict[str, Any] = Field(default_factory=dict)
 
 
 class AssistantProfileResponse(BaseModel):
@@ -496,6 +497,8 @@ class ExecuteFeatureRequest(BaseModel):
     input_data: dict[str, Any]
     platform: str | None = None
     voice_profile_id: str | None = None
+    connected_account_id: str | None = None
+    validation_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecuteFeatureResponse(BaseModel):

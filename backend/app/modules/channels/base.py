@@ -1,5 +1,6 @@
 from typing import Any, Protocol, runtime_checkable
 
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from app.modules.channels.models import ConnectedAccount
@@ -69,6 +70,18 @@ class PublishResult(BaseModel):
     raw_response: dict[str, Any] = Field(default_factory=dict)
     error_message: str | None = None
     is_retryable: bool = False
+    status_code: int | None = None
+    auth_error: bool = False
+    outcome_unknown: bool = False
+    waiting_for_media: bool = False
+    retry_after: int | None = None
+
+
+class MediaProcessingPending(HTTPException):
+    """An uploaded asset can be resumed without repeating the upload."""
+
+    def __init__(self, detail: str, retry_after: int = 60):
+        super().__init__(503, detail, headers={"Retry-After": str(retry_after)})
 
 
 class Metrics(BaseModel):

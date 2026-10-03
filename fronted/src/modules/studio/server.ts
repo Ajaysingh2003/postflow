@@ -1,0 +1,272 @@
+import axios from "axios";
+import { z } from "zod";
+import { authedProcedure, createTRPCRouter } from "@/trpc/init";
+import {
+  getApiBase,
+  getAuthHeaders,
+  handleBackendError,
+} from "@/lib/http-error";
+import type {
+  Account,
+  Feature,
+  Payload,
+  Post,
+  PostActions,
+  RepliesPage,
+  Variant,
+} from "./types";
+
+async function backend<T>(
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  path: string,
+  data?: unknown,
+  params?: Record<string, unknown>,
+): Promise<T> {
+  try {
+    const response = await axios.request<T>({
+      method,
+      url: `${getApiBase()}/v1${path}`,
+      data,
+      params,
+      headers: await getAuthHeaders(),
+      timeout: 60000,
+    });
+    return response.data;
+  } catch (error) {
+    return handleBackendError(error, "This action could not be completed.");
+  }
+}
+
+const id = z.string().uuid();
+const fields = z.record(z.string(), z.unknown());
+const resources = {
+  templates: "/templates",
+  media: "/media",
+  voices: "/assistant/voice-profiles",
+  runs: "/assistant/runs",
+  analytics: "/analytics/overview",
+  usage: "/analytics/plan-limits",
+  members: "/workspaces/current/members",
+} as const;
+
+export const studioRouter = createTRPCRouter({
+  posts: authedProcedure
+    .input(
+      z.object({
+        offset: z.number().int().min(0).default(0),
+        status: z.string().optional(),
+      }),
+    )
+    .query(({ input }) =>
+      backend<Post[]>("GET", "/posts", undefined, {
+        offset: input.offset,
+        limit: 100,
+        variant_status: input.status,
+      }),
+    ),
+  post: authedProcedure
+    .input(z.object({ id }))
+    .query(({ input }) => backend<Post>("GET", `/posts/${input.id}`)),
+  accounts: authedProcedure.query(() =>
+    backend<Account[]>("GET", "/channels/accounts"),
+  ),
+  targets: authedProcedure
+    .input(z.object({ id }))
+    .query(({ input }) =>
+      backend<{ targets: { id: string; name: string }[] }>(
+        "GET",
+        `/channels/accounts/${input.id}/targets`,
+      ),
+    ),
+  capabilities: authedProcedure.query(() =>
+    backend<{ platforms: Record<string, Payload> }>(
+      "GET",
+      "/channels/capabilities",
+    ),
+  ),
+  actions: authedProcedure
+    .input(z.object({ id }))
+    .query(({ input }) =>
+      backend<PostActions>(
+        "GET",
+        `/post-management/variants/${input.id}/actions`,
+      ),
+    ),
+  replies: authedProcedure
+    .input(z.object({ id, cursor: z.string().optional() }))
+    .query(({ input }) =>
+      backend<RepliesPage>(
+        "GET",
+        `/post-management/variants/${input.id}/replies`,
+        undefined,
+        { cursor: input.cursor },
+      ),
+    ),
+  manage: authedProcedure
+    .input(
+      z.object({
+        id,
+        action: z.enum(["reply", "edit", "delete"]),
+        request_id: id,
+        text: z.string().optional(),
+        target_token: z.string().optional(),
+      }),
+    )
+    .mutation(({ input }) => {
+      const suffix = {
+        reply: "reply",
+        edit: "published",
+        delete: "delete-published",
+      }[input.action];
+      return backend<{
+        message: string;
+        external_id?: string;
+        external_url?: string;
+      }>(
+        input.action === "edit" ? "PATCH" : "POST",
+        `/post-management/variants/${input.id}/${suffix}`,
+        {
+          request_id: input.request_id,
+          text: input.text,
+          target_token: input.target_token,
+        },
+      );
+    }),
+  create: authedProcedure
+    .input(
+      z.object({
+        title: z.string().min(1),
+        base_text: z.string(),
+        variants: z
+          .array(
+            z.object({
+              platform: z.string(),
+              connected_account_id: id,
+              payload: fields,
+              media_asset_ids: z.array(id).optional(),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .mutation(({ input }) => backend<Post>("POST", "/posts", input)),
+  editDraft: authedProcedure
+    .input(z.object({ id, payload: fields }))
+    .mutation(({ input }) =>
+      backend<Variant>("PATCH", `/variants/${input.id}`, {
+        payload: input.payload,
+      }),
+    ),
+  publish: authedProcedure
+    .input(z.object({ id }))
+    .mutation(({ input }) =>
+      backend<Payload>(
+        "POST",
+        `/publishing/variants/${input.id}/publish-now`,
+        {},
+      ),
+    ),
+  schedule: authedProcedure
+    .input(z.object({ id, scheduled_time: z.string() }))
+    .mutation(({ input }) =>
+      backend<Payload>("POST", `/publishing/variants/${input.id}/schedule`, {
+        scheduled_time: input.scheduled_time,
+      }),
+    ),
+  cancel: authedProcedure
+    .input(z.object({ id }))
+    .mutation(({ input }) =>
+      backend<Payload>("POST", `/publishing/variants/${input.id}/cancel`, {}),
+    ),
+  attempts: authedProcedure
+    .input(z.object({ id }))
+    .query(({ input }) =>
+      backend<Payload[]>("GET", `/publishing/variants/${input.id}/attempts`),
+    ),
+  features: authedProcedure.query(() =>
+    backend<Feature[]>("GET", "/assistant/features"),
+  ),
+  runFeature: authedProcedure
+    .input(
+      z.object({
+        feature: z.string(),
+        platform: z.string(),
+        input_data: fields,
+        connected_account_id: id.optional(),
+      }),
+    )
+    .mutation(({ input }) =>
+      backend<{ output: Payload }>(
+        "POST",
+        `/assistant/features/${encodeURIComponent(input.feature)}/run`,
+        {
+          platform: input.platform,
+          input_data: input.input_data,
+          connected_account_id: input.connected_account_id,
+        },
+      ),
+    ),
+  resource: authedProcedure
+    .input(
+      z.object({
+        kind: z.enum([
+          "templates",
+          "media",
+          "voices",
+          "runs",
+          "analytics",
+          "usage",
+          "members",
+        ]),
+      }),
+    )
+    .query(({ input }) =>
+      backend<Payload | Payload[]>("GET", resources[input.kind]),
+    ),
+  createTemplate: authedProcedure
+    .input(z.object({ name: z.string().min(1), base_text: z.string() }))
+    .mutation(({ input }) => backend<Payload>("POST", "/templates", input)),
+  trainVoice: authedProcedure
+    .input(
+      z.object({
+        tone_description: z.string(),
+        sample_posts: z.array(z.string()),
+      }),
+    )
+    .mutation(({ input }) =>
+      backend<Payload>("POST", "/assistant/voice-profiles/train", input),
+    ),
+  connect: authedProcedure
+    .input(
+      z.object({
+        platform: z.enum([
+          "x",
+          "linkedin",
+          "reddit",
+          "bluesky",
+          "mastodon",
+          "facebook",
+          "instagram",
+          "threads",
+        ]),
+        options: fields.optional(),
+      }),
+    )
+    .mutation(({ input }) =>
+      backend<{ auth_url: string }>(
+        "POST",
+        `/channels/${input.platform}/connect`,
+        { options: input.options ?? {} },
+      ),
+    ),
+  disconnect: authedProcedure
+    .input(z.object({ id }))
+    .mutation(({ input }) =>
+      backend<Payload>("POST", `/channels/accounts/${input.id}/disconnect`, {}),
+    ),
+  refreshAccount: authedProcedure
+    .input(z.object({ id }))
+    .mutation(({ input }) =>
+      backend<Account>("POST", `/channels/accounts/${input.id}/refresh`, {}),
+    ),
+});

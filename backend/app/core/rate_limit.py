@@ -7,7 +7,10 @@ from redis.asyncio import Redis
 from app.core.config import Settings
 
 POLICIES = (
-    ("/api/v1/auth/", 20, 60),
+    ("/api/v1/auth/login", 20, 60),
+    ("/api/v1/auth/register", 20, 60),
+    ("/api/v1/auth/password", 20, 60),
+    ("/api/v1/auth/google", 20, 60),
     ("/api/v1/assistant/", 30, 60),
     ("/api/v1/channels/", 30, 60),
     ("/api/v1/media/uploads", 30, 60),

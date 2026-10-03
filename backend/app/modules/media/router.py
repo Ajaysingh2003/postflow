@@ -29,6 +29,11 @@ def _asset(db: Session, workspace_id: str, asset_id: str) -> MediaAsset:
     return asset
 
 
+@router.get("", response_model=list[MediaResponse])
+def list_assets(workspace: Workspace = Depends(get_current_workspace), db: Session = Depends(get_db)):
+    return list(db.scalars(select(MediaAsset).where(MediaAsset.workspace_id == workspace.id).order_by(MediaAsset.created_at.desc()).limit(200)))
+
+
 @router.post("/attachments", response_model=MediaResponse, status_code=201)
 def upload_attachment(
     file: UploadFile = File(...),
@@ -53,6 +58,7 @@ def upload_attachment(
             settings, file.filename or "", content_type, len(data), source=purpose == "assistant"
         )
         service.validate_contents(data, content_type)
+        width, height = service.dimensions(data, content_type)
         s3 = service.client(settings)
         service.scan_clamav(settings, data)
         key = f"media/{workspace.id}/{uuid4()}/{filename}"
@@ -86,6 +92,8 @@ def upload_attachment(
             object_key=key,
             original_filename=filename,
             content_type=content_type,
+            width=width,
+            height=height,
             declared_size=len(data),
             actual_size=len(data),
             status="ready",
@@ -159,10 +167,13 @@ def complete_upload(
         limit = service.max_bytes(settings, asset.content_type)
         if actual_size <= 0 or actual_size > limit or actual_size != asset.declared_size:
             raise HTTPException(status_code=422, detail="Uploaded size does not match declaration")
-        data = s3.get_object(Bucket=settings.r2_bucket_name, Key=asset.object_key)["Body"].read(
-            limit + 1
-        )
+        body = s3.get_object(Bucket=settings.r2_bucket_name, Key=asset.object_key)["Body"]
+        try:
+            data = body.read(limit + 1)
+        finally:
+            body.close()
         service.validate_contents(data, asset.content_type)
+        asset.width, asset.height = service.dimensions(data, asset.content_type)
         service.scan_clamav(settings, data)
         final_key = asset.object_key.replace("quarantine/", "media/", 1)
         s3.copy_object(
@@ -254,3 +265,18 @@ def delete_asset(
         raise HTTPException(status_code=502, detail="Unable to delete stored object") from exc
     db.delete(asset)
     db.commit()
+
+
+@router.patch("/{asset_id}", response_model=MediaResponse)
+def update_asset(
+    asset_id: str,
+    payload: dict[str, str | None],
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    asset = _asset(db, workspace.id, asset_id)
+    if set(payload) != {"alt_text"} or len(payload.get("alt_text") or "") > 1000:
+        raise HTTPException(422, "Provide alt_text of at most 1000 characters")
+    asset.alt_text = payload["alt_text"]
+    db.commit()
+    return asset

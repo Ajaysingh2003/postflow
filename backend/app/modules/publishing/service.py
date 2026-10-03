@@ -6,12 +6,14 @@ import logging
 import random
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.modules.channels.base import Issue, PublishResult
-from app.modules.channels.models import ConnectedAccount, SubredditProfile
+from app.core.security import as_utc
+from app.modules.channels.base import Issue, MediaProcessingPending, PublishResult
+from app.modules.channels.models import ConnectedAccount
 from app.modules.channels.registry import channel_registry
 from app.modules.content.models import Post, PostVariant
 from app.modules.publishing.models import PublishAttempt
@@ -68,18 +70,65 @@ async def validate_variant(
                 )
             )
 
-    # Subreddit-aware cached rule validation for Reddit
-    sub_profile = None
-    if variant.platform == "reddit" and db and isinstance(variant.payload, dict):
-        raw_sub = variant.payload.get("subreddit") or variant.payload.get("target") or ""
-        clean_sub = raw_sub.strip().lstrip("r/").lower()
-        if clean_sub:
-            sub_profile = db.scalar(
-                select(SubredditProfile).where(SubredditProfile.name == clean_sub)
-            )
+    if db and variant.connected_account_id:
+        account = db.get(ConnectedAccount, variant.connected_account_id)
+        post = db.get(Post, variant.post_id)
+        if (
+            account
+            and post
+            and (account.workspace_id != post.workspace_id or account.platform != variant.platform)
+        ):
+            return [
+                Issue(
+                    field="connected_account_id",
+                    message="Account does not belong to this workspace/platform",
+                    code="account_mismatch",
+                )
+            ]
+        variant.validation_account = account
+    prepare = getattr(adapter, "prepare_validation", None)
+    if prepare and db:
+        await prepare(variant, db)
+    assets = []
+    if db and variant.connected_account_id:
+        from app.modules.media.publishing import media_for_variant
 
-    # Invoke platform adapter validation
-    adapter_issues = await adapter.validate(variant, subreddit_profile=sub_profile)
+        assets = (
+            media_for_variant(db, variant.validation_account, variant)
+            if variant.validation_account
+            else []
+        )
+        caps = (
+            getattr(adapter, "account_capabilities", lambda _: adapter.capabilities)(
+                variant.validation_account
+            )
+            if variant.validation_account
+            else adapter.capabilities
+        )
+        if len(assets) > caps.max_media_count:
+            issues.append(Issue(field="media", message="Too many attachments for this account"))
+        if any(a.content_type not in caps.supported_media_types for a, _ in assets):
+            issues.append(Issue(field="media", message="Unsupported media type for this platform"))
+        if not caps.supports_alt_text and any(alt for _, alt in assets):
+            issues.append(Issue(field="media", message="This upload API does not support alt text"))
+        if caps.max_alt_text_length and any(
+            len(alt) > caps.max_alt_text_length for _, alt in assets
+        ):
+            issues.append(
+                Issue(field="media", message="Attachment alt text exceeds the platform limit")
+            )
+        validate_media = getattr(adapter, "validate_media", None)
+        if validate_media:
+            issues.extend(await validate_media(assets))
+    adapter_issues = await adapter.validate(variant)
+    if assets:
+        adapter_issues = [
+            i
+            for i in adapter_issues
+            if i.code != "media_required"
+            and "contain text or media" not in i.message
+            and "cannot be empty" not in i.message
+        ]
     issues.extend(adapter_issues)
     return issues
 
@@ -99,6 +148,8 @@ async def schedule_variant(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Variant is already published"
         )
+    if (variant.publish_state or {}).get("outcome_unknown"):
+        raise HTTPException(409, "Reconcile the previous publication before scheduling again")
     if variant.status == "publishing":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,8 +170,6 @@ async def schedule_variant(
     from app.modules.billing.entitlements import check_scheduled_posts_limit
 
     post = variant.post
-    if post:
-        check_scheduled_posts_limit(db, post.workspace_id)
 
     # Pre-schedule validation
     if not bypass_validation:
@@ -136,8 +185,21 @@ async def schedule_variant(
     if target_time.tzinfo is None:
         target_time = target_time.replace(tzinfo=UTC)
 
-    variant.scheduled_time = target_time
-    variant.status = "scheduled"
+    if post and variant.status != "scheduled":
+        check_scheduled_posts_limit(db, post.workspace_id)
+    changed = db.execute(
+        update(PostVariant)
+        .where(
+            PostVariant.id == variant.id,
+            PostVariant.status == variant.status,
+            PostVariant.publishing_started_at.is_(None),
+        )
+        .values(scheduled_time=target_time, status="scheduled")
+    ).rowcount
+    if changed != 1:
+        db.rollback()
+        raise HTTPException(409, "Publication changed while scheduling; reload this variant")
+    db.refresh(variant)
 
     # Update parent post status if still draft
     post = variant.post
@@ -189,7 +251,14 @@ def cancel_variant_schedule(db: Session, variant_id: str) -> PostVariant:
             detail=f"Cannot cancel variant with status '{variant.status}'. Only 'scheduled' variants can be cancelled.",
         )
 
-    variant.status = "draft"
+    changed = db.execute(
+        update(PostVariant)
+        .where(PostVariant.id == variant.id, PostVariant.status == "scheduled")
+        .values(status="draft", scheduled_time=None)
+    ).rowcount
+    if changed != 1:
+        db.rollback()
+        raise HTTPException(409, "Publisher already claimed this variant")
     db.commit()
     db.refresh(variant)
     return variant
@@ -260,6 +329,25 @@ async def publish_variant_job(
         db.refresh(attempt)
         return attempt
 
+    post = db.get(Post, variant.post_id)
+    if (
+        not post
+        or account.workspace_id != post.workspace_id
+        or account.platform != variant.platform
+    ):
+        raise HTTPException(403, "Account does not belong to the variant workspace/platform")
+    if variant.status not in {"draft", "scheduled", "approved", "failed"}:
+        raise HTTPException(409, "Variant is not available for publication")
+    if account.status == "needs_reauth" and account.encrypted_refresh_token:
+        adapter = channel_registry.get(variant.platform)
+        if adapter:
+            try:
+                from app.modules.channels.oauth import refresh_account_tokens
+
+                await refresh_account_tokens(db, account, adapter)
+            except Exception as exc:  # noqa: BLE001
+                logger.info("Just-in-time refresh for account %s did not recover: %s", account.id, exc)
+
     if account.status in ("needs_reauth", "disabled"):
         variant.status = "failed"
         variant.last_error = (
@@ -294,194 +382,217 @@ async def publish_variant_job(
         db.refresh(attempt)
         return attempt
 
-    # 3. Automatic Token Refresh if Expiring
-    now_utc = datetime.now(UTC)
-    if account.token_expires_at and account.token_expires_at <= now_utc + timedelta(minutes=5):
-        try:
-            logger.info("Account %s token expiring, refreshing before publish", account.id)
+    post = db.get(Post, variant.post_id)
+    if (
+        not post
+        or account.workspace_id != post.workspace_id
+        or account.platform != variant.platform
+    ):
+        raise HTTPException(403, "Account does not belong to the variant workspace/platform")
+    if variant.status not in {"draft", "scheduled", "approved", "failed"}:
+        raise HTTPException(409, "Variant is not available for publication")
+    if (variant.publish_state or {}).get("outcome_unknown"):
+        raise HTTPException(409, "Previous publish outcome is unknown; reconcile before retrying")
+    from app.modules.billing.entitlements import check_scheduled_posts_limit
+
+    if variant.status != "scheduled":
+        check_scheduled_posts_limit(db, post.workspace_id)
+    cost = getattr(adapter, "publishing_cost", None)
+    if cost:
+        from app.modules.billing.usage import reserve_provider_cost
+
+        reserve_provider_cost(
+            db, post.workspace_id, variant, cost(variant), adapter.publishing_budget()
+        )
+    now = datetime.now(UTC)
+    claimed = db.execute(
+        update(PostVariant)
+        .where(
+            PostVariant.id == variant.id,
+            PostVariant.status.in_(["draft", "scheduled", "approved", "failed"]),
+        )
+        .values(status="publishing", publishing_started_at=now)
+    )
+    if claimed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(409, "Variant was claimed by another publisher")
+    attempt = PublishAttempt(variant_id=variant.id, started_at=now, result="publishing")
+    db.add(attempt)
+    db.commit()
+    db.refresh(variant)
+    sending = False
+    refreshing = False
+    try:
+        if account.token_expires_at and as_utc(account.token_expires_at) <= now + timedelta(
+            minutes=5
+        ):
+            refreshing = True
             await adapter.refresh_tokens(account)
-            account.status = "active"
             account.last_synced_at = datetime.now(UTC)
             db.commit()
-        except Exception as refresh_exc:  # noqa: BLE001
-            logger.warning("Token refresh failed for account %s: %s", account.id, refresh_exc)
-            account.status = "needs_reauth"
-            variant.status = "failed"
-            variant.last_error = (
-                f"Token refresh failed: {refresh_exc}. Account marked needs_reauth."
+            refreshing = False
+        issues = await validate_variant(variant, db)
+        errors = [i for i in issues if i.severity == "error"]
+        if errors:
+            raise HTTPException(422, "; ".join(i.message for i in errors))
+        limiter = rate_limiter or shared_rate_limiter
+        allowed, delay = await limiter.acquire(variant.platform, account.id)
+        if not allowed:
+            raise HTTPException(
+                429, "Platform rate limit reached", headers={"Retry-After": str(int(delay) + 1)}
             )
-            attempt = PublishAttempt(
-                variant_id=variant.id,
-                started_at=now_utc,
-                finished_at=datetime.now(UTC),
-                result="auth_error",
-                status_code=401,
-                error=variant.last_error,
-            )
-            db.add(attempt)
+
+        async def persist_state():
+            db.add(variant)
             db.commit()
-            db.refresh(attempt)
-            return attempt
 
-    # 4. Pre-publish Validation
-    validation_issues = await validate_variant(variant, db)
-    error_issues = [i for i in validation_issues if i.severity == "error"]
-    if error_issues:
-        error_msg = "; ".join(f"{i.field}: {i.message}" for i in error_issues)
-        variant.status = "failed"
-        variant.last_error = f"Pre-publish validation failed: {error_msg}"
-        attempt = PublishAttempt(
-            variant_id=variant.id,
-            started_at=now_utc,
-            finished_at=datetime.now(UTC),
-            result="fatal_error",
-            error=variant.last_error,
-        )
-        db.add(attempt)
-        db.commit()
-        db.refresh(attempt)
-        return attempt
+        variant.persist_publish_state = persist_state
+        from app.modules.media.publishing import prepare_media
 
-    # 5. Shared Platform Rate Limiter Check
-    limiter = rate_limiter or shared_rate_limiter
-    allowed, retry_after = await limiter.check_rate_limit(variant.platform, account.id)
-    if not allowed:
-        variant.attempt_count += 1
-        variant.scheduled_time = datetime.now(UTC) + timedelta(seconds=max(5.0, retry_after))
-        variant.status = "scheduled"
-        variant.last_error = f"Platform rate limit hit. Rescheduled in {round(retry_after, 1)}s."
-        attempt = PublishAttempt(
-            variant_id=variant.id,
-            started_at=now_utc,
-            finished_at=datetime.now(UTC),
-            result="retryable_error",
-            status_code=429,
-            error=variant.last_error,
-        )
-        db.add(attempt)
-        db.commit()
-        db.refresh(attempt)
-        return attempt
-
-    # 6. Publish Execution
-    variant.status = "publishing"
-    db.commit()
-
-    started_at = datetime.now(UTC)
-    status_code: int | None = 200
-    try:
-        publish_result: PublishResult = await adapter.publish(account, variant)
-        await limiter.record_request(variant.platform, account.id)
-    except Exception as exc:
-        logger.exception("Publishing execution raised error for variant %s", variant.id)
-        publish_result = PublishResult(
+        await prepare_media(db, account, variant, adapter)
+        sending = True
+        result = await adapter.publish(account, variant)
+    except MediaProcessingPending as exc:
+        result = PublishResult(
             success=False,
-            error_message=f"Unhandled error during publish: {exc}",
+            waiting_for_media=True,
             is_retryable=True,
+            status_code=503,
+            error_message=str(exc.detail),
+            retry_after=int(exc.headers["Retry-After"]),
         )
-        status_code = 500
-
-    finished_at = datetime.now(UTC)
-
-    # 7. Process Result and Update Status / Audit Log
-    if publish_result.success:
+    except HTTPException as exc:
+        result = PublishResult(
+            success=False,
+            status_code=exc.status_code,
+            error_message=str(exc.detail),
+            auth_error=refreshing or exc.status_code == 401,
+            is_retryable=exc.status_code in {429, 502, 503},
+            retry_after=int(exc.headers.get("Retry-After", 0)) if exc.headers else None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Publication %s interrupted (%s)", variant.id, type(exc).__name__)
+        result = PublishResult(
+            success=False,
+            error_message=type(exc).__name__,
+            auth_error=refreshing,
+            outcome_unknown=sending,
+            is_retryable=not sending and isinstance(exc, httpx.TransportError),
+        )
+    finished = datetime.now(UTC)
+    attempt.finished_at = finished
+    attempt.status_code = result.status_code
+    attempt.response_payload = result.raw_response
+    variant.publishing_started_at = None
+    auth_error = result.auth_error or any(
+        word in (result.error_message or "").lower()
+        for word in (
+            "401",
+            "unauthorized",
+            "invalid_grant",
+            "invalid access token",
+            "token has been expired",
+        )
+    )
+    if result.success and not result.external_post_id:
+        result = result.model_copy(
+            update={
+                "success": False,
+                "outcome_unknown": True,
+                "error_message": "Provider accepted publication without returning a post identifier",
+            }
+        )
+    if result.success:
         variant.status = "published"
-        variant.external_post_id = publish_result.external_post_id
+        variant.external_post_id = result.external_post_id
+        variant.published_at = finished
         variant.last_error = None
         variant.attempt_count += 1
-        attempt = PublishAttempt(
-            variant_id=variant.id,
-            started_at=started_at,
-            finished_at=finished_at,
-            result="success",
-            status_code=status_code or 200,
-            response_payload=publish_result.raw_response,
-        )
-        # Update post status if all variants finished
-        post = variant.post
-        if post:
-            all_done = all(v.status in ("published", "failed") for v in post.variants)
-            if all_done:
-                post.status = (
-                    "published"
-                    if any(v.status == "published" for v in post.variants)
-                    else "failed"
-                )
-    else:
-        err_text = publish_result.error_message or "Unknown publication error"
-        is_auth = (
-            "401" in err_text
-            or "unauthorized" in err_text.lower()
-            or "invalid_grant" in err_text.lower()
-            or "token has been expired" in err_text.lower()
-            or "invalid access token" in err_text.lower()
-        )
+        attempt.result = "success"
+        attempt.status_code = result.status_code or 200
+        from app.modules.billing.models import UsageLedger
 
-        if is_auth:
-            account.status = "needs_reauth"
-            variant.status = "failed"
-            variant.last_error = f"Auth error: {err_text}. Account marked needs_reauth."
-            attempt = PublishAttempt(
-                variant_id=variant.id,
-                started_at=started_at,
-                finished_at=finished_at,
-                result="auth_error",
-                status_code=401,
-                error=variant.last_error,
-                response_payload=publish_result.raw_response,
+        for charge in db.scalars(
+            select(UsageLedger).where(
+                UsageLedger.reference_id == variant.id,
+                UsageLedger.workspace_id == post.workspace_id,
             )
-        elif publish_result.is_retryable:
+        ):
+            charge.state = "settled"
+    elif result.outcome_unknown:
+        variant.status = "failed"
+        variant.publish_state = {**(variant.publish_state or {}), "outcome_unknown": True}
+        variant.last_error = (
+            "Publication outcome is unknown; reconcile the remote post before retrying"
+        )
+        attempt.result = "outcome_unknown"
+        attempt.error = variant.last_error
+    elif auth_error:
+        account.status = "needs_reauth"
+        variant.status = "failed"
+        variant.last_error = "Auth error: reconnect this account before publishing"
+        attempt.result = "auth_error"
+        attempt.status_code = 401
+        attempt.error = variant.last_error
+    else:
+        if result.waiting_for_media:
+            checks = (variant.publish_state or {}).get("processing_checks", 0) + 1
+            variant.publish_state = {**(variant.publish_state or {}), "processing_checks": checks}
+            if checks > 60:
+                result.is_retryable = False
+        else:
             variant.attempt_count += 1
-            if variant.attempt_count < MAX_ATTEMPTS:
-                jitter = random.uniform(1.0, 5.0)
-                backoff = (
-                    min(
-                        BASE_BACKOFF_SECONDS * (2 ** (variant.attempt_count - 1)),
-                        MAX_BACKOFF_SECONDS,
-                    )
-                    + jitter
-                )
-                variant.scheduled_time = datetime.now(UTC) + timedelta(seconds=backoff)
-                variant.status = "scheduled"
-                variant.last_error = f"Transient error: {err_text}. Retrying in {round(backoff, 1)}s (attempt {variant.attempt_count}/{MAX_ATTEMPTS})."
-                attempt = PublishAttempt(
-                    variant_id=variant.id,
-                    started_at=started_at,
-                    finished_at=finished_at,
-                    result="retryable_error",
-                    status_code=status_code or 500,
-                    error=variant.last_error,
-                    response_payload=publish_result.raw_response,
-                )
-            else:
-                variant.status = "failed"
-                variant.last_error = f"Max retries ({MAX_ATTEMPTS}) exceeded: {err_text}"
-                attempt = PublishAttempt(
-                    variant_id=variant.id,
-                    started_at=started_at,
-                    finished_at=finished_at,
-                    result="fatal_error",
-                    status_code=status_code or 500,
-                    error=variant.last_error,
-                    response_payload=publish_result.raw_response,
-                )
+        if result.is_retryable and variant.attempt_count < MAX_ATTEMPTS:
+            delay = result.retry_after or min(
+                BASE_BACKOFF_SECONDS * 2 ** max(0, variant.attempt_count - 1), MAX_BACKOFF_SECONDS
+            ) + random.uniform(1, 5)
+            variant.status = "scheduled"
+            variant.scheduled_time = finished + timedelta(seconds=delay)
+            attempt.result = "retryable_error"
+            attempt.status_code = result.status_code or 500
         else:
             variant.status = "failed"
-            variant.last_error = f"Publish failed: {err_text}"
-            attempt = PublishAttempt(
-                variant_id=variant.id,
-                started_at=started_at,
-                finished_at=finished_at,
-                result="fatal_error",
-                status_code=status_code or 400,
-                error=variant.last_error,
-                response_payload=publish_result.raw_response,
-            )
-
-    db.add(attempt)
+            attempt.result = "fatal_error"
+            attempt.status_code = result.status_code or 400
+        variant.last_error = result.error_message or "Publication failed"
+        if variant.attempt_count >= MAX_ATTEMPTS:
+            variant.last_error = f"Max retries ({MAX_ATTEMPTS}) exceeded: " + variant.last_error
+        attempt.error = variant.last_error
+    if all(v.status in {"published", "failed"} for v in post.variants):
+        post.status = (
+            "published" if any(v.status == "published" for v in post.variants) else "failed"
+        )
     db.commit()
     db.refresh(attempt)
     return attempt
+
+
+def recover_stale_publications(db: Session, now: datetime | None = None) -> int:
+    """A crashed worker may have posted remotely; never automatically resend it."""
+    cutoff = (now or datetime.now(UTC)) - timedelta(minutes=30)
+    variants = list(
+        db.scalars(
+            select(PostVariant)
+            .where(PostVariant.status == "publishing", PostVariant.publishing_started_at < cutoff)
+            .with_for_update(skip_locked=True)
+        )
+    )
+    for variant in variants:
+        variant.status = "failed"
+        variant.publish_state = {**(variant.publish_state or {}), "outcome_unknown": True}
+        variant.last_error = (
+            "Publisher stopped before recording an outcome; reconcile before retrying"
+        )
+        for attempt in db.scalars(
+            select(PublishAttempt).where(
+                PublishAttempt.variant_id == variant.id, PublishAttempt.result == "publishing"
+            )
+        ):
+            attempt.result = "outcome_unknown"
+            attempt.finished_at = datetime.now(UTC)
+            attempt.error = variant.last_error
+    db.commit()
+    return len(variants)
 
 
 def get_variant_attempts(db: Session, variant_id: str) -> list[PublishAttempt]:

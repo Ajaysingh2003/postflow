@@ -1,20 +1,7 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
-
-class DraftAttachment(BaseModel):
-    asset_id: str
-    name: str = Field(max_length=255)
-    content_type: Literal["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "video/mp4"]
-
-
-class DraftMention(BaseModel):
-    name: str = Field(min_length=1, max_length=150)
-    profile_url: str | None = Field(default=None, max_length=500)
-    avatar_url: str | None = Field(default=None, max_length=1000)
-    entity_type: str | None = Field(default=None, max_length=50)
 
 
 class PostVariantCreate(BaseModel):
@@ -23,6 +10,13 @@ class PostVariantCreate(BaseModel):
     payload: dict = Field(default_factory=dict)
     scheduled_time: datetime | None = None
     idempotency_key: str | None = None
+    media_asset_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
+class PostVariantUpdate(BaseModel):
+    connected_account_id: str | None = None
+    payload: dict | None = None
+    media_asset_ids: list[str] | None = Field(default=None, max_length=20)
 
 
 class PostVariantResponse(BaseModel):
@@ -34,6 +28,9 @@ class PostVariantResponse(BaseModel):
     payload: dict = Field(default_factory=dict)
     scheduled_time: datetime | None = None
     status: str
+    published_at: datetime | None = None
+    publish_state: dict[str, Any] = Field(default_factory=dict)
+    media_asset_ids: list[str] = Field(default_factory=list)
     external_post_id: str | None = None
     last_error: str | None = None
     attempt_count: int = 0
@@ -46,7 +43,7 @@ class PostCreate(BaseModel):
     title: str = Field(default="Untitled", min_length=1, max_length=240)
     base_text: str = Field(default="", max_length=50_000)
     content: str | None = None  # alias for base_text
-    status: str = "draft"
+    status: Literal["draft"] = "draft"
     variants: list[PostVariantCreate] = Field(default_factory=list)
 
 
@@ -54,7 +51,7 @@ class PostUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=240)
     base_text: str | None = Field(default=None, max_length=50_000)
     content: str | None = None  # alias for base_text
-    status: str | None = None
+    status: Literal["draft"] | None = None
 
 
 class PostResponse(BaseModel):
@@ -72,3 +69,15 @@ class PostResponse(BaseModel):
     @property
     def content(self) -> str:
         return self.base_text
+
+
+class TemplateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    base_text: str = Field(default="", max_length=50_000)
+    variants: list[dict] = Field(default_factory=list)
+
+
+class TemplateResponse(TemplateCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    workspace_id: str

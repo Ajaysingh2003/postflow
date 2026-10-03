@@ -18,14 +18,15 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.modules.analytics.models import MetricSnapshot
 from app.modules.billing.service import reconcile_subscriptions
-from app.modules.channels.adapters.reddit import RedditAdapter
-from app.modules.channels.models import ConnectedAccount, SubredditProfile
+from app.modules.channels.models import ConnectedAccount
+from app.modules.channels.oauth import refresh_expiring_accounts
 from app.modules.channels.registry import channel_registry
 from app.modules.content.models import PostVariant
-from app.modules.publishing.service import publish_variant_job
+from app.modules.publishing.service import publish_variant_job, recover_stale_publications
 
 logger = logging.getLogger("jobs")
 running = True
+_job_runner = asyncio.Runner()
 
 
 def _stop(*_) -> None:
@@ -43,7 +44,7 @@ def _run_sync(coro: Coroutine[Any, Any, Any]) -> Any:
     if loop and loop.is_running():
         with ThreadPoolExecutor(max_workers=1) as executor:
             return executor.submit(asyncio.run, coro).result()
-    return asyncio.run(coro)
+    return _job_runner.run(coro)
 
 
 async def dispatch_due_async(db: Session) -> int:
@@ -73,6 +74,7 @@ async def dispatch_due_async(db: Session) -> int:
             await publish_variant_job(variant.id, db)
             processed += 1
         except Exception:
+            db.rollback()
             logger.exception("Error processing scheduled variant %s", variant.id)
 
     return processed
@@ -91,75 +93,22 @@ def process_queue(db: Session | None = None) -> int:
     return dispatch_due(db)
 
 
-async def refresh_subreddit_profiles_async(db: Session) -> int:
-    """
-    Periodically refresh cached subreddit rules, flairs, and post type constraints
-    for all referenced subreddits where data is older than 24 hours.
-    """
-    reddit_adapter = channel_registry.get("reddit")
-    if not isinstance(reddit_adapter, RedditAdapter):
-        return 0
-
-    now = datetime.now(UTC)
-    stale_cutoff = now - timedelta(hours=24)
-
-    # 1. Existing cached profiles older than 24h
-    profiles_to_refresh = list(
-        db.scalars(
-            select(SubredditProfile).where(
-                (SubredditProfile.fetched_at.is_(None)) | (SubredditProfile.fetched_at < stale_cutoff)
-            )
-        )
-    )
-    subreddits_to_check = {p.name for p in profiles_to_refresh}
-
-    # 2. Subreddits referenced in recent post variants
-    recent_variants = list(
-        db.scalars(
-            select(PostVariant)
-            .where(PostVariant.platform == "reddit")
-            .order_by(PostVariant.created_at.desc())
-            .limit(50)
-        )
-    )
-    for v in recent_variants:
-        if isinstance(v.payload, dict):
-            raw = v.payload.get("subreddit") or v.payload.get("target") or ""
-            clean = raw.strip().lstrip("r/").lower()
-            if clean:
-                subreddits_to_check.add(clean)
-
-    if not subreddits_to_check:
-        return 0
-
-    # Find an active Reddit connected account to perform the queries
-    account = db.scalar(
-        select(ConnectedAccount).where(
-            ConnectedAccount.platform == "reddit",
-            ConnectedAccount.status == "active",
-        )
-    )
-    if not account:
-        logger.debug("No active Reddit account available to refresh subreddit profiles")
-        return 0
-
-    refreshed_count = 0
-    for sub_name in subreddits_to_check:
-        try:
-            await reddit_adapter.refresh_subreddit_profile(db, account, sub_name)
-            refreshed_count += 1
-        except Exception:  # noqa: BLE001
-            logger.warning("Failed to refresh subreddit profile for r/%s", sub_name)
-
-    return refreshed_count
+async def refresh_channel_metadata_async(db: Session) -> int:
+    count = 0
+    for platform in channel_registry.list_supported_platforms():
+        adapter = channel_registry.require(platform)
+        refresh = getattr(adapter, "refresh_metadata", None)
+        if refresh:
+            count += await refresh(db)
+    return count
 
 
-def refresh_subreddit_profiles(db: Session | None = None) -> int:
+def refresh_channel_metadata(db: Session | None = None) -> int:
     """Synchronous entry point for refreshing subreddit profiles."""
     if db is not None:
-        return _run_sync(refresh_subreddit_profiles_async(db))
+        return _run_sync(refresh_channel_metadata_async(db))
     with SessionLocal() as session:
-        return _run_sync(refresh_subreddit_profiles_async(session))
+        return _run_sync(refresh_channel_metadata_async(session))
 
 
 async def fetch_metrics_job_async(db: Session) -> int:
@@ -174,13 +123,17 @@ async def fetch_metrics_job_async(db: Session) -> int:
     published_cutoff = now - timedelta(days=30)
     variants = list(
         db.scalars(
-            select(PostVariant)
-            .where(
+            select(PostVariant).where(
                 PostVariant.status == "published",
                 PostVariant.external_post_id.is_not(None),
-                PostVariant.created_at >= published_cutoff,
+                (
+                    (PostVariant.published_at >= published_cutoff)
+                    | (
+                        (PostVariant.published_at.is_(None))
+                        & (PostVariant.created_at >= published_cutoff)
+                    )
+                ),
             )
-            .limit(100)
         )
     )
 
@@ -217,11 +170,13 @@ async def fetch_metrics_job_async(db: Session) -> int:
             db.add(snapshot)
             snapshots_created += 1
         except Exception:  # noqa: BLE001
-            logger.warning("Error fetching metrics for variant %s on %s", variant.id, variant.platform)
+            logger.warning(
+                "Error fetching metrics for variant %s on %s", variant.id, variant.platform
+            )
 
     # 2. Whole-account metrics for active accounts
     active_accounts = list(
-        db.scalars(select(ConnectedAccount).where(ConnectedAccount.status == "active").limit(50))
+        db.scalars(select(ConnectedAccount).where(ConnectedAccount.status == "active"))
     )
     for account in active_accounts:
         adapter = channel_registry.get(account.platform)
@@ -245,7 +200,9 @@ async def fetch_metrics_job_async(db: Session) -> int:
             db.add(snapshot)
             snapshots_created += 1
         except Exception:  # noqa: BLE001
-            logger.warning("Error fetching account metrics for account %s on %s", account.id, account.platform)
+            logger.warning(
+                "Error fetching account metrics for account %s on %s", account.id, account.platform
+            )
 
     if snapshots_created:
         db.commit()
@@ -270,11 +227,12 @@ def run(kind: str) -> None:
     interval = (
         settings.scheduler_poll_seconds if kind == "scheduler" else settings.worker_poll_seconds
     )
-    action = dispatch_due if kind == "scheduler" else process_queue
+    action = (lambda: 0) if kind == "scheduler" else process_queue
     logger.info("postflow %s started", kind)
     last_reconciliation = 0.0
     last_subreddit_refresh = 0.0
     last_metrics_fetch = 0.0
+    last_token_refresh = 0.0
 
     while running:
         try:
@@ -284,6 +242,15 @@ def run(kind: str) -> None:
 
             now_mono = time.monotonic()
             if kind == "scheduler":
+                if now_mono - last_token_refresh >= 300:
+                    with SessionLocal() as db:
+                        recover_stale_publications(db)
+                        adapters = {
+                            p: channel_registry.require(p)
+                            for p in channel_registry.list_supported_platforms()
+                        }
+                        _run_sync(refresh_expiring_accounts(db, adapters))
+                    last_token_refresh = now_mono
                 # Hourly billing reconciliation
                 if now_mono - last_reconciliation >= 3600:
                     with SessionLocal() as db:
@@ -294,7 +261,7 @@ def run(kind: str) -> None:
 
                 # Periodic subreddit profiles refresh (every 4 hours)
                 if now_mono - last_subreddit_refresh >= 14400:
-                    refreshed = refresh_subreddit_profiles()
+                    refreshed = refresh_channel_metadata()
                     last_subreddit_refresh = now_mono
                     if refreshed:
                         logger.info("refreshed %s subreddit profiles", refreshed)

@@ -267,7 +267,11 @@ async def test_token_refresh_and_needs_reauth_flagging():
         db.add(account)
 
     with SessionLocal() as db:
-        acc = db.scalar(select(ConnectedAccount).where(ConnectedAccount.external_account_id == "acc_refresh_test"))
+        acc = db.scalar(
+            select(ConnectedAccount).where(
+                ConnectedAccount.external_account_id == "acc_refresh_test"
+            )
+        )
         adapter = FakePlatformAdapter(fail_refresh=False)
 
         # Successful refresh
@@ -282,7 +286,9 @@ async def test_token_refresh_and_needs_reauth_flagging():
 
     with SessionLocal() as db:
         rechecked = db.scalar(
-            select(ConnectedAccount).where(ConnectedAccount.external_account_id == "acc_refresh_test")
+            select(ConnectedAccount).where(
+                ConnectedAccount.external_account_id == "acc_refresh_test"
+            )
         )
         assert rechecked.status == "needs_reauth"
 
@@ -318,7 +324,9 @@ async def test_refresh_expiring_accounts():
 
     with SessionLocal() as db:
         adapter = FakePlatformAdapter()
-        refreshed = await refresh_expiring_accounts(db, {"mock_social": adapter}, lookahead_minutes=60)
+        refreshed = await refresh_expiring_accounts(
+            db, {"mock_social": adapter}, lookahead_minutes=60
+        )
         external_ids = [a.external_account_id for a in refreshed]
         assert "expiring_soon" in external_ids
         assert "expiring_later" not in external_ids
@@ -347,7 +355,7 @@ def test_channels_endpoints_full_lifecycle(auth_client):
     # 4. Initiate OAuth connect
     connect_resp = client.post(
         "/api/v1/channels/mock_social/connect",
-        json={"redirect_uri": "https://app.postflow.ai/callback", "options": {"scope": "all"}},
+        json={"options": {"scope": "all"}},
     )
     assert connect_resp.status_code == 200
     connect_data = connect_resp.json()

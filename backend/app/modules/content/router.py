@@ -1,20 +1,85 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_current_workspace, require_content_access
 from app.db.session import get_db
-from app.modules.content.models import Post, PostVariant
+from app.modules.channels.models import ConnectedAccount
+from app.modules.channels.registry import channel_registry
+from app.modules.content.models import ContentTemplate, Post, PostVariant, PostVariantMedia
 from app.modules.content.schemas import (
     PostCreate,
     PostResponse,
     PostUpdate,
+    PostVariantCreate,
+    PostVariantResponse,
+    PostVariantUpdate,
+    TemplateCreate,
+    TemplateResponse,
 )
 from app.modules.identity.models import User, Workspace
+from app.modules.media.models import MediaAsset
 
 router = APIRouter(tags=["content"], dependencies=[Depends(require_content_access)])
+
+
+def _account(db, workspace_id, platform, account_id):
+    channel_registry.require(platform)
+    if account_id:
+        account = db.scalar(
+            select(ConnectedAccount).where(
+                ConnectedAccount.id == account_id,
+                ConnectedAccount.workspace_id == workspace_id,
+                ConnectedAccount.platform == platform,
+            )
+        )
+        if account is None:
+            raise HTTPException(404, "Connected account not found in this workspace/platform")
+
+
+def _media(db, workspace_id, variant, ids):
+    if len(set(ids)) != len(ids):
+        raise HTTPException(422, "Duplicate media attachments")
+    assets = [
+        db.scalar(
+            select(MediaAsset).where(
+                MediaAsset.id == aid,
+                MediaAsset.workspace_id == workspace_id,
+                MediaAsset.status == "ready",
+            )
+        )
+        for aid in ids
+    ]
+    if any(asset is None for asset in assets):
+        raise HTTPException(422, "Attachments must be ready assets in this workspace")
+    variant.media_links = [
+        PostVariantMedia(media_asset_id=asset.id, order_index=i, alt_text=asset.alt_text)
+        for i, asset in enumerate(assets)
+    ]
+
+
+def _variant(db, workspace_id, variant_id):
+    variant = db.scalar(
+        select(PostVariant)
+        .join(Post)
+        .where(PostVariant.id == variant_id, Post.workspace_id == workspace_id)
+        .with_for_update()
+    )
+    if variant is None:
+        raise HTTPException(404, "Variant not found")
+    return variant
+
+
+def _editable(variant):
+    if (
+        variant.status not in {"draft", "failed", "rejected"}
+        or (variant.publish_state or {}).get("outcome_unknown")
+        or (variant.publish_state or {}).get("thread_ids")
+        or (variant.publish_state or {}).get("thread_posts")
+    ):
+        raise HTTPException(409, "Cancel the schedule or reconcile publication before editing")
 
 
 def _post(db: Session, workspace_id: str, post_id: str, lock: bool = False) -> Post:
@@ -44,6 +109,7 @@ def create_post(
     db.flush()
 
     for v_in in payload.variants:
+        _account(db, workspace.id, v_in.platform, v_in.connected_account_id)
         variant = PostVariant(
             post_id=post.id,
             connected_account_id=v_in.connected_account_id,
@@ -54,6 +120,7 @@ def create_post(
             idempotency_key=v_in.idempotency_key or str(uuid4()),
         )
         db.add(variant)
+        _media(db, workspace.id, variant, v_in.media_asset_ids)
 
     db.commit()
     db.refresh(post)
@@ -62,14 +129,19 @@ def create_post(
 
 @router.get("/posts", response_model=list[PostResponse])
 def list_posts(
-    workspace: Workspace = Depends(get_current_workspace), db: Session = Depends(get_db)
+    workspace: Workspace = Depends(get_current_workspace), db: Session = Depends(get_db),
+    offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
+    variant_status: str | None = Query(default=None),
 ) -> list[Post]:
+    query = select(Post).where(Post.workspace_id == workspace.id)
+    if variant_status:
+        query = query.where(Post.variants.any(PostVariant.status == variant_status))
     return list(
         db.scalars(
-            select(Post)
-            .where(Post.workspace_id == workspace.id)
-            .order_by(Post.updated_at.desc())
-            .limit(200)
+            query
+            .order_by(Post.updated_at.desc(), Post.id.asc())
+            .offset(offset)
+            .limit(limit)
         )
     )
 
@@ -92,6 +164,8 @@ def update_post(
     db: Session = Depends(get_db),
 ) -> Post:
     post = _post(db, workspace.id, post_id, lock=True)
+    if any(v.status in {"scheduled", "publishing", "published"} for v in post.variants):
+        raise HTTPException(409, "Active/published posts cannot be edited")
     if payload.title is not None:
         post.title = payload.title
     if payload.status is not None:
@@ -105,12 +179,131 @@ def update_post(
     return post
 
 
+@router.post("/posts/{post_id}/variants", response_model=PostVariantResponse, status_code=201)
+def add_variant(
+    post_id: str,
+    payload: PostVariantCreate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    _post(db, workspace.id, post_id, lock=True)
+    _account(db, workspace.id, payload.platform, payload.connected_account_id)
+    variant = PostVariant(
+        post_id=post_id,
+        connected_account_id=payload.connected_account_id,
+        platform=payload.platform,
+        payload=payload.payload,
+        status="draft",
+        idempotency_key=payload.idempotency_key or str(uuid4()),
+    )
+    db.add(variant)
+    _media(db, workspace.id, variant, payload.media_asset_ids)
+    db.commit()
+    db.refresh(variant)
+    return variant
+
+
+@router.patch("/variants/{variant_id}", response_model=PostVariantResponse)
+def edit_variant(
+    variant_id: str,
+    payload: PostVariantUpdate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    variant = _variant(db, workspace.id, variant_id)
+    _editable(variant)
+    if "connected_account_id" in payload.model_fields_set:
+        _account(db, workspace.id, variant.platform, payload.connected_account_id)
+        variant.connected_account_id = payload.connected_account_id
+    if payload.payload is not None:
+        variant.payload = payload.payload
+    if payload.media_asset_ids is not None:
+        _media(db, workspace.id, variant, payload.media_asset_ids)
+    variant.status = "draft"
+    variant.publish_state = {}
+    db.commit()
+    db.refresh(variant)
+    return variant
+
+
+@router.delete("/variants/{variant_id}", status_code=204)
+def delete_variant(
+    variant_id: str,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    variant = _variant(db, workspace.id, variant_id)
+    _editable(variant)
+    db.delete(variant)
+    db.commit()
+
+
+@router.post("/templates", response_model=TemplateResponse, status_code=201)
+def create_template(
+    payload: TemplateCreate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    template = ContentTemplate(workspace_id=workspace.id, **payload.model_dump())
+    db.add(template)
+    db.commit()
+    return template
+
+
+@router.get("/templates", response_model=list[TemplateResponse])
+def list_templates(
+    workspace: Workspace = Depends(get_current_workspace), db: Session = Depends(get_db)
+):
+    return list(
+        db.scalars(select(ContentTemplate).where(ContentTemplate.workspace_id == workspace.id))
+    )
+
+
+@router.patch("/templates/{template_id}", response_model=TemplateResponse)
+def edit_template(
+    template_id: str,
+    payload: TemplateCreate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    template = db.scalar(
+        select(ContentTemplate).where(
+            ContentTemplate.id == template_id, ContentTemplate.workspace_id == workspace.id
+        )
+    )
+    if template is None:
+        raise HTTPException(404, "Template not found")
+    for key, value in payload.model_dump().items():
+        setattr(template, key, value)
+    db.commit()
+    return template
+
+
+@router.delete("/templates/{template_id}", status_code=204)
+def delete_template(
+    template_id: str,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    template = db.scalar(
+        select(ContentTemplate).where(
+            ContentTemplate.id == template_id, ContentTemplate.workspace_id == workspace.id
+        )
+    )
+    if template is None:
+        raise HTTPException(404, "Template not found")
+    db.delete(template)
+    db.commit()
+
+
 @router.delete("/posts/{post_id}", status_code=204)
 def delete_post(
     post_id: str,
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ) -> None:
-    post = _post(db, workspace.id, post_id)
+    post = _post(db, workspace.id, post_id, lock=True)
+    for variant in post.variants:
+        _editable(variant)
     db.delete(post)
     db.commit()

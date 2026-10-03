@@ -186,7 +186,11 @@ async def test_handle_callback_success():
         if "/api/v2/instance" in url_str:
             return httpx.Response(
                 200,
-                json={"configuration": {"statuses": {"max_characters": 500, "max_media_attachments": 4}}},
+                json={
+                    "configuration": {
+                        "statuses": {"max_characters": 500, "max_media_attachments": 4}
+                    }
+                },
             )
         return httpx.Response(404)
 
@@ -194,7 +198,9 @@ async def test_handle_callback_success():
     adapter = MastodonAdapter(http_client=mock_client)
 
     with SessionLocal() as db:
-        existing = db.scalar(select(MastodonApp).where(MastodonApp.instance_domain == "mastodon.social"))
+        existing = db.scalar(
+            select(MastodonApp).where(MastodonApp.instance_domain == "mastodon.social")
+        )
         if not existing:
             db.add(
                 MastodonApp(
@@ -237,10 +243,18 @@ async def test_validate_vanilla_and_custom_instance_limits():
     custom_cfg = {"instance_config": {"max_characters": 1000, "max_media_attachments": 8}}
     text_700_chars = "b" * 700
     # Should be valid under 1000 character instance
-    assert len(await adapter.validate(MockVariant({"text": text_700_chars, **custom_cfg}))) == 0
+    # User payload cannot override server-discovered constraints.
+    assert len(await adapter.validate(MockVariant({"text": text_700_chars, **custom_cfg}))) == 1
+    variant = MockVariant({"text": text_700_chars})
+    from types import SimpleNamespace
+
+    variant.validation_account = SimpleNamespace(account_metadata=custom_cfg)
+    assert len(await adapter.validate(variant)) == 0
 
     # 3. Too many media items for vanilla instance (> 4)
-    issues_media = await adapter.validate(MockVariant({"text": "pics", "media_ids": ["1", "2", "3", "4", "5"]}))
+    issues_media = await adapter.validate(
+        MockVariant({"text": "pics", "media_ids": ["1", "2", "3", "4", "5"]})
+    )
     assert len(issues_media) == 1
     assert issues_media[0].code == "too_many_media"
 
@@ -333,6 +347,7 @@ async def test_fetch_metrics(mock_mastodon_account):
 @pytest.mark.anyio
 async def test_fetch_account_metrics(mock_mastodon_account):
     """Verify whole-account follower and status count analytics from original Mastodon instance source."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://mastodon.social/api/v1/accounts/verify_credentials"
         return httpx.Response(

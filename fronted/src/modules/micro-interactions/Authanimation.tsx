@@ -2,127 +2,60 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import {
-  BarChart3,
-  Check,
-  Globe2,
-  Image as ImageIcon,
-  MessageSquare,
-  Repeat2,
-  Send,
-  ThumbsUp,
-  Type as TypeIcon,
-} from "lucide-react";
-import { Linkedin } from "@/lib/icons";
+import { Check } from "lucide-react";
 
 /* ============================================================
-   Brand
+   Timing
 ============================================================ */
 
-const BRAND = "#128be0";
-
-const BRAND_FIELD =
-  "linear-gradient(180deg, #36a7f3 0%, #2199ec 44%, #128be0 100%)";
-
-/** Every card is the same height, so the stack positions are exact. */
-const CARD_HEIGHT = 180;
-const CARD_GAP = 16;
-const CARD_STEP = CARD_HEIGHT + CARD_GAP;
-
-const TYPE_SPEED = 26;
-const PAUSE_BEFORE_PUBLISH = 900;
-const PAUSE_AFTER_PUBLISH = 1800;
+const TYPE_SPEED = 24;
+const PAUSE_BEFORE_SCHEDULE = 800;
+const PAUSE_AFTER_SCHEDULE = 1500;
 
 /* ============================================================
    Content
+   One thread per weekday. Each thread is two posts.
 ============================================================ */
 
-interface FeedPost {
-  id: string;
-  author: string;
-  initials: string;
-  role: string;
-  body: string;
-  reactions: number;
-  comments: number;
-  mine?: boolean;
-}
+const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
-/** Posts already in the feed. They drain out as yours go live. */
-const baseFeed: FeedPost[] = [
+const threads = [
   {
-    id: "base-1",
-    author: "Priya Raghunathan",
-    initials: "PR",
-    role: "Head of Growth at Lumen",
-    body: "Rewrote our worst-performing post with one change: I cut the first two lines. It did six times the reach.",
-    reactions: 143,
-    comments: 21,
+    time: "9:00",
+    posts: [
+      "Consistency beats frequency. We cut our posting in half and impressions went up.",
+      "The reason: every post got more time, and every reply got an answer.",
+    ],
   },
   {
-    id: "base-2",
-    author: "Marcus Doyle",
-    initials: "MD",
-    role: "Founder at Rendlo",
-    body: "Your first hundred followers come from replying, not posting. Nobody tells you this part.",
-    reactions: 88,
-    comments: 11,
+    time: "8:30",
+    posts: [
+      "Your profile is a landing page. Most people still treat it like a résumé.",
+      "Lead with who you help, not where you worked.",
+    ],
   },
   {
-    id: "base-3",
-    author: "Elena Fischer",
-    initials: "EF",
-    role: "B2B Content Lead",
-    body: "Everyone wants the reach. Almost nobody wants to answer comments for an hour after it lands.",
-    reactions: 167,
-    comments: 34,
+    time: "10:15",
+    posts: [
+      "The best hook I wrote this year was a line I almost deleted.",
+      "If a sentence feels too direct, it is probably the one to keep.",
+    ],
   },
   {
-    id: "base-4",
-    author: "Tomas Nowak",
-    initials: "TN",
-    role: "Sales Director at Arcwell",
-    body: "I stopped writing for the algorithm and started writing for six people I actually wanted to hear from.",
-    reactions: 122,
-    comments: 17,
+    time: "9:45",
+    posts: [
+      "Nobody replies to a pitch. Everybody replies to a good question.",
+      "Ask one thing you genuinely want to know.",
+    ],
+  },
+  {
+    time: "8:00",
+    posts: [
+      "Three months of showing up beat a year of sporadic launches.",
+      "Pick a day, pick a time, and let the queue do the rest.",
+    ],
   },
 ];
-
-/** Drafts the composer writes, in order. Each one goes live into the feed. */
-const drafts = [
-  {
-    id: "draft-1",
-    body: "Consistency beats frequency. We cut our posting in half and impressions went up.",
-    reactions: 128,
-    comments: 19,
-  },
-  {
-    id: "draft-2",
-    body: "Your profile is a landing page. Most people still treat it like a résumé.",
-    reactions: 96,
-    comments: 14,
-  },
-  {
-    id: "draft-3",
-    body: "The best hook I wrote this year was a line I almost deleted.",
-    reactions: 211,
-    comments: 28,
-  },
-  {
-    id: "draft-4",
-    body: "Nobody replies to a pitch. Everybody replies to a good question.",
-    reactions: 154,
-    comments: 22,
-  },
-  {
-    id: "draft-5",
-    body: "Three months of showing up beat a year of cold email. I have the numbers.",
-    reactions: 187,
-    comments: 31,
-  },
-];
-
-const VISIBLE_CARDS = 4;
 
 /* ============================================================
    Panel
@@ -131,184 +64,92 @@ const VISIBLE_CARDS = 4;
 export default function AuthVisualPanel() {
   const reducedMotion = useReducedMotion();
 
-  const [draftIndex, setDraftIndex] = useState(0);
+  const [round, setRound] = useState(0);
   const [typed, setTyped] = useState(0);
   const [scheduled, setScheduled] = useState(false);
-  const [feed, setFeed] = useState<FeedPost[]>(baseFeed);
 
-  const draft = drafts[draftIndex];
-  const isTyping = typed < draft.body.length;
+  const dayIndex = round % threads.length;
+  const thread = threads[dayIndex];
+  const [first, second] = thread.posts;
+  const total = first.length + second.length;
 
-  /* -- Typing, then a beat before it goes out --------------------------- */
-
+  /* A single timer drives the loop: type, pause, schedule, pause, next. */
   useEffect(() => {
     if (reducedMotion) return;
 
-    if (typed < draft.body.length) {
-      const timer = window.setTimeout(
-        () => setTyped((count) => count + 1),
-        TYPE_SPEED,
-      );
+    let delay = TYPE_SPEED;
+    let next: () => void = () => setTyped((count) => count + 1);
 
-      return () => window.clearTimeout(timer);
+    if (typed >= total && !scheduled) {
+      delay = PAUSE_BEFORE_SCHEDULE;
+      next = () => setScheduled(true);
+    } else if (scheduled) {
+      delay = PAUSE_AFTER_SCHEDULE;
+      next = () => {
+        setScheduled(false);
+        setTyped(0);
+        setRound((value) => value + 1);
+      };
     }
 
-    const timer = window.setTimeout(
-      () => setScheduled(true),
-      PAUSE_BEFORE_PUBLISH,
-    );
-
+    const timer = window.setTimeout(next, delay);
     return () => window.clearTimeout(timer);
-  }, [typed, draft.body.length, reducedMotion]);
+  }, [typed, total, scheduled, reducedMotion]);
 
-  /* -- The post enters the feed and pushes the rest down ----------------- */
+  /* With reduced motion, show one finished thread and stop. */
+  const shownTyped = reducedMotion ? total : typed;
 
-  useEffect(() => {
-    if (!scheduled || reducedMotion) return;
+  const firstText = first.slice(0, shownTyped);
+  const secondText = second.slice(0, Math.max(shownTyped - first.length, 0));
+  const activePost = shownTyped < first.length ? 0 : 1;
+  const isTyping = !reducedMotion && shownTyped < total;
 
-    setFeed((previous) =>
-      [
-        {
-          id: `${draft.id}-${draftIndex}`,
-          author: "Ajay Singh",
-          initials: "AS",
-          role: "Founder at Outlify",
-          body: draft.body,
-          reactions: draft.reactions,
-          comments: draft.comments,
-          mine: true,
-        },
-        ...previous,
-      ].slice(0, VISIBLE_CARDS),
-    );
-
-    const timer = window.setTimeout(() => {
-      setScheduled(false);
-      setTyped(0);
-      setDraftIndex((index) => (index + 1) % drafts.length);
-    }, PAUSE_AFTER_PUBLISH);
-
-    return () => window.clearTimeout(timer);
-  }, [scheduled, draft, draftIndex, reducedMotion]);
-
-  /* -- No motion: show the finished state -------------------------------- */
-
-  useEffect(() => {
-    if (reducedMotion) setTyped(drafts[0].body.length);
-  }, [reducedMotion]);
+  const scheduledCount = dayIndex + (scheduled ? 1 : 0);
 
   return (
-    <section
-      className="relative hidden min-h-screen w-full overflow-hidden md:flex md:flex-col"
-      style={{ background: BRAND_FIELD }}
-    >
-      {/* Light falling from the top right, so the field isn't flat */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 "
-        style={{
-          background:
-            "radial-gradient(120% 80% at 88% -10%, #FFFFFF86 0%, rgba(255,255,255,0) 60%)",
-        }}
-      />
+    <section className="relative hidden min-h-screen w-full bg-[#f5f5f5] md:flex md:flex-col">
+      <div className="flex min-h-screen w-full flex-col justify-between px-8 py-10 lg:px-12 xl:px-16">
+        {/* Brand */}
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-[15px] font-semibold text-white">
+            P
+          </span>
 
-      <div className="relative z-10 flex min-h-screen flex-col px-8 py-10 lg:px-12 xl:px-16">
-        {/* ===============================
-            Brand
-        =============================== */}
-
-        <div className="flex shrink-0 items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm">
-            <Linkedin size={19} />
-          </div>
-
-          <div>
-            <p className="font-heading text-lg font-semibold tracking-[-0.02em] text-white">
-              Outlify
-            </p>
-
-            <p className="text-[15px] text-white/75">
-              LinkedIn content and outreach
-            </p>
-          </div>
+          <span className="font-heading text-[17px] font-semibold tracking-[-0.02em] text-slate-900">
+            Postflow
+          </span>
         </div>
 
-        {/* ===============================
-            Stage
-        =============================== */}
+        {/* Stage */}
+        <div aria-hidden className="py-10">
+          <div className="w-full max-w-[460px]">
+            <Editor
+              firstText={firstText}
+              secondText={secondText}
+              activePost={activePost}
+              isTyping={isTyping}
+              scheduled={reducedMotion ? false : scheduled}
+              day={WEEK[dayIndex]}
+              time={thread.time}
+            />
 
-        <div
-          aria-hidden
-          className="relative my-10 min-h-0 flex-1 overflow-hidden"
-        >
-          {/* The feed wall, tilted and running off the edge */}
-          <div
-            className="absolute right-[-16%] top-[-4%] w-[430px] origin-top"
-            style={{ transform: "rotate(-8deg)" }}
-          >
-            <AnimatePresence initial={false}>
-              {feed.map((post, index) => (
-                <motion.div
-                  key={post.id}
-                  className="absolute inset-x-0 top-0"
-                  initial={
-                    reducedMotion
-                      ? false
-                      : { y: -CARD_STEP * 0.6, opacity: 0, scale: 0.94 }
-                  }
-                  animate={{
-                    y: index * CARD_STEP,
-                    opacity: 1 - index * 0.08,
-                    scale: 1,
-                  }}
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 210,
-                    damping: 26,
-                    opacity: { duration: 0.35 },
-                  }}
-                >
-                  <FeedCard
-                    post={post}
-                    countUp={Boolean(post.mine) && index === 0 && !reducedMotion}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-
-          {/* Keeps the headline sitting on clean colour */}
-          <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-2/5"
-            style={{
-              background:
-                "linear-gradient(to top, #128be0 0%, rgba(18,139,224,0.85) 45%, rgba(18,139,224,0) 100%)",
-            }}
-          />
-
-          {/* The composer, upright and in front */}
-          <div className="absolute left-0 top-1/2 z-20 w-full max-w-[400px] -translate-y-1/2">
-            <Composer
-              body={draft.body.slice(0, typed)}
-              isTyping={isTyping && !reducedMotion}
-              scheduled={scheduled}
+            <Week
+              scheduledCount={scheduledCount}
+              activeDay={dayIndex}
+              reducedMotion={Boolean(reducedMotion)}
             />
           </div>
         </div>
 
-        {/* ===============================
-            Typography
-        =============================== */}
-
-        <div className="shrink-0">
-          <h2 className="font-heading max-w-[560px] text-[42px] font-medium leading-[1.08] tracking-[-0.04em] text-white xl:text-[50px]">
-            Post every week without writing every day.
+        {/* Copy */}
+        <div>
+          <h2 className="font-heading max-w-[520px] text-[38px] font-medium leading-[1.1] tracking-[-0.035em] text-slate-900 xl:text-[44px]">
+            Write once. Publish everywhere.
           </h2>
 
-          <p className="mt-5 max-w-[520px] text-[17px] leading-7 text-white/80">
-            Outlify drafts in your voice, schedules around your audience, and
-            keeps the replies moving after a post lands.
+          <p className="mt-4 max-w-[460px] text-[16px] leading-7 text-slate-500">
+            Draft threads, schedule them for the week, and publish to X,
+            LinkedIn and Bluesky from one quiet editor.
           </p>
         </div>
       </div>
@@ -317,62 +158,45 @@ export default function AuthVisualPanel() {
 }
 
 /* ============================================================
-   Composer
+   Editor
 ============================================================ */
 
-function Composer({
-  body,
+function Editor({
+  firstText,
+  secondText,
+  activePost,
   isTyping,
   scheduled,
+  day,
+  time,
 }: {
-  body: string;
+  firstText: string;
+  secondText: string;
+  activePost: number;
   isTyping: boolean;
   scheduled: boolean;
+  day: string;
+  time: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_28px_70px_-18px_rgba(8,60,105,0.55)]">
-      <div className="flex items-center gap-3 px-5 pt-5">
-        <span
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold text-white"
-          style={{ background: BRAND_FIELD }}
-        >
-          AS
-        </span>
+    <div className="rounded-2xl border-[0.5px] border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-12px_rgba(15,23,42,0.12)]">
+      <div className="px-5 pt-5">
+        <ThreadPost
+          text={firstText}
+          showCursor={isTyping && activePost === 0}
+          connected
+        />
 
-        <div className="min-w-0">
-          <p className="font-subheading text-[15px] font-semibold text-slate-900">
-            Ajay Singh
-          </p>
-
-          <p className="truncate text-sm text-slate-500">
-            Founder at Outlify
-          </p>
-        </div>
+        <ThreadPost
+          text={secondText}
+          showCursor={isTyping && activePost === 1}
+        />
       </div>
 
-      <div className="min-h-[92px] px-5 pt-4">
-        <p className="text-[15px] leading-7 text-slate-800">
-          {body}
+      <div className="mt-2 flex items-center justify-between gap-3 border-t-[0.5px] border-slate-200 px-4 py-3">
+        <span className="text-xs text-slate-400">2 posts</span>
 
-          {isTyping && (
-            <motion.span
-              className="ml-0.5 inline-block h-[18px] w-[2px] translate-y-[3px] rounded-full"
-              style={{ backgroundColor: BRAND }}
-              animate={{ opacity: [1, 1, 0, 0] }}
-              transition={{ duration: 1, repeat: Infinity, times: [0, 0.5, 0.5, 1] }}
-            />
-          )}
-        </p>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
-        <div className="flex items-center gap-1">
-          <ComposerTool icon={TypeIcon} />
-          <ComposerTool icon={ImageIcon} />
-          <ComposerTool icon={BarChart3} />
-        </div>
-
-        <div className="relative h-9 min-w-[150px]">
+        <div className="relative h-9 w-[170px]">
           <AnimatePresence initial={false} mode="wait">
             {scheduled ? (
               <motion.div
@@ -380,31 +204,28 @@ function Composer({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.22 }}
+                transition={{ duration: 0.2 }}
                 className="absolute inset-0 flex items-center justify-end gap-2"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
-                  <Check size={13} strokeWidth={3} />
+                  <Check size={12} strokeWidth={3} />
                 </span>
 
                 <span className="font-subheading text-sm font-medium text-slate-700">
-                  Scheduled, Tue 8:30
+                  Scheduled, {day} {time}
                 </span>
               </motion.div>
             ) : (
-              <motion.button
+              <motion.span
                 key="schedule"
-                type="button"
-                tabIndex={-1}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.22 }}
-                className="font-subheading absolute inset-0 rounded-lg text-sm font-medium text-white"
-                style={{ background: BRAND_FIELD }}
+                transition={{ duration: 0.2 }}
+                className="font-subheading absolute inset-0 flex items-center justify-center rounded-lg bg-[#38bdf8] text-sm font-medium text-white shadow-[0_0_0_1px_rgba(14,116,170,0.25),inset_0_1px_0_rgba(255,255,255,0.4),0_1px_2px_rgba(8,60,105,0.25)]"
               >
-                Schedule post
-              </motion.button>
+                Schedule thread
+              </motion.span>
             )}
           </AnimatePresence>
         </div>
@@ -413,101 +234,104 @@ function Composer({
   );
 }
 
-function ComposerTool({ icon: Icon }: { icon: React.ElementType }) {
+function ThreadPost({
+  text,
+  showCursor,
+  connected = false,
+}: {
+  text: string;
+  showCursor: boolean;
+  connected?: boolean;
+}) {
   return (
-    <span className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400">
-      <Icon size={16} />
-    </span>
+    <div className="flex gap-3">
+      {/* Avatar column, with a line down to the next post */}
+      <div className="flex w-9 shrink-0 flex-col items-center">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-[13px] font-semibold text-white">
+          AS
+        </span>
+
+        {connected && <span className="mt-1 w-px flex-1 bg-slate-200" />}
+      </div>
+
+      {/* Fixed height so nothing shifts while typing */}
+      <div className="min-w-0 flex-1 pb-4">
+        <p className="font-subheading text-[15px] font-semibold leading-9 text-slate-900">
+          Ajay Singh
+        </p>
+
+        <p className="min-h-[72px] text-[15px] leading-6 text-slate-800">
+          {text}
+
+          {showCursor && (
+            <motion.span
+              className="ml-0.5 inline-block h-[16px] w-[2px] translate-y-[3px] rounded-full bg-slate-900"
+              animate={{ opacity: [1, 1, 0, 0] }}
+              transition={{
+                duration: 1,
+                repeat: Infinity,
+                times: [0, 0.5, 0.5, 1],
+              }}
+            />
+          )}
+        </p>
+      </div>
+    </div>
   );
 }
 
 /* ============================================================
-   Feed card
+   Week
+   Five slots. A slot fills when its thread is scheduled.
 ============================================================ */
 
-function FeedCard({ post, countUp }: { post: FeedPost; countUp: boolean }) {
-  const reactions = useCountUp(post.reactions, countUp);
-
+function Week({
+  scheduledCount,
+  activeDay,
+  reducedMotion,
+}: {
+  scheduledCount: number;
+  activeDay: number;
+  reducedMotion: boolean;
+}) {
   return (
-    <article
-      className="rounded-2xl bg-white px-5 py-5 shadow-[0_18px_44px_-16px_rgba(8,60,105,0.45)]"
-      style={{ height: CARD_HEIGHT }}
-    >
-      <div className="flex items-center gap-3">
-        <span
-          className={
-            post.mine
-              ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
-              : "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600"
-          }
-          style={post.mine ? { background: BRAND_FIELD } : undefined}
-        >
-          {post.initials}
-        </span>
+    <div className="mt-3 grid grid-cols-5 gap-2">
+      {WEEK.map((label, index) => {
+        const filled = !reducedMotion && index < scheduledCount;
+        const current = !reducedMotion && index === activeDay && !filled;
 
-        <div className="min-w-0 flex-1">
-          <p className="font-subheading truncate text-[15px] font-semibold text-slate-900">
-            {post.author}
-          </p>
+        return (
+          <div
+            key={label}
+            className={
+              current
+                ? "flex items-center justify-between rounded-xl border-[0.5px] border-slate-300 bg-white px-3 py-2.5"
+                : "flex items-center justify-between rounded-xl border-[0.5px] border-slate-200 bg-white/60 px-3 py-2.5"
+            }
+          >
+            <span
+              className={
+                filled || current
+                  ? "text-xs font-medium text-slate-700"
+                  : "text-xs text-slate-400"
+              }
+            >
+              {label}
+            </span>
 
-          <p className="truncate text-sm text-slate-500">{post.role}</p>
-        </div>
+            <span className="relative flex h-4 w-4 items-center justify-center">
+              <span className="absolute inset-0 rounded-full border-[0.5px] border-slate-300" />
 
-        <Globe2 size={14} className="shrink-0 text-slate-300" />
-      </div>
-
-      <p className="mt-4 line-clamp-2 h-12 text-[15px] leading-6 text-slate-700">
-        {post.body}
-      </p>
-
-      <div className="mt-4 flex items-center gap-5 text-sm text-slate-500">
-        <span className="flex items-center gap-1.5">
-          <ThumbsUp size={14} />
-          <span className="tabular-nums">{reactions}</span>
-        </span>
-
-        <span className="flex items-center gap-1.5">
-          <MessageSquare size={14} />
-          <span className="tabular-nums">{post.comments}</span>
-        </span>
-
-        <Repeat2 size={14} className="ml-auto text-slate-300" />
-        <Send size={14} className="text-slate-300" />
-      </div>
-    </article>
+              <motion.span
+                className="h-2 w-2 rounded-full bg-[#38bdf8]"
+                initial={false}
+                animate={{ scale: filled ? 1 : 0, opacity: filled ? 1 : 0 }}
+                transition={{ type: "spring", stiffness: 380, damping: 24 }}
+              />
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
-}
-
-/* ============================================================
-   Count up
-============================================================ */
-
-function useCountUp(target: number, run: boolean) {
-  const [value, setValue] = useState(run ? 0 : target);
-
-  useEffect(() => {
-    if (!run) {
-      setValue(target);
-      return;
-    }
-
-    let frame = 0;
-    const start = performance.now();
-    const duration = 1100;
-
-    const tick = (now: number) => {
-      const progress = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-
-      setValue(Math.round(target * eased));
-
-      if (progress < 1) frame = requestAnimationFrame(tick);
-    };
-
-    frame = requestAnimationFrame(tick);
-
-    return () => cancelAnimationFrame(frame);
-  }, [target, run]);
-
-  return value;
 }

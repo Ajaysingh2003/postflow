@@ -21,7 +21,7 @@ export function CardWrapper({ children, backHref }: CardWrapperProps) {
   };
 
   return (
-    <div className="bg-backgroundz border  border-border rounded-xl shadow-md p-2">
+    <div className="bg-backgroundz border  border-border rounded-xl shadow-mdz p-2">
       {/* Top action row */}
       <div className="mb-4 flex items-center">
         <Button

@@ -6,6 +6,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.main import app
@@ -60,7 +61,9 @@ def reddit_env():
         sub = SubredditProfile(
             name="programming",
             display_name="r/programming",
-            rules=[{"short_name": "No Spam", "description": "High-quality technical content only."}],
+            rules=[
+                {"short_name": "No Spam", "description": "High-quality technical content only."}
+            ],
             allowed_post_types=["text", "link", "image", "video"],
             flair_required=True,
             available_flairs=[{"id": "flair_tech", "text": "Architecture"}],
@@ -85,10 +88,10 @@ def reddit_env():
 
 def test_reddit_adapter_media_capabilities():
     adapter = RedditAdapter(client_id="cid", client_secret="csec")
-    assert adapter.capabilities.supports_media is True
-    assert adapter.capabilities.supports_video is True
+    assert adapter.capabilities.supports_media is False
+    assert adapter.capabilities.supports_video is False
     assert "video/mp4" in adapter.capabilities.supported_media_types
-    assert adapter.capabilities.max_media_count == 1
+    assert adapter.capabilities.max_media_count == 0
 
 
 @pytest.mark.anyio
@@ -100,9 +103,11 @@ async def test_reddit_media_post_validation():
             self.payload = payload
 
     issues = await adapter.validate(
-        MockPayload({"subreddit": "programming", "title": "Architecture Diagram", "post_type": "image"})
+        MockPayload(
+            {"subreddit": "programming", "title": "Architecture Diagram", "post_type": "image"}
+        )
     )
-    assert any(i.field == "media_url" for i in issues)
+    assert any(i.code == "unsupported_post_type" for i in issues)
 
     issues_valid = await adapter.validate(
         MockPayload(
@@ -114,7 +119,7 @@ async def test_reddit_media_post_validation():
             }
         )
     )
-    assert not any(i.field == "media_url" for i in issues_valid)
+    assert any(i.code == "unsupported_post_type" for i in issues_valid)
 
 
 @pytest.mark.anyio
@@ -122,7 +127,15 @@ async def test_reddit_media_publish_kind_link():
     mock_responses = {
         f"{REDDIT_OAUTH_API_BASE}/api/submit": httpx.Response(
             status_code=200,
-            json={"json": {"errors": [], "data": {"id": "t3_imgpost123", "url": "https://reddit.com/r/programming/comments/imgpost123"}}},
+            json={
+                "json": {
+                    "errors": [],
+                    "data": {
+                        "id": "t3_imgpost123",
+                        "url": "https://reddit.com/r/programming/comments/imgpost123",
+                    },
+                }
+            },
         )
     }
 
@@ -150,8 +163,8 @@ async def test_reddit_media_publish_kind_link():
         {
             "subreddit": "programming",
             "title": "Distributed Queues Visualized",
-            "post_type": "image",
-            "media_url": "https://cdn.example.com/diagram.png",
+            "post_type": "link",
+            "url": "https://cdn.example.com/diagram.png",
             "flair_id": "flair_tech",
         }
     )
@@ -186,101 +199,21 @@ def test_reddit_post_preview_generation(reddit_env):
     assert data["mock_upvotes"] == 1
 
 
-@pytest.mark.anyio
-async def test_reddit_comment_inbox_and_reply_endpoints(reddit_env, monkeypatch):
-    client = reddit_env["client"]
-    headers = reddit_env["headers"]
-    acc_id = reddit_env["account_id"]
-
-    # Mock fetch_comments and post_comment_reply on RedditAdapter
-    mock_comments = [
-        {
-            "id": "c_123",
-            "fullname": "t1_c_123",
-            "author": "curious_coder",
-            "body": "How do you handle worker node crashes during active jobs?",
-            "score": 14,
-            "created_utc": 1727800000.0,
-            "permalink": "https://reddit.com/r/programming/comments/xyz/comment/c_123",
-            "parent_id": "t3_xyz",
-            "post_title": "Scaling Distributed Workers",
-            "subreddit": "programming",
-        }
-    ]
-
-    async def mock_fetch_comments(self, account, external_post_id=None, limit=25):
-        return mock_comments
-
-    async def mock_post_reply(self, account, parent_id, text):
-        return {
-            "id": "c_reply_456",
-            "fullname": "t1_c_reply_456",
-            "author": account.display_name,
-            "body": text,
-            "parent_id": parent_id,
-            "created_utc": 1727800100.0,
-        }
-
-    monkeypatch.setattr(RedditAdapter, "fetch_comments", mock_fetch_comments)
-    monkeypatch.setattr(RedditAdapter, "post_comment_reply", mock_post_reply)
-
-    # 1. Test Inbox retrieval
-    res_inbox = client.get(f"/api/v1/channels/reddit/{acc_id}/inbox", headers=headers)
-    assert res_inbox.status_code == 200
-    inbox_items = res_inbox.json()
-    assert len(inbox_items) == 1
-    assert inbox_items[0]["author"] == "curious_coder"
-
-    # 2. Test manual comment reply
-    res_reply = client.post(
-        f"/api/v1/channels/reddit/{acc_id}/comments/reply",
-        headers=headers,
-        json={
-            "parent_id": "t1_c_123",
-            "text": "We use Redis visibility timeouts and idempotent leases to reassign the task cleanly.",
-        },
+def test_reddit_inbox_reply_and_listening_are_not_exposed(reddit_env):
+    client, headers, account = reddit_env["client"], reddit_env["headers"], reddit_env["account_id"]
+    for path in (
+        f"/api/v1/channels/reddit/{account}/inbox",
+        f"/api/v1/channels/reddit/{account}/conversations/search?q=topic",
+    ):
+        assert client.get(path, headers=headers).status_code == 404
+    assert (
+        client.post(
+            f"/api/v1/channels/reddit/{account}/comments/reply",
+            headers=headers,
+            json={"parent_id": "t1_other", "text": "reply"},
+        ).status_code
+        == 404
     )
-    assert res_reply.status_code == 200
-    reply_data = res_reply.json()
-    assert reply_data["id"] == "c_reply_456"
-    assert reply_data["parent_id"] == "t1_c_123"
-
-
-@pytest.mark.anyio
-async def test_reddit_conversation_discovery_search(reddit_env, monkeypatch):
-    client = reddit_env["client"]
-    headers = reddit_env["headers"]
-    acc_id = reddit_env["account_id"]
-
-    mock_discussions = [
-        {
-            "id": "t3_disc1",
-            "fullname": "t3_disc1",
-            "title": "What is your stack for background job processing?",
-            "subreddit": "webdev",
-            "author": "lead_architect",
-            "score": 85,
-            "num_comments": 42,
-            "created_utc": 1727800000.0,
-            "permalink": "https://reddit.com/r/webdev/comments/disc1",
-            "selftext_snippet": "Evaluating Celery vs ARQ vs BullMQ...",
-        }
-    ]
-
-    async def mock_search(self, account, query, subreddit=None, sort="relevance", time_filter="week", limit=15):
-        return mock_discussions
-
-    monkeypatch.setattr(RedditAdapter, "search_discussions", mock_search)
-
-    res = client.get(
-        f"/api/v1/channels/reddit/{acc_id}/conversations/search?q=background+jobs&subreddit=webdev",
-        headers=headers,
-    )
-    assert res.status_code == 200
-    discussions = res.json()
-    assert len(discussions) == 1
-    assert discussions[0]["subreddit"] == "webdev"
-    assert discussions[0]["num_comments"] == 42
 
 
 @pytest.mark.anyio
@@ -310,7 +243,11 @@ async def test_new_reddit_ai_assistant_features(reddit_env):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="reddit_best_posting_times",
-            input_data={"subreddit": "programming", "timezone": "America/New_York", "topic": "Tech Architecture"},
+            input_data={
+                "subreddit": "programming",
+                "timezone": "America/New_York",
+                "topic": "Tech Architecture",
+            },
             db=db,
         )
         assert "recommended_windows" in out_times
@@ -336,17 +273,35 @@ async def test_new_reddit_ai_assistant_features(reddit_env):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="reddit_community_discovery",
-            input_data={"topic": "FastAPI and distributed job queues", "niche": "Backend Engineering"},
+            input_data={
+                "topic": "FastAPI and distributed job queues",
+                "niche": "Backend Engineering",
+            },
             db=db,
         )
         assert "recommended_subreddits" in out_disc
         assert len(out_disc["recommended_subreddits"]) > 0
 
         # 5. Multi-Community Adaptation
+        for name in ("programming", "webdev"):
+            if db.scalar(select(SubredditProfile).where(SubredditProfile.name == name)) is None:
+                db.add(
+                    SubredditProfile(
+                        name=name,
+                        rules=[],
+                        allowed_post_types=["text", "link"],
+                        flair_required=False,
+                        available_flairs=[],
+                        title_requirements={"max_length": 300},
+                        fetched_at=datetime.now(UTC),
+                    )
+                )
+        db.commit()
         out_adapt, _, _ = await execute_feature(
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="reddit_multi_community_adapt",
+            validation_context={"programming": {"flair_id": "flair_tech"}},
             input_data={
                 "base_message": "We built an async queue system that handles 50,000 tasks per second with zero locking.",
                 "target_subreddits": ["programming", "webdev"],
@@ -404,7 +359,9 @@ def test_team_approval_workflow(reddit_env):
     user_id = reddit_env["user_id"]
 
     with SessionLocal() as db:
-        post = Post(workspace_id=ws_id, author_id=user_id, title="Needs Approval", base_text="Body content")
+        post = Post(
+            workspace_id=ws_id, author_id=user_id, title="Needs Approval", base_text="Body content"
+        )
         db.add(post)
         db.flush()
         variant = PostVariant(
@@ -420,7 +377,9 @@ def test_team_approval_workflow(reddit_env):
         var_id = variant.id
 
     # 1. Submit for approval
-    res_sub = client.post(f"/api/v1/publishing/variants/{var_id}/submit-for-approval", headers=headers)
+    res_sub = client.post(
+        f"/api/v1/publishing/variants/{var_id}/submit-for-approval", headers=headers
+    )
     assert res_sub.status_code == 200
     assert res_sub.json()["status"] == "pending_approval"
 

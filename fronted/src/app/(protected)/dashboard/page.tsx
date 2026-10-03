@@ -1,11 +1,5 @@
-import React from "react";
+import { PostsView } from "@/modules/studio/PostsView";
 
-function page() {
-  return (
-    <div className="w-full h-full">
-      page
-    </div>
-  );
+export default function DashboardPage() {
+  return <PostsView title="Your workspace" />;
 }
-
-export default page;

@@ -70,6 +70,10 @@ async def test_build_auth_url():
 async def test_handle_callback_success():
     def handler(request: httpx.Request) -> httpx.Response:
         url_str = str(request.url)
+        if "/post_requirements" in url_str:
+            return httpx.Response(
+                200, json={"is_flair_required": True, "title_text_max_length": 300}
+            )
         assert "postflow" in request.headers["User-Agent"]
         if url_str == REDDIT_TOKEN_URL:
             return httpx.Response(
@@ -178,12 +182,20 @@ async def test_list_targets(mock_reddit_account):
 async def test_refresh_subreddit_profile(mock_reddit_account):
     def handler(request: httpx.Request) -> httpx.Response:
         url_str = str(request.url)
+        if "/post_requirements" in url_str:
+            return httpx.Response(
+                200, json={"is_flair_required": True, "title_text_max_length": 300}
+            )
         if "/r/python/about/rules" in url_str:
             return httpx.Response(
                 200,
                 json={
                     "rules": [
-                        {"short_name": "No Spam", "description": "Original content only", "violation_reason": "Spam"}
+                        {
+                            "short_name": "No Spam",
+                            "description": "Original content only",
+                            "violation_reason": "Spam",
+                        }
                     ]
                 },
             )
@@ -192,7 +204,13 @@ async def test_refresh_subreddit_profile(mock_reddit_account):
         if "/r/python/about" in url_str:
             return httpx.Response(
                 200,
-                json={"data": {"submission_type": "any", "link_flair_enabled": True, "link_flair_required": True}},
+                json={
+                    "data": {
+                        "submission_type": "any",
+                        "link_flair_enabled": True,
+                        "link_flair_required": True,
+                    }
+                },
             )
         return httpx.Response(404)
 
@@ -214,12 +232,14 @@ async def test_validate():
 
     # Valid post with title and subreddit target
     issues = await adapter.validate(
-        MockVariant({
-            "subreddit": "python",
-            "title": "Clean Architecture in Python",
-            "body": "Here is a breakdown of domain patterns...",
-            "post_type": "text",
-        })
+        MockVariant(
+            {
+                "subreddit": "python",
+                "title": "Clean Architecture in Python",
+                "body": "Here is a breakdown of domain patterns...",
+                "post_type": "text",
+            }
+        )
     )
     assert len(issues) == 0
 
@@ -240,7 +260,9 @@ async def test_validate():
 
     # Link post without url
     issues = await adapter.validate(
-        MockVariant({"subreddit": "python", "title": "Great Site", "post_type": "link", "url": None})
+        MockVariant(
+            {"subreddit": "python", "title": "Great Site", "post_type": "link", "url": None}
+        )
     )
     assert len(issues) == 1
     assert issues[0].code == "missing_url"
@@ -277,12 +299,14 @@ async def test_publish_text_and_link_post(mock_reddit_account):
     # 1. Text (Self) post
     res_text = await adapter.publish(
         mock_reddit_account,
-        MockVariant({
-            "subreddit": "r/Python",
-            "title": "Release 1.0 of Postflow",
-            "body": "Detailed notes on multi-platform scheduling",
-            "post_type": "text",
-        }),
+        MockVariant(
+            {
+                "subreddit": "r/Python",
+                "title": "Release 1.0 of Postflow",
+                "body": "Detailed notes on multi-platform scheduling",
+                "post_type": "text",
+            }
+        ),
     )
     assert res_text.success is True
     assert res_text.external_post_id == "t3_123456"
@@ -294,12 +318,14 @@ async def test_publish_text_and_link_post(mock_reddit_account):
     # 2. Link post
     res_link = await adapter.publish(
         mock_reddit_account,
-        MockVariant({
-            "subreddit": "Python",
-            "title": "Documentation Link",
-            "url": "https://postflow.ai/docs",
-            "post_type": "link",
-        }),
+        MockVariant(
+            {
+                "subreddit": "Python",
+                "title": "Documentation Link",
+                "url": "https://postflow.ai/docs",
+                "post_type": "link",
+            }
+        ),
     )
     assert res_link.success is True
     assert recorded_form_data[1]["kind"] == "link"
@@ -313,7 +339,13 @@ async def test_publish_ratelimit_retryable(mock_reddit_account):
             200,
             json={
                 "json": {
-                    "errors": [["RATELIMIT", "You are doing that too much. Try again in 5 minutes.", "ratelimit"]]
+                    "errors": [
+                        [
+                            "RATELIMIT",
+                            "You are doing that too much. Try again in 5 minutes.",
+                            "ratelimit",
+                        ]
+                    ]
                 }
             },
         )
@@ -380,6 +412,7 @@ async def test_fetch_metrics(mock_reddit_account):
 @pytest.mark.anyio
 async def test_fetch_account_metrics(mock_reddit_account):
     """Verify whole-account karma and subscriber metrics from the original Reddit source."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == f"{REDDIT_OAUTH_API_BASE}/api/v1/me"
         return httpx.Response(

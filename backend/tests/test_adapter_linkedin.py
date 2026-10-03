@@ -49,7 +49,7 @@ def test_linkedin_adapter_protocol_conformance():
     assert adapter.capabilities.platform == "linkedin"
     assert adapter.capabilities.max_text_length == 3000
     assert adapter.capabilities.supports_media is True
-    assert adapter.capabilities.max_media_count == 9
+    assert adapter.capabilities.max_media_count == 20
     assert adapter.capabilities.supports_account_metrics is True
 
 
@@ -138,7 +138,7 @@ async def test_list_targets(mock_linkedin_account):
     def handler(request: httpx.Request) -> httpx.Response:
         url_str = str(request.url)
         assert f"{LINKEDIN_REST_BASE}/organizationalEntityAcls" in url_str
-        assert request.headers["LinkedIn-Version"] == "202401"
+        assert request.headers["LinkedIn-Version"] == "202609"
         return httpx.Response(
             200,
             json={
@@ -187,9 +187,11 @@ async def test_validate():
     assert len(issues) == 1
     assert issues[0].code == "text_too_long"
 
-    # Too many media items (> 9)
+    # Too many media items (> 20)
     issues = await adapter.validate(
-        MockVariant({"text": "Check slides", "media_urns": [f"urn:li:image:{i}" for i in range(10)]})
+        MockVariant(
+            {"text": "Check slides", "media_urns": [f"urn:li:image:{i}" for i in range(21)]}
+        )
     )
     assert len(issues) == 1
     assert issues[0].code == "too_many_media"
@@ -202,7 +204,7 @@ async def test_publish_personal_and_organization_post(mock_linkedin_account):
     def handler(request: httpx.Request) -> httpx.Response:
         url_str = str(request.url)
         assert url_str == f"{LINKEDIN_REST_BASE}/posts"
-        assert request.headers["LinkedIn-Version"] == "202401"
+        assert request.headers["LinkedIn-Version"] == "202609"
         assert request.headers["X-Restli-Protocol-Version"] == "2.0.0"
         import json
 
@@ -224,17 +226,21 @@ async def test_publish_personal_and_organization_post(mock_linkedin_account):
     )
     assert res_personal.success is True
     assert res_personal.external_post_id == "urn:li:share:987654321"
-    assert res_personal.external_url == "https://www.linkedin.com/feed/update/urn:li:share:987654321"
+    assert (
+        res_personal.external_url == "https://www.linkedin.com/feed/update/urn:li:share:987654321"
+    )
     assert recorded_requests[0]["author"] == "urn:li:person:person_12345"
     assert recorded_requests[0]["commentary"] == "Sharing my thoughts on AI"
 
     # 2. Publish targeting an organization page
     res_org = await adapter.publish(
         mock_linkedin_account,
-        MockVariant({
-            "text": "Company update: New product release!",
-            "target_urn": "urn:li:organization:1234567",
-        }),
+        MockVariant(
+            {
+                "text": "Company update: New product release!",
+                "target_urn": "urn:li:organization:1234567",
+            }
+        ),
     )
     assert res_org.success is True
     assert recorded_requests[1]["author"] == "urn:li:organization:1234567"
@@ -287,6 +293,7 @@ async def test_fetch_metrics(mock_linkedin_account):
 @pytest.mark.anyio
 async def test_fetch_account_metrics_organization(mock_linkedin_account):
     """Verify whole-account follower and view analytics from the original LinkedIn API source."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         encoded_org = urllib.parse.quote("urn:li:organization:998877", safe="")
         assert f"{LINKEDIN_REST_BASE}/organizationalEntityFollowerStatistics" in str(request.url)

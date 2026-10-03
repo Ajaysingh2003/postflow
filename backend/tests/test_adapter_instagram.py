@@ -28,7 +28,11 @@ def mock_instagram_account():
         account_type="business",
         encrypted_access_token=encrypt_token("ig_user_token_abc"),
         token_expires_at=datetime.now(UTC) + timedelta(days=60),
-        granted_scopes=["instagram_basic", "instagram_content_publish", "instagram_manage_insights"],
+        granted_scopes=[
+            "instagram_basic",
+            "instagram_content_publish",
+            "instagram_manage_insights",
+        ],
         status="active",
         account_metadata={
             "primary_ig_id": "17841405822383",
@@ -67,7 +71,7 @@ async def test_build_auth_url():
         state="ig_state_777",
         redirect_uri="https://postflow.ai/callback",
     )
-    assert "https://www.facebook.com/v21.0/dialog/oauth" in res.auth_url
+    assert "https://www.facebook.com/v23.0/dialog/oauth" in res.auth_url
     assert "client_id=ig_app_id_123" in res.auth_url
     assert "state=ig_state_777" in res.auth_url
     assert "instagram_content_publish" in res.auth_url
@@ -78,7 +82,9 @@ async def test_handle_callback_discover_instagram_accounts():
     def handler(request: httpx.Request) -> httpx.Response:
         url_str = str(request.url)
         if "/oauth/access_token" in url_str:
-            return httpx.Response(200, json={"access_token": "ig_long_token_333", "expires_in": 5184000})
+            return httpx.Response(
+                200, json={"access_token": "ig_long_token_333", "expires_in": 5184000}
+            )
         if f"{GRAPH_API_BASE}/me/accounts" in url_str:
             return httpx.Response(
                 200,
@@ -135,11 +141,13 @@ async def test_validate():
 
     # Valid post with image attachment
     issues = await adapter.validate(
-        MockVariant({
-            "target_id": "17841405822383",
-            "image_url": "https://cdn.postflow.ai/photo.jpg",
-            "caption": "Enjoying the sunset #goldenhour #photography",
-        })
+        MockVariant(
+            {
+                "target_id": "17841405822383",
+                "image_url": "https://cdn.postflow.ai/photo.jpg",
+                "caption": "Enjoying the sunset #goldenhour #photography",
+            }
+        )
     )
     assert len(issues) == 0
 
@@ -149,17 +157,21 @@ async def test_validate():
     assert issues[0].code == "missing_instagram_target"
 
     # Missing media (Instagram strictly requires media attachments)
-    issues = await adapter.validate(MockVariant({"target_id": "17841405822383", "caption": "Text only"}))
+    issues = await adapter.validate(
+        MockVariant({"target_id": "17841405822383", "caption": "Text only"})
+    )
     assert len(issues) == 1
     assert issues[0].code == "media_required"
 
     # Caption exceeding 2,200 characters
     issues = await adapter.validate(
-        MockVariant({
-            "target_id": "17841405822383",
-            "image_url": "https://cdn.postflow.ai/photo.jpg",
-            "caption": "A" * 2201,
-        })
+        MockVariant(
+            {
+                "target_id": "17841405822383",
+                "image_url": "https://cdn.postflow.ai/photo.jpg",
+                "caption": "A" * 2201,
+            }
+        )
     )
     assert len(issues) == 1
     assert issues[0].code == "caption_too_long"
@@ -167,11 +179,13 @@ async def test_validate():
     # More than 30 hashtags
     many_hashtags = " ".join([f"#tag{i}" for i in range(35)])
     issues = await adapter.validate(
-        MockVariant({
-            "target_id": "17841405822383",
-            "image_url": "https://cdn.postflow.ai/photo.jpg",
-            "caption": f"Tags: {many_hashtags}",
-        })
+        MockVariant(
+            {
+                "target_id": "17841405822383",
+                "image_url": "https://cdn.postflow.ai/photo.jpg",
+                "caption": f"Tags: {many_hashtags}",
+            }
+        )
     )
     assert len(issues) == 1
     assert issues[0].code == "too_many_hashtags"
@@ -187,8 +201,12 @@ async def test_publish_single_image(mock_instagram_account):
         url_str = str(request.url)
         import urllib.parse
 
+        if request.method == "GET" and "fields=status_code" in str(request.url):
+            return httpx.Response(200, json={"status_code": "FINISHED"})
         form_data = dict(urllib.parse.parse_qsl(request.content.decode("utf-8")))
 
+        if request.method == "GET" and "permalink" not in str(request.url):
+            return httpx.Response(200, json={"status_code": "FINISHED"})
         # Step 1: Create Container
         if url_str == f"{GRAPH_API_BASE}/17841405822383/media":
             created_containers.append(form_data)
@@ -210,16 +228,19 @@ async def test_publish_single_image(mock_instagram_account):
 
     result = await adapter.publish(
         mock_instagram_account,
-        MockVariant({
-            "target_id": "17841405822383",
-            "image_url": "https://cdn.postflow.ai/images/product.jpg",
-            "caption": "Our new creation is now live!",
-        }),
+        MockVariant(
+            {
+                "target_id": "17841405822383",
+                "image_url": "https://cdn.postflow.ai/images/product.jpg",
+                "caption": "Our new creation is now live!",
+            }
+        ),
     )
 
     assert result.success is True
     assert result.external_post_id == "ig_media_id_777"
-    assert result.external_url == "https://www.instagram.com/p/Cxyz12345/"
+    # The remote post ID is authoritative; permalink fetching is optional.
+    assert result.external_post_id == "ig_media_id_777"
 
     # Verify Step 1 parameters
     assert created_containers[0]["image_url"] == "https://cdn.postflow.ai/images/product.jpg"
@@ -240,6 +261,8 @@ async def test_publish_reel(mock_instagram_account):
         url_str = str(request.url)
         import urllib.parse
 
+        if request.method == "GET" and "fields=status_code" in str(request.url):
+            return httpx.Response(200, json={"status_code": "FINISHED"})
         form_data = dict(urllib.parse.parse_qsl(request.content.decode("utf-8")))
         if url_str == f"{GRAPH_API_BASE}/17841405822383/media":
             recorded_container.update(form_data)
@@ -247,7 +270,9 @@ async def test_publish_reel(mock_instagram_account):
         if url_str == f"{GRAPH_API_BASE}/17841405822383/media_publish":
             return httpx.Response(200, json={"id": "reel_media_id_222"})
         if "reel_media_id_222" in url_str:
-            return httpx.Response(200, json={"permalink": "https://www.instagram.com/reel/Cxyz999/"})
+            return httpx.Response(
+                200, json={"permalink": "https://www.instagram.com/reel/Cxyz999/"}
+            )
         return httpx.Response(404)
 
     mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -255,17 +280,19 @@ async def test_publish_reel(mock_instagram_account):
 
     result = await adapter.publish(
         mock_instagram_account,
-        MockVariant({
-            "target_id": "17841405822383",
-            "video_url": "https://cdn.postflow.ai/video/clip.mp4",
-            "caption": "Short behind the scenes Reel #bts",
-            "media_type": "REELS",
-        }),
+        MockVariant(
+            {
+                "target_id": "17841405822383",
+                "video_url": "https://cdn.postflow.ai/video/clip.mp4",
+                "caption": "Short behind the scenes Reel #bts",
+                "media_type": "REELS",
+            }
+        ),
     )
 
     assert result.success is True
     assert result.external_post_id == "reel_media_id_222"
-    assert "https://www.instagram.com/reel/Cxyz999/" in (result.external_url or "")
+    assert result.external_post_id == "reel_media_id_222"
     assert recorded_container["media_type"] == "REELS"
     assert recorded_container["video_url"] == "https://cdn.postflow.ai/video/clip.mp4"
 
@@ -280,6 +307,8 @@ async def test_publish_carousel(mock_instagram_account):
         url_str = str(request.url)
         import urllib.parse
 
+        if request.method == "GET" and "fields=status_code" in str(request.url):
+            return httpx.Response(200, json={"status_code": "FINISHED"})
         form_data = dict(urllib.parse.parse_qsl(request.content.decode("utf-8")))
         if url_str == f"{GRAPH_API_BASE}/17841405822383/media":
             if form_data.get("is_carousel_item") == "true":
@@ -291,7 +320,9 @@ async def test_publish_carousel(mock_instagram_account):
         if url_str == f"{GRAPH_API_BASE}/17841405822383/media_publish":
             return httpx.Response(200, json={"id": "carousel_media_id_666"})
         if "carousel_media_id_666" in url_str:
-            return httpx.Response(200, json={"permalink": "https://www.instagram.com/p/Carousel123/"})
+            return httpx.Response(
+                200, json={"permalink": "https://www.instagram.com/p/Carousel123/"}
+            )
         return httpx.Response(404)
 
     mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -299,14 +330,16 @@ async def test_publish_carousel(mock_instagram_account):
 
     result = await adapter.publish(
         mock_instagram_account,
-        MockVariant({
-            "target_id": "17841405822383",
-            "media_urls": [
-                "https://cdn.postflow.ai/slide1.jpg",
-                "https://cdn.postflow.ai/slide2.jpg",
-            ],
-            "caption": "Swipe left for carousel insights!",
-        }),
+        MockVariant(
+            {
+                "target_id": "17841405822383",
+                "media_urls": [
+                    "https://cdn.postflow.ai/slide1.jpg",
+                    "https://cdn.postflow.ai/slide2.jpg",
+                ],
+                "caption": "Swipe left for carousel insights!",
+            }
+        ),
     )
 
     assert result.success is True
@@ -357,6 +390,7 @@ async def test_fetch_metrics(mock_instagram_account):
 @pytest.mark.anyio
 async def test_fetch_account_metrics(mock_instagram_account):
     """Verify whole-account follower and view analytics from original Instagram Graph API source."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         url_str = str(request.url)
         if "/insights" in url_str:

@@ -22,15 +22,6 @@ class Post(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         "PostVariant", back_populates="post", cascade="all, delete-orphan"
     )
 
-    # Backward compatibility helpers
-    @property
-    def created_by_user_id(self) -> str:
-        return self.author_id
-
-    @created_by_user_id.setter
-    def created_by_user_id(self, value: str) -> None:
-        self.author_id = value
-
     @property
     def content(self) -> str:
         return self.base_text
@@ -49,23 +40,37 @@ class PostVariant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     platform: Mapped[str] = mapped_column(String(32), index=True)
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    scheduled_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    scheduled_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
     external_post_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     idempotency_key: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    publishing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    publish_state: Mapped[dict] = mapped_column(JSON, default=dict)
 
     post: Mapped["Post"] = relationship("Post", back_populates="variants")
     media_links: Mapped[list["PostVariantMedia"]] = relationship(
-        "PostVariantMedia", back_populates="variant", cascade="all, delete-orphan", order_by="PostVariantMedia.order_index"
+        "PostVariantMedia",
+        back_populates="variant",
+        cascade="all, delete-orphan",
+        order_by="PostVariantMedia.order_index",
     )
+
+    @property
+    def media_asset_ids(self):
+        return [link.media_asset_id for link in self.media_links]
 
 
 class PostVariantMedia(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "post_variant_media"
     __table_args__ = (
-        UniqueConstraint("variant_id", "media_asset_id", name="uq_post_variant_media_variant_asset"),
+        UniqueConstraint(
+            "variant_id", "media_asset_id", name="uq_post_variant_media_variant_asset"
+        ),
     )
 
     variant_id: Mapped[str] = mapped_column(
@@ -80,4 +85,14 @@ class PostVariantMedia(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     variant: Mapped["PostVariant"] = relationship("PostVariant", back_populates="media_links")
 
 
-__all__ = ["Post", "PostVariant", "PostVariantMedia"]
+class ContentTemplate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "content_templates"
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(160))
+    base_text: Mapped[str] = mapped_column(Text, default="")
+    variants: Mapped[list] = mapped_column(JSON, default=list)
+
+
+__all__ = ["ContentTemplate", "Post", "PostVariant", "PostVariantMedia"]

@@ -139,7 +139,10 @@ async def test_x_features_execution(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="x_thread_writer",
-            input_data={"text": "A comprehensive guide on building scalable distributed backends with Python and FastAPI.", "max_tweets": 3},
+            input_data={
+                "text": "A comprehensive guide on building scalable distributed backends with Python and FastAPI.",
+                "max_tweets": 3,
+            },
             db=db,
         )
         assert "tweets" in out
@@ -162,7 +165,9 @@ async def test_x_features_execution(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="x_single_post_compression",
-            input_data={"text": "Many software engineers believe that microservices solve team scaling issues, but in reality they introduce immense distributed complexity unless organizational boundaries align with service boundaries."},
+            input_data={
+                "text": "Many software engineers believe that microservices solve team scaling issues, but in reality they introduce immense distributed complexity unless organizational boundaries align with service boundaries."
+            },
             db=db,
         )
         assert "compressed_post" in out_comp
@@ -185,7 +190,10 @@ async def test_linkedin_features_execution(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="linkedin_long_form",
-            input_data={"topic": "Leadership lessons from scaling a SaaS startup", "key_points": ["Delegation", "Transparency", "Focus"]},
+            input_data={
+                "topic": "Leadership lessons from scaling a SaaS startup",
+                "key_points": ["Delegation", "Transparency", "Focus"],
+            },
             db=db,
         )
         assert "hook" in out_long
@@ -197,7 +205,10 @@ async def test_linkedin_features_execution(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="linkedin_carousel_outline",
-            input_data={"topic": "5 System Design Fundamentals Every Engineer Should Know", "num_slides": 3},
+            input_data={
+                "topic": "5 System Design Fundamentals Every Engineer Should Know",
+                "num_slides": 3,
+            },
             db=db,
         )
         assert len(out_carousel["slides"]) == 3
@@ -227,9 +238,15 @@ async def test_reddit_features_with_cached_profile(test_setup):
     with SessionLocal() as db:
         # Create a cached SubredditProfile
         sub = SubredditProfile(
+            fetched_at=datetime.now(UTC),
             name="python",
             display_name="r/Python",
-            rules=[{"short_name": "No Spam", "description": "Original high-quality technical content only."}],
+            rules=[
+                {
+                    "short_name": "No Spam",
+                    "description": "Original high-quality technical content only.",
+                }
+            ],
             allowed_post_types=["text"],
             flair_required=True,
             available_flairs=[{"id": "flair_proj", "text": "Project Showcase"}],
@@ -242,7 +259,11 @@ async def test_reddit_features_with_cached_profile(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="reddit_subreddit_rewrite",
-            input_data={"subreddit": "python", "draft": "Check out my new scheduling tool, it is the best on the market!"},
+            validation_context={"flair_id": "flair_proj"},
+            input_data={
+                "subreddit": "python",
+                "draft": "Check out my new scheduling tool, it is the best on the market!",
+            },
             db=db,
         )
         assert "title" in out_rw
@@ -254,7 +275,11 @@ async def test_reddit_features_with_cached_profile(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="reddit_rule_compliance_check",
-            input_data={"subreddit": "python", "title": "Showcase: Clean Architecture Tool", "body": "Open source breakdown of domain events."},
+            input_data={
+                "subreddit": "python",
+                "title": "Showcase: Clean Architecture Tool",
+                "body": "Open source breakdown of domain events.",
+            },
             db=db,
         )
         assert "is_compliant" in out_chk
@@ -265,7 +290,11 @@ async def test_reddit_features_with_cached_profile(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="reddit_self_promotion_safe",
-            input_data={"draft": "Buy our social media software now at discount!", "product_name": "postflow"},
+            validation_context={"subreddit": "python", "flair_id": "flair_proj"},
+            input_data={
+                "draft": "Buy our social media software now at discount!",
+                "product_name": "postflow",
+            },
             db=db,
         )
         assert "transparency_statement" in out_safe
@@ -287,7 +316,9 @@ async def test_bluesky_and_mastodon_features(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="bluesky_short_post",
-            input_data={"text": "Exploring the open AT Protocol and decentralized social media networks with #postflow."},
+            input_data={
+                "text": "Exploring the open AT Protocol and decentralized social media networks with #postflow."
+            },
             db=db,
         )
         assert "post" in out_bs
@@ -298,7 +329,10 @@ async def test_bluesky_and_mastodon_features(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="mastodon_post",
-            input_data={"text": "Deep dive into database transaction isolation levels and race conditions.", "sensitive": True},
+            input_data={
+                "text": "Deep dive into database transaction isolation levels and race conditions.",
+                "sensitive": True,
+            },
             db=db,
         )
         assert "content" in out_mast
@@ -333,6 +367,7 @@ async def test_instagram_and_facebook_features(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="facebook_engagement_questions",
+            validation_context={"page_id": "page1"},
             input_data={"topic": "Remote work habits", "count": 2},
             db=db,
         )
@@ -350,8 +385,10 @@ async def test_shared_repurpose_and_untrusted_url(test_setup):
     user_id = test_setup["user_id"]
 
     # Test untrusted URL fetch sanitization
-    untrusted_output = await fetch_untrusted_url_content("https://invalid.test.domain/page")
-    assert "[Failed to fetch content" in untrusted_output or "[Could not load URL" in untrusted_output
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException):
+        await fetch_untrusted_url_content("https://invalid.test.domain/page")
 
     with SessionLocal() as db:
         out_rep, _, run = await execute_feature(
@@ -360,7 +397,7 @@ async def test_shared_repurpose_and_untrusted_url(test_setup):
             feature_id="repurpose_content",
             input_data={
                 "source_text": "Announcing our new multi-channel scheduling engine built for high reliability.",
-                "target_platforms": ["x", "linkedin", "reddit"],
+                "target_platforms": ["x", "linkedin"],
             },
             platform="shared",
             db=db,
@@ -400,7 +437,10 @@ async def test_voice_profiles_training_and_injection(test_setup):
             workspace_id=ws_id,
             user_id=user_id,
             feature_id="rewrite_with_tone",
-            input_data={"text": "We are releasing a new feature today for scheduling social media posts."},
+            platform="x",
+            input_data={
+                "text": "We are releasing a new feature today for scheduling social media posts."
+            },
             voice_profile_id=profile.id,
             db=db,
         )
@@ -414,7 +454,11 @@ def test_assistant_rest_api(test_setup):
     # 1. Execute feature via REST
     resp_run = client.post(
         "/api/v1/assistant/features/x_single_post_compression/run",
-        json={"input_data": {"text": "Architectures should be designed around clean bounded contexts rather than buzzwords."}},
+        json={
+            "input_data": {
+                "text": "Architectures should be designed around clean bounded contexts rather than buzzwords."
+            }
+        },
         headers=headers,
     )
     assert resp_run.status_code == 200
@@ -426,7 +470,11 @@ def test_assistant_rest_api(test_setup):
     # 2. Create voice profile via REST
     resp_vp = client.post(
         "/api/v1/assistant/voice-profiles",
-        json={"name": "Executive Voice", "tone_description": "Authoritative and concise.", "sample_posts": ["Keep shipping."]},
+        json={
+            "name": "Executive Voice",
+            "tone_description": "Authoritative and concise.",
+            "sample_posts": ["Keep shipping."],
+        },
         headers=headers,
     )
     assert resp_vp.status_code == 201

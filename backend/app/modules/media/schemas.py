@@ -22,6 +22,9 @@ class MediaResponse(BaseModel):
     id: str
     original_filename: str
     content_type: str
+    width: int | None = None
+    height: int | None = None
+    alt_text: str | None = None
     actual_size: int | None
     status: str
     rejection_reason: str | None

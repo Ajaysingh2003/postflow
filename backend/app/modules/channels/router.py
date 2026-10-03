@@ -1,17 +1,28 @@
+import json
 import logging
+import urllib.parse
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_current_user, get_current_workspace, require_roles
+from app.core.config import get_settings
+from app.core.dependencies import (
+    get_current_user,
+    get_current_workspace,
+    membership_for,
+    require_roles,
+)
 from app.db.session import get_db
 from app.modules.channels.base import Capabilities
 from app.modules.channels.models import ConnectedAccount
 from app.modules.channels.oauth import (
     create_oauth_state,
+    decrypt_token,
     disconnect_account,
+    encrypt_token,
     generate_pkce_pair,
     refresh_account_tokens,
     verify_and_consume_oauth_state,
@@ -26,12 +37,18 @@ from app.modules.channels.schemas import (
     DisconnectResponse,
     TargetListResponse,
 )
+from app.modules.channels.support import require_credentials
 from app.modules.identity.models import User
 from app.modules.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/channels", tags=["channels"])
+
+
+@router.get("/bluesky/client-metadata")
+def bluesky_client_metadata():
+    return channel_registry.require("bluesky").client_metadata()
 
 
 @router.get("/capabilities", response_model=CapabilitiesListResponse)
@@ -80,6 +97,24 @@ def get_connected_account(
     return ConnectedAccountResponse.model_validate(account)
 
 
+@router.get("/accounts/{account_id}/capabilities", response_model=Capabilities)
+def account_capabilities(
+    account_id: str,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    account = db.scalar(
+        select(ConnectedAccount).where(
+            ConnectedAccount.id == account_id, ConnectedAccount.workspace_id == workspace.id
+        )
+    )
+    if account is None:
+        raise HTTPException(404, "Account not found")
+    adapter = channel_registry.require(account.platform)
+    hook = getattr(adapter, "account_capabilities", None)
+    return hook(account) if hook else adapter.capabilities
+
+
 @router.post("/{platform}/connect", response_model=AuthStartResponse)
 async def start_oauth(
     platform: str,
@@ -94,8 +129,27 @@ async def start_oauth(
     Generates state and PKCE verifier, saving them securely.
     """
     adapter = channel_registry.require(platform)
-    options = payload.options if payload else {}
-    redirect_uri = payload.redirect_uri if payload else None
+    require_credentials(adapter, *getattr(adapter, "required_credentials", ()))
+    options = dict(payload.options) if payload else {}
+    redirect_uri = (payload.redirect_uri if payload else None) or get_settings().oauth_callback_url(
+        platform
+    )
+    if (
+        payload
+        and payload.redirect_uri
+        and payload.redirect_uri != get_settings().oauth_callback_url(platform)
+    ):
+        raise HTTPException(422, "OAuth redirect must match the configured callback")
+    for key in (
+        "db",
+        "state_record",
+        "workspace_id",
+        "state",
+        "redirect_uri",
+        "code_verifier",
+        "code_challenge",
+    ):
+        options.pop(key, None)
 
     # Enforce billing plan connected accounts quota
     from app.modules.billing.entitlements import check_connected_accounts_limit
@@ -108,7 +162,7 @@ async def start_oauth(
     instance_domain = options.get("instance_domain")
 
     # Create CSRF-safe state record in db
-    _, raw_state = create_oauth_state(
+    state_record, raw_state = create_oauth_state(
         db=db,
         workspace_id=workspace.id,
         user_id=user.id,
@@ -125,9 +179,15 @@ async def start_oauth(
         code_challenge=code_challenge,
         code_verifier=code_verifier,
         redirect_uri=redirect_uri,
+        db=db,
+        state_record=state_record,
         **options,
     )
 
+    if auth_start.metadata.get("requested_scopes"):
+        metadata = json.loads(decrypt_token(state_record.encrypted_metadata) or "{}")
+        state_record.encrypted_metadata = encrypt_token(json.dumps({**metadata, "requested_scopes": auth_start.metadata["requested_scopes"]}))
+        db.commit()
     return AuthStartResponse(auth_url=auth_start.auth_url, state=raw_state)
 
 
@@ -152,6 +212,9 @@ async def handle_callback_post(
     # Verify and consume state (protects against replay and CSRF)
     state_record = verify_and_consume_oauth_state(db, platform, payload.state)
 
+    membership = membership_for(db, state_record.workspace_id, state_record.user_id)
+    if membership.role not in {"owner", "admin"}:
+        raise HTTPException(403, "Channel administration permission was removed")
     params: dict[str, Any] = dict(payload.params)
     if payload.code:
         params["code"] = payload.code
@@ -164,6 +227,8 @@ async def handle_callback_post(
         code_verifier=state_record.code_verifier,
         redirect_uri=state_record.redirect_uri,
         instance_domain=state_record.instance_domain,
+        oauth_metadata=json.loads(decrypt_token(state_record.encrypted_metadata) or "{}"),
+        db=db,
     )
 
     # Check if this account already exists in the workspace
@@ -198,7 +263,7 @@ async def handle_callback_post(
     return ConnectedAccountResponse.model_validate(target_account)
 
 
-@router.get("/{platform}/callback", response_model=ConnectedAccountResponse)
+@router.get("/{platform}/callback")
 async def handle_callback_get(
     platform: str,
     request: Request,
@@ -206,8 +271,9 @@ async def handle_callback_get(
     code: str | None = Query(default=None),
     error: str | None = Query(default=None),
     error_description: str | None = Query(default=None),
+    iss: str | None = Query(default=None),
     db: Session = Depends(get_db),
-) -> ConnectedAccountResponse:
+):
     """Handle direct GET callback redirects from OAuth providers."""
     query_params = dict(request.query_params)
     payload = CallbackRequest(
@@ -217,7 +283,32 @@ async def handle_callback_get(
         error_description=error_description,
         params=query_params,
     )
-    return await handle_callback_post(platform, payload, db)
+    accept = request.headers.get("accept", "")
+    is_browser = (
+        "text/html" in accept
+        or "application/xhtml+xml" in accept
+        or not accept.startswith("application/json")
+    )
+
+    try:
+        account_resp = await handle_callback_post(platform, payload, db)
+        if is_browser:
+            settings = get_settings()
+            return RedirectResponse(
+                url=f"{settings.frontend_url.rstrip('/')}/dashboard/channels?connected={platform}",
+                status_code=302,
+            )
+        return account_resp
+    except Exception as exc:
+        if is_browser:
+            settings = get_settings()
+            err_detail = getattr(exc, "detail", str(exc))
+            encoded_err = urllib.parse.quote(str(err_detail))
+            return RedirectResponse(
+                url=f"{settings.frontend_url.rstrip('/')}/dashboard/channels?error={encoded_err}",
+                status_code=302,
+            )
+        raise
 
 
 @router.post("/accounts/{account_id}/disconnect", response_model=DisconnectResponse)

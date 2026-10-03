@@ -1,17 +1,16 @@
 """Provider-agnostic LLM client for structured text generation.
 
 Supports any OpenAI-compatible completions endpoint with JSON mode.
-When no API key is provided, falls back to a deterministic structured mock
-suitable for local development and offline automated testing.
+Deterministic output is available only with an explicit development/test mock flag.
 """
 
 import json
 import logging
-import os
+import re
 from typing import Any, TypeVar
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import get_settings
 from app.modules.assistant.base import LLMMessage, LLMResponse
@@ -21,6 +20,12 @@ logger = logging.getLogger("assistant.llm")
 T = TypeVar("T", bound=BaseModel)
 
 
+class LLMGenerationError(ValueError):
+    def __init__(self, tokens_used):
+        super().__init__("Provider output did not match the requested schema")
+        self.tokens_used = tokens_used
+
+
 def make_strict_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Recursively enforce 'additionalProperties: False' for strict JSON Schema mode."""
     cloned = json.loads(json.dumps(schema))
@@ -28,7 +33,10 @@ def make_strict_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
     def _recurse(node: Any) -> None:
         if isinstance(node, dict):
             if node.get("type") == "object" or "properties" in node:
-                node["additionalProperties"] = False
+                if not isinstance(node.get("additionalProperties"), dict):
+                    node["additionalProperties"] = False
+                if "properties" in node:
+                    node["required"] = list(node["properties"])
             for v in node.values():
                 _recurse(v)
         elif isinstance(node, list):
@@ -51,8 +59,8 @@ class LLMClient:
     ) -> None:
         settings = get_settings()
         self.api_key = api_key or settings.llm_provider_api_key
-        self.base_url = (base_url or settings.llm_provider_url or "https://api.openai.com/v1").rstrip("/")
-        self.model = model or settings.llm_model or "gpt-4o"
+        self.base_url = (base_url or settings.llm_provider_url or "").rstrip("/")
+        self.model = model or settings.llm_model
         self._http_client = http_client
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -69,9 +77,12 @@ class LLMClient:
         """
         Generate structured output parsed and validated against response_model.
         """
-        # In automated test mode or when no key is set, use deterministic mock output
-        is_test_env = "PYTEST_CURRENT_TEST" in os.environ and self._http_client is None
-        if not self.api_key or self.api_key == "test-key-mock" or is_test_env:
+        settings = get_settings()
+        if not self.api_key and not settings.llm_mock_enabled:
+            from fastapi import HTTPException
+
+            raise HTTPException(503, "AI provider is not configured")
+        if settings.llm_mock_enabled and self._http_client is None:
             mock_data = self._generate_mock_output(response_model, messages)
             parsed = response_model.model_validate(mock_data)
             resp = LLMResponse(
@@ -84,12 +95,17 @@ class LLMClient:
             )
             return parsed, resp
 
+        if not self.base_url or not self.model:
+            from fastapi import HTTPException
+
+            raise HTTPException(503, "Configure an AI provider URL and model")
         client = await self._get_client()
         raw_schema = response_model.model_json_schema()
         strict_schema = make_strict_json_schema(raw_schema)
 
         payload = {
             "model": self.model,
+            "max_tokens": get_settings().llm_max_output_tokens,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "temperature": temperature,
             "response_format": {
@@ -114,13 +130,20 @@ class LLMClient:
                 headers=headers,
             )
             # Fallback to simple json_object mode if the provider rejects strict json_schema
-            if r.status_code != 200 and ("json_schema" in r.text.lower() or "schema" in r.text.lower()):
+            if r.status_code != 200 and (
+                "json_schema" in r.text.lower() or "schema" in r.text.lower()
+            ):
                 logger.info("Provider rejected strict json_schema, retrying with json_object mode")
                 fallback_payload = {
                     "model": self.model,
-                    "messages": [
-                        {"role": m.role, "content": m.content} for m in messages
-                    ] + [{"role": "system", "content": f"Output must strictly match this JSON schema: {json.dumps(raw_schema)}"}],
+                    "max_tokens": get_settings().llm_max_output_tokens,
+                    "messages": [{"role": m.role, "content": m.content} for m in messages]
+                    + [
+                        {
+                            "role": "system",
+                            "content": f"Output must strictly match this JSON schema: {json.dumps(raw_schema)}",
+                        }
+                    ],
                     "temperature": temperature,
                     "response_format": {"type": "json_object"},
                 }
@@ -142,8 +165,11 @@ class LLMClient:
         content_str = choice.get("message", {}).get("content", "{}")
         usage = res_json.get("usage", {})
 
-        data = json.loads(content_str)
-        parsed = response_model.model_validate(data)
+        try:
+            data = json.loads(content_str)
+            parsed = response_model.model_validate(data)
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise LLMGenerationError(usage.get("total_tokens", 0)) from exc
         llm_resp = LLMResponse(
             content=content_str,
             parsed=parsed,
@@ -195,9 +221,21 @@ class LLMClient:
                     ]
                 elif "slide" in field_name or "carousel" in field_name:
                     result[field_name] = [
-                        {"slide_number": 1, "title": "The Big Shift", "content": "Why traditional scheduling is changing."},
-                        {"slide_number": 2, "title": "Key Insight", "content": "Multi-channel alignment drives reach."},
-                        {"slide_number": 3, "title": "Take Action", "content": "Audit your platform variants today."},
+                        {
+                            "slide_number": 1,
+                            "title": "The Big Shift",
+                            "content": "Why traditional scheduling is changing.",
+                        },
+                        {
+                            "slide_number": 2,
+                            "title": "Key Insight",
+                            "content": "Multi-channel alignment drives reach.",
+                        },
+                        {
+                            "slide_number": 3,
+                            "title": "Take Action",
+                            "content": "Audit your platform variants today.",
+                        },
                     ]
                 elif "adapted_posts" in field_name:
                     result[field_name] = [
@@ -227,9 +265,14 @@ class LLMClient:
                 elif "tag" in field_name:
                     result[field_name] = ["en"]
                 elif "rule" in field_name or "issue" in field_name:
-                    result[field_name] = ["Complies with community standards; no promotional spam detected."]
+                    result[field_name] = [
+                        "Complies with community standards; no promotional spam detected."
+                    ]
                 elif "strengths" in field_name:
-                    result[field_name] = ["Strong technical depth", "Fits community discussion norms"]
+                    result[field_name] = [
+                        "Strong technical depth",
+                        "Fits community discussion norms",
+                    ]
                 elif "risk_factors" in field_name:
                     result[field_name] = ["Ensure external links are omitted from title"]
                 elif "recommendations" in field_name:
@@ -241,18 +284,43 @@ class LLMClient:
                 elif "suggestions" in field_name:
                     if "reply" in response_model.__name__.lower():
                         result[field_name] = [
-                            {"tone": "helpful", "text": "Thanks for pointing that out! Here is how we handled concurrency...", "reasoning": "Direct and insightful answer"},
-                            {"tone": "appreciative", "text": "Great perspective, completely agree on the database lock trade-off.", "reasoning": "Validates commenter and builds goodwill"},
+                            {
+                                "tone": "helpful",
+                                "text": "Thanks for pointing that out! Here is how we handled concurrency...",
+                                "reasoning": "Direct and insightful answer",
+                            },
+                            {
+                                "tone": "appreciative",
+                                "text": "Great perspective, completely agree on the database lock trade-off.",
+                                "reasoning": "Validates commenter and builds goodwill",
+                            },
                         ]
                     else:
-                        result[field_name] = ["Ensure no promotional links in title", "Add concrete technical breakdown"]
+                        result[field_name] = [
+                            "Ensure no promotional links in title",
+                            "Add concrete technical breakdown",
+                        ]
                 elif "recommended_subreddits" in field_name:
                     result[field_name] = [
-                        {"subreddit": "programming", "subscriber_scale": "5.8M", "match_reason": "High interest in architecture", "posting_tips": "Focus on code trade-offs"},
-                        {"subreddit": "webdev", "subscriber_scale": "2.4M", "match_reason": "Relevant to API developers", "posting_tips": "Value-first tutorials"},
+                        {
+                            "subreddit": "programming",
+                            "subscriber_scale": "5.8M",
+                            "match_reason": "High interest in architecture",
+                            "posting_tips": "Focus on code trade-offs",
+                        },
+                        {
+                            "subreddit": "webdev",
+                            "subscriber_scale": "2.4M",
+                            "match_reason": "Relevant to API developers",
+                            "posting_tips": "Value-first tutorials",
+                        },
                     ]
                 elif "option" in field_name:
-                    result[field_name] = ["Option A: Faster execution", "Option B: Deeper reliability", "Option C: Both"]
+                    result[field_name] = [
+                        "Option A: Faster execution",
+                        "Option B: Deeper reliability",
+                        "Option C: Both",
+                    ]
                 else:
                     result[field_name] = ["Mock generated item 1", "Mock generated item 2"]
 
@@ -266,30 +334,60 @@ class LLMClient:
                     result[field_name] = 42
 
             elif "dict" in ann_str.lower():
-                result[field_name] = {"variant": "mock_data"}
+                if field_name in {"variants", "adapted_variants"}:
+                    platforms = set(
+                        re.findall(
+                            r"'(x|linkedin|reddit|bluesky|mastodon|facebook|instagram|threads)'",
+                            user_content,
+                        )
+                    )
+                    result[field_name] = {
+                        p: "Practical lessons from building reliable software." for p in platforms
+                    }
+                else:
+                    result[field_name] = {"variant": "mock_data"}
 
             elif "str" in ann_str.lower():
-                if "title" in field_name:
+                if field_name == "post_type":
+                    result[field_name] = "text"
+                elif "title" in field_name:
                     result[field_name] = "How to Build Resilient Social Scheduling Architectures"
                 elif "alignment" in field_name:
                     result[field_name] = "High"
                 elif "rationale" in field_name or "reason" in field_name:
                     result[field_name] = "Peak community activity occurs mid-week afternoon UTC."
-                elif "caption" in field_name or "body" in field_name or "content" in field_name or "post" in field_name:
-                    snippet = user_content[:80] if user_content else "Modern distributed publishing."
-                    result[field_name] = f"Key takeaway: {snippet} Clean architecture ensures zero cross-platform cascading failures."
+                elif (
+                    "caption" in field_name
+                    or "body" in field_name
+                    or "content" in field_name
+                    or "post" in field_name
+                ):
+                    snippet = (
+                        user_content[:80] if user_content else "Modern distributed publishing."
+                    )
+                    result[field_name] = (
+                        f"Key takeaway: {snippet} Clean architecture ensures zero cross-platform cascading failures."
+                    )
                 elif "hook" in field_name:
-                    result[field_name] = "Why 90% of developers build scheduling pipelines wrong (and how to fix it):"
+                    result[field_name] = (
+                        "Why 90% of developers build scheduling pipelines wrong (and how to fix it):"
+                    )
                 elif "first_comment" in field_name:
-                    result[field_name] = "Drop a comment if you'd like the complete architecture blueprint!"
+                    result[field_name] = (
+                        "Drop a comment if you'd like the complete architecture blueprint!"
+                    )
                 elif "flair" in field_name:
                     result[field_name] = "Discussion"
                 elif "alt_text" in field_name:
-                    result[field_name] = "Diagram showing decoupled social media platform adapters and workers."
+                    result[field_name] = (
+                        "Diagram showing decoupled social media platform adapters and workers."
+                    )
                 elif "warning" in field_name or "spoiler" in field_name:
                     result[field_name] = "Engineering architecture insights"
                 elif "script" in field_name:
-                    result[field_name] = "Hook: Stop hardcoding social integrations! Visual: show code refactor. Body: Use adapters."
+                    result[field_name] = (
+                        "Hook: Stop hardcoding social integrations! Visual: show code refactor. Body: Use adapters."
+                    )
                 else:
                     result[field_name] = f"Mock {field_name} text"
             else:

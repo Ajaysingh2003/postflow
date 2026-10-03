@@ -7,6 +7,7 @@ import httpx
 from fastapi import HTTPException, status
 
 from app.core.config import get_settings
+from app.modules.channels.adapters.management import LinkedInManagement
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -18,6 +19,7 @@ from app.modules.channels.base import (
 )
 from app.modules.channels.models import ConnectedAccount
 from app.modules.channels.oauth import decrypt_token, encrypt_token
+from app.modules.channels.support import AdapterHTTP
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ LINKEDIN_USERINFO_URL = "https://api.linkedin.com/v2/userinfo"
 LINKEDIN_REST_BASE = "https://api.linkedin.com/rest"
 
 # Supported LinkedIn REST API version
-LINKEDIN_API_VERSION = "202401"
+LINKEDIN_API_VERSION = get_settings().linkedin_api_version
 
 # Standard scopes for personal profiles and company organization pages
 LINKEDIN_SCOPES = [
@@ -42,13 +44,14 @@ LINKEDIN_SCOPES = [
 ]
 
 
-class LinkedInAdapter:
+class LinkedInAdapter(LinkedInManagement):
     """
     Platform adapter for LinkedIn using official OAuth 2.0 and REST Posts API.
     Supports posting to personal profiles and company organization pages.
     """
 
     platform = "linkedin"
+    required_credentials = ("client_id", "client_secret")
 
     def __init__(
         self,
@@ -57,9 +60,13 @@ class LinkedInAdapter:
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         settings = get_settings()
-        self.client_id = client_id or settings.linkedin_client_id or "linkedin_client_id_placeholder"
-        self.client_secret = client_secret or settings.linkedin_client_secret or "linkedin_client_secret_placeholder"
-        self.redirect_base_url = settings.oauth_redirect_base_url
+        self.client_id = (
+            client_id or settings.linkedin_client_id or "linkedin_client_id_placeholder"
+        )
+        self.client_secret = (
+            client_secret or settings.linkedin_client_secret or "linkedin_client_secret_placeholder"
+        )
+        self.redirect_base_url = settings.oauth_callback_url(self.platform)
         self._http_client = http_client
 
         self.capabilities = Capabilities(
@@ -71,14 +78,13 @@ class LinkedInAdapter:
             supported_media_types=[
                 "image/jpeg",
                 "image/png",
-                "image/webp",
                 "image/gif",
                 "video/mp4",
                 "application/pdf",
             ],
-            max_media_count=9,
+            max_media_count=20,
             supports_video=True,
-            max_video_duration_seconds=600,
+            max_video_duration_seconds=1800,
             supports_threads=False,
             supports_polls=True,
             supports_alt_text=True,
@@ -92,10 +98,13 @@ class LinkedInAdapter:
             supports_scheduling=True,
         )
 
+    from app.modules.channels.adapters.media import upload_linkedin as prepare_media
+    from app.modules.channels.adapters.media import validate_linkedin_media as validate_media
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._http_client is not None:
             return self._http_client
-        return httpx.AsyncClient(timeout=30.0)
+        return AdapterHTTP(self.platform)
 
     def _headers(self, access_token: str) -> dict[str, str]:
         return {
@@ -111,6 +120,8 @@ class LinkedInAdapter:
         """
         redirect_uri = opts.get("redirect_uri") or self.redirect_base_url
         scopes = opts.get("scopes") or LINKEDIN_SCOPES
+        if opts.get("manage_replies"):
+            scopes = list(dict.fromkeys([*scopes, "r_organization_social_feed", "w_organization_social_feed", "r_member_social_feed", "w_member_social_feed"]))
 
         params = {
             "response_type": "code",
@@ -124,7 +135,7 @@ class LinkedInAdapter:
             auth_url=auth_url,
             state=state,
             code_verifier=None,
-            metadata={"redirect_uri": redirect_uri},
+            metadata={"redirect_uri": redirect_uri, "requested_scopes": scopes},
         )
 
     async def handle_callback(
@@ -166,7 +177,9 @@ class LinkedInAdapter:
                 await client.aclose()
 
         if token_resp.status_code != 200:
-            logger.error("LinkedIn token exchange failed: %s %s", token_resp.status_code, token_resp.text)
+            logger.error(
+                "LinkedIn token exchange failed: %s %s", token_resp.status_code, token_resp.text
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"LinkedIn token exchange failed: {token_resp.text}",
@@ -177,7 +190,7 @@ class LinkedInAdapter:
         refresh_token = token_data.get("refresh_token")
         expires_in = token_data.get("expires_in", 5184000)  # Default 60 days
         granted_scope_str = token_data.get("scope", "")
-        granted_scopes = granted_scope_str.split(" ") if granted_scope_str else LINKEDIN_SCOPES
+        granted_scopes = granted_scope_str.split(" ") if granted_scope_str else opts.get("oauth_metadata", {}).get("requested_scopes", LINKEDIN_SCOPES)
 
         # Fetch OpenID user profile
         user_info = await self._fetch_userinfo(access_token)
@@ -203,6 +216,7 @@ class LinkedInAdapter:
                 "email": email,
                 "name": name,
                 "picture": user_info.get("picture"),
+                "avatar_url": user_info.get("picture"),
             },
         )
 
@@ -254,7 +268,9 @@ class LinkedInAdapter:
 
         if resp.status_code != 200:
             logger.error("LinkedIn token refresh failed: %s %s", resp.status_code, resp.text)
-            raise RuntimeError(f"LinkedIn token refresh failed (HTTP {resp.status_code}): {resp.text}")
+            raise RuntimeError(
+                f"LinkedIn token refresh failed (HTTP {resp.status_code}): {resp.text}"
+            )
 
         token_data = resp.json()
         new_access = token_data.get("access_token")
@@ -334,11 +350,19 @@ class LinkedInAdapter:
         issues: list[Issue] = []
         payload = getattr(variant, "payload", {})
         if not isinstance(payload, dict):
-            return [Issue(field="payload", message="Invalid variant payload format", severity="error")]
+            return [
+                Issue(field="payload", message="Invalid variant payload format", severity="error")
+            ]
 
         text = payload.get("text", "")
-        if not text and not payload.get("media_urns"):
-            issues.append(Issue(field="text", message="LinkedIn post must contain text or media", severity="error"))
+        if not text and not payload.get("media_urns") and not payload.get("poll"):
+            issues.append(
+                Issue(
+                    field="text",
+                    message="LinkedIn post must contain text or media",
+                    severity="error",
+                )
+            )
 
         if len(text) > self.capabilities.max_text_length:
             issues.append(
@@ -361,6 +385,25 @@ class LinkedInAdapter:
                 )
             )
 
+        poll = payload.get("poll")
+        if poll and (
+            not 1 <= len(poll.get("question", "")) <= 140
+            or not 2 <= len(poll.get("options", [])) <= 4
+            or any(not o or len(o) > 30 for o in poll.get("options", []))
+            or poll.get("duration", "SEVEN_DAYS")
+            not in {"ONE_DAY", "THREE_DAYS", "SEVEN_DAYS", "FOURTEEN_DAYS"}
+            or media_urns
+        ):
+            issues.append(
+                Issue(
+                    field="poll",
+                    message="Invalid LinkedIn poll question/options/duration or conflicting media",
+                )
+            )
+        if len(media_urns) > 1 and any(not urn.startswith("urn:li:image:") for urn in media_urns):
+            issues.append(
+                Issue(field="media_urns", message="Multiple attachments must be image URNs")
+            )
         return issues
 
     async def publish(self, account: ConnectedAccount, variant: Any) -> PublishResult:
@@ -401,10 +444,33 @@ class LinkedInAdapter:
 
         media_urns = payload.get("media_urns")
         if media_urns:
-            body["content"] = {
-                "media": [{"id": urn} for urn in media_urns]
-            }
+            body["content"] = {"media": {"id": media_urns[0]}}
+            if payload.get("media_alt_texts") and media_urns[0].startswith("urn:li:image:"):
+                body["content"]["media"]["altText"] = payload["media_alt_texts"][0]
 
+        if media_urns and len(media_urns) > 1:
+            body["content"] = {
+                "multiImage": {
+                    "images": [
+                        {
+                            "id": urn,
+                            "altText": (payload.get("media_alt_texts") or [""] * len(media_urns))[
+                                i
+                            ],
+                        }
+                        for i, urn in enumerate(media_urns)
+                    ]
+                }
+            }
+        if payload.get("poll"):
+            poll = payload["poll"]
+            body["content"] = {
+                "poll": {
+                    "question": poll["question"],
+                    "options": [{"text": o} for o in poll["options"]],
+                    "settings": {"duration": poll.get("duration", "SEVEN_DAYS")},
+                }
+            }
         client = await self._get_client()
         try:
             resp = await client.post(
@@ -418,6 +484,7 @@ class LinkedInAdapter:
                 success=False,
                 error_message=f"Network error: {exc}",
                 is_retryable=True,
+                outcome_unknown=isinstance(exc, httpx.TransportError),
             )
         finally:
             if self._http_client is None:
@@ -430,7 +497,12 @@ class LinkedInAdapter:
                     post_urn = resp.json().get("id")
                 except (ValueError, KeyError) as exc:
                     logger.debug("Could not parse json id from LinkedIn response: %s", exc)
-            post_urn = post_urn or "urn:li:share:published"
+            if not post_urn:
+                return PublishResult(
+                    success=False,
+                    outcome_unknown=True,
+                    error_message="LinkedIn accepted the post but returned no identifier",
+                )
 
             # URL format for LinkedIn shares
             external_url = f"https://www.linkedin.com/feed/update/{post_urn}"
@@ -441,7 +513,7 @@ class LinkedInAdapter:
                 raw_response={"post_urn": post_urn, "status_code": resp.status_code},
             )
 
-        is_retryable = resp.status_code in {429, 500, 502, 503, 504}
+        is_retryable = resp.status_code == 429
         error_msg = f"LinkedIn API error (HTTP {resp.status_code}): {resp.text}"
         logger.warning("LinkedIn publish failed: %s", error_msg)
 
@@ -450,6 +522,9 @@ class LinkedInAdapter:
             error_message=error_msg,
             raw_response={"status_code": resp.status_code, "body": resp.text},
             is_retryable=is_retryable,
+            status_code=resp.status_code,
+            auth_error=resp.status_code == 401,
+            outcome_unknown=resp.status_code >= 500,
         )
 
     async def delete_post(self, account: ConnectedAccount, external_post_id: str) -> None:
@@ -473,7 +548,9 @@ class LinkedInAdapter:
 
         if resp.status_code not in {204, 200, 404}:
             logger.warning("Failed to delete LinkedIn post %s: %s", external_post_id, resp.text)
-            raise RuntimeError(f"Failed to delete LinkedIn post (HTTP {resp.status_code}): {resp.text}")
+            raise RuntimeError(
+                f"Failed to delete LinkedIn post (HTTP {resp.status_code}): {resp.text}"
+            )
 
     async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
         """
@@ -495,8 +572,10 @@ class LinkedInAdapter:
                 await client.aclose()
 
         if resp.status_code != 200:
-            logger.warning("Failed to fetch LinkedIn metrics for %s: %s", external_post_id, resp.text)
-            return Metrics()
+            logger.warning(
+                "Failed to fetch LinkedIn metrics for %s: %s", external_post_id, resp.text
+            )
+            raise RuntimeError(f"Metrics API error: HTTP {resp.status_code}")
 
         data = resp.json()
         likes = data.get("likesSummary", {}).get("totalLikes", 0)
@@ -547,8 +626,10 @@ class LinkedInAdapter:
                 await client.aclose()
 
         if resp.status_code != 200:
-            logger.warning("Failed to fetch LinkedIn organization stats for %s: %s", org_urn, resp.text)
-            return AccountMetrics()
+            logger.warning(
+                "Failed to fetch LinkedIn organization stats for %s: %s", org_urn, resp.text
+            )
+            raise RuntimeError("Account metrics request failed or is unsupported")
 
         stats = resp.json().get("elements", [{}])[0]
         follower_counts = stats.get("followerCountsByAssociationType", [{}])[0]

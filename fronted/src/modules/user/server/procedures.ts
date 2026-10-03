@@ -2,7 +2,13 @@ import axios from "axios";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { authedProcedure, baseProcedure, createTRPCRouter, getUserProcedure } from "@/trpc/init";
+import {
+  authedProcedure,
+  baseProcedure,
+  createTRPCRouter,
+  getUserProcedure,
+  invalidateUserSession,
+} from "@/trpc/init";
 import {
   clearAuthCookies,
   getAccessToken,
@@ -131,25 +137,13 @@ export const userRouter = createTRPCRouter({
 
   /**
    * Fetches the current authenticated user from the backend identity service.
+   * Utilizes getUserProcedure session caching to avoid redundant roundtrips.
    */
-  me: baseProcedure.query(async (): Promise<AuthUser> => {
-    const token = await getAccessToken();
-    if (!token) {
+  me: getUserProcedure.query(async ({ ctx }): Promise<AuthUser> => {
+    if (!ctx.user) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: "Not signed in" });
     }
-
-    try {
-      const response = await axios.get<AuthUser>(`${getAuthApiUrl()}/me`, {
-        headers: await getAuthHeaders(token),
-      });
-
-      return {
-        ...response.data,
-        display_name: response.data.name,
-      };
-    } catch (error) {
-      return handleBackendError(error, "Could not load user profile");
-    }
+    return ctx.user as AuthUser;
   }),
 
   /**
@@ -169,7 +163,7 @@ export const userRouter = createTRPCRouter({
         display_name: z.string().trim().min(1).max(160).optional(),
       }),
     )
-    .mutation(async ({ input }): Promise<AuthUser> => {
+    .mutation(async ({ input, ctx }): Promise<AuthUser> => {
       const name = (input.name || input.display_name)?.trim();
       if (!name) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Name is required" });
@@ -179,8 +173,10 @@ export const userRouter = createTRPCRouter({
         const response = await axios.patch<AuthUser>(
           `${getAuthApiUrl()}/me`,
           { name },
-          { headers: await getAuthHeaders() },
+          { headers: await getAuthHeaders((ctx as any)?.token) },
         );
+
+        invalidateUserSession((ctx as any)?.token);
 
         return {
           ...response.data,
@@ -198,6 +194,7 @@ export const userRouter = createTRPCRouter({
     try {
       const token = await getAccessToken();
       if (token) {
+        invalidateUserSession(token);
         await axios.post(`${getAuthApiUrl()}/logout`, {}, { headers: await getAuthHeaders(token) });
       }
     } catch {
@@ -205,21 +202,25 @@ export const userRouter = createTRPCRouter({
     }
 
     await clearAuthCookies();
+    invalidateUserSession();
     return { success: true };
   }),
 
   /**
    * Revokes all active sessions for the user and clears cookies.
    */
-  logoutAll: authedProcedure.mutation(async () => {
+  logoutAll: authedProcedure.mutation(async ({ ctx }) => {
     try {
-      await axios.post(`${getAuthApiUrl()}/logout-all`, {}, { headers: await getAuthHeaders() });
+      invalidateUserSession((ctx as any)?.token);
+      await axios.post(`${getAuthApiUrl()}/logout-all`, {}, { headers: await getAuthHeaders((ctx as any)?.token) });
     } catch (error) {
       await clearAuthCookies();
+      invalidateUserSession();
       return handleBackendError(error, "Could not terminate all sessions");
     }
 
     await clearAuthCookies();
+    invalidateUserSession();
     return { success: true };
   }),
 

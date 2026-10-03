@@ -1,12 +1,16 @@
 import logging
 import urllib.parse
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
 from fastapi import HTTPException, status
 
 from app.core.config import get_settings
+from app.modules.channels.adapters.management import XManagement
+from app.modules.channels.adapters.media import save_state
+from app.modules.channels.adapters.text import x_length
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -18,6 +22,7 @@ from app.modules.channels.base import (
 )
 from app.modules.channels.models import ConnectedAccount
 from app.modules.channels.oauth import decrypt_token, encrypt_token
+from app.modules.channels.support import AdapterHTTP
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +36,13 @@ X_API_BASE = "https://api.twitter.com/2"
 X_SCOPES = ["tweet.read", "tweet.write", "users.read", "offline.access"]
 
 
-class XAdapter:
+class XAdapter(XManagement):
     """
     Platform adapter for X (formerly Twitter) using official OAuth 2.0 with PKCE and API v2.
     """
 
     platform = "x"
+    required_credentials = ("client_id",)
 
     def __init__(
         self,
@@ -47,14 +53,14 @@ class XAdapter:
         settings = get_settings()
         self.client_id = client_id or settings.x_client_id or "x_client_id_placeholder"
         self.client_secret = client_secret or settings.x_client_secret
-        self.redirect_base_url = settings.oauth_redirect_base_url
+        self.redirect_base_url = settings.oauth_callback_url(self.platform)
         self._http_client = http_client
 
         self.capabilities = Capabilities(
             platform=self.platform,
             display_name="X (Twitter)",
             max_text_length=280,
-            text_length_type="characters",
+            text_length_type="weighted",
             supports_media=True,
             supported_media_types=[
                 "image/jpeg",
@@ -68,7 +74,7 @@ class XAdapter:
             max_video_duration_seconds=140,
             supports_threads=True,
             supports_polls=True,
-            supports_alt_text=True,
+            supports_alt_text=False,
             max_alt_text_length=1000,
             supports_links=True,
             supports_tags=True,
@@ -78,10 +84,13 @@ class XAdapter:
             supports_scheduling=True,
         )
 
+    from app.modules.channels.adapters.media import upload_x as prepare_media
+    from app.modules.channels.adapters.media import validate_x_media as validate_media
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._http_client is not None:
             return self._http_client
-        return httpx.AsyncClient(timeout=30.0)
+        return AdapterHTTP(self.platform)
 
     async def build_auth_url(self, workspace_id: str, state: str, **opts: Any) -> AuthStart:
         """
@@ -198,6 +207,7 @@ class XAdapter:
                 "username": username,
                 "name": name,
                 "profile_image_url": user_info.get("profile_image_url"),
+                "avatar_url": user_info.get("profile_image_url"),
                 "public_metrics": user_info.get("public_metrics", {}),
             },
         )
@@ -208,7 +218,9 @@ class XAdapter:
             resp = await client.get(
                 f"{X_API_BASE}/users/me",
                 headers={"Authorization": f"Bearer {access_token}"},
-                params={"user.fields": "id,name,username,profile_image_url,public_metrics,description"},
+                params={
+                    "user.fields": "id,name,username,profile_image_url,public_metrics,description"
+                },
             )
         finally:
             if self._http_client is None:
@@ -288,14 +300,16 @@ class XAdapter:
 
         client = await self._get_client()
         try:
-            await client.post(
+            resp = await client.post(
                 X_REVOKE_URL,
                 data=data,
                 auth=auth,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
-        except Exception as exc:  # noqa: BLE001
+            resp.raise_for_status()
+        except Exception as exc:
             logger.warning("Error revoking token with X for %s: %s", account.id, exc)
+            raise
         finally:
             if self._http_client is None:
                 await client.aclose()
@@ -311,18 +325,26 @@ class XAdapter:
         issues: list[Issue] = []
         payload = getattr(variant, "payload", {})
         if not isinstance(payload, dict):
-            return [Issue(field="payload", message="Invalid variant payload format", severity="error")]
+            return [
+                Issue(field="payload", message="Invalid variant payload format", severity="error")
+            ]
 
+        if "thread" in payload:
+            from app.modules.channels.adapters.threading import validate_thread
+
+            return await validate_thread(self, variant)
         text = payload.get("text", "")
         if not text and not payload.get("media_ids"):
-            issues.append(Issue(field="text", message="Tweet must contain text or media", severity="error"))
+            issues.append(
+                Issue(field="text", message="Tweet must contain text or media", severity="error")
+            )
 
         # Check character limit (280 characters standard)
-        if len(text) > self.capabilities.max_text_length:
+        if x_length(text) > self.capabilities.max_text_length:
             issues.append(
                 Issue(
                     field="text",
-                    message=f"Tweet length ({len(text)}) exceeds maximum of {self.capabilities.max_text_length} characters",
+                    message=f"Tweet length ({x_length(text)}) exceeds maximum of {self.capabilities.max_text_length} characters",
                     severity="error",
                     code="text_too_long",
                 )
@@ -339,7 +361,46 @@ class XAdapter:
                 )
             )
 
+        if payload.get("quote_tweet_id"):
+            issues.append(
+                Issue(
+                    field="quote_tweet_id",
+                    message="Quote posting requires X Enterprise access and is not enabled",
+                )
+            )
+        poll = payload.get("poll")
+        if poll:
+            options = poll.get("options", [])
+            if not 2 <= len(options) <= 4 or any(
+                not isinstance(o, str) or not o or len(o) > 25 for o in options
+            ):
+                issues.append(
+                    Issue(
+                        field="poll",
+                        message="A poll needs 2–4 nonempty options of at most 25 characters",
+                    )
+                )
+            if not 5 <= poll.get("duration_minutes", 1440) <= 10080 or media_ids:
+                issues.append(
+                    Issue(
+                        field="poll",
+                        message="Poll duration must be 5–10080 minutes and cannot include media",
+                    )
+                )
         return issues
+
+    def publishing_budget(self):
+        return get_settings().x_monthly_spend_limit_micros
+
+    def publishing_cost(self, variant):
+        items = variant.payload.get("thread") or [variant.payload]
+        return sum(
+            200000
+            if "http://" in (i if isinstance(i, str) else i.get("text", ""))
+            or "https://" in (i if isinstance(i, str) else i.get("text", ""))
+            else 15000
+            for i in items
+        )
 
     async def publish(self, account: ConnectedAccount, variant: Any) -> PublishResult:
         """
@@ -354,7 +415,23 @@ class XAdapter:
             )
 
         payload = getattr(variant, "payload", {})
+        if payload.get("thread"):
+            ids = list((getattr(variant, "publish_state", None) or {}).get("thread_ids", []))
+            for item in payload["thread"][len(ids) :]:
+                item_payload = {"text": item} if isinstance(item, str) else dict(item)
+                if ids:
+                    item_payload["in_reply_to_tweet_id"] = ids[-1]
+                result = await self.publish(account, SimpleNamespace(payload=item_payload))
+                if not result.success:
+                    return result
+                ids.append(result.external_post_id)
+                await save_state(variant, thread_ids=ids)
+            return PublishResult(
+                success=True, external_post_id=ids[0], raw_response={"thread_ids": ids}
+            )
         body: dict[str, Any] = {"text": payload.get("text", "")}
+        if payload.get("poll"):
+            body["poll"] = payload["poll"]
 
         media_ids = payload.get("media_ids")
         if media_ids:
@@ -380,6 +457,7 @@ class XAdapter:
                 success=False,
                 error_message=f"Network error: {exc}",
                 is_retryable=True,
+                outcome_unknown=isinstance(exc, httpx.TransportError),
             )
         finally:
             if self._http_client is None:
@@ -387,7 +465,7 @@ class XAdapter:
 
         if resp.status_code == 201:
             data = resp.json().get("data", {})
-            tweet_id = str(data.get("id"))
+            tweet_id = str(data["id"]) if data.get("id") else None
             return PublishResult(
                 success=True,
                 external_post_id=tweet_id,
@@ -396,7 +474,7 @@ class XAdapter:
             )
 
         # Handle rate limits and transient errors
-        is_retryable = resp.status_code in {429, 500, 502, 503, 504}
+        is_retryable = resp.status_code == 429
         error_msg = f"X API error (HTTP {resp.status_code}): {resp.text}"
         logger.warning("X tweet publish failed: %s", error_msg)
 
@@ -405,6 +483,9 @@ class XAdapter:
             error_message=error_msg,
             raw_response={"status_code": resp.status_code, "body": resp.text},
             is_retryable=is_retryable,
+            status_code=resp.status_code,
+            auth_error=resp.status_code == 401,
+            outcome_unknown=resp.status_code >= 500,
         )
 
     async def delete_post(self, account: ConnectedAccount, external_post_id: str) -> None:
@@ -449,8 +530,10 @@ class XAdapter:
                 await client.aclose()
 
         if resp.status_code != 200:
-            logger.warning("Failed to fetch X tweet metrics for %s: %s", external_post_id, resp.text)
-            return Metrics()
+            logger.warning(
+                "Failed to fetch X tweet metrics for %s: %s", external_post_id, resp.text
+            )
+            raise RuntimeError(f"Metrics API error: HTTP {resp.status_code}")
 
         data = resp.json().get("data", {})
         pub = data.get("public_metrics", {})
@@ -501,7 +584,7 @@ class XAdapter:
 
         if resp.status_code != 200:
             logger.warning("Failed to fetch X account metrics for %s: %s", account.id, resp.text)
-            return AccountMetrics()
+            raise RuntimeError("Account metrics request failed or is unsupported")
 
         data = resp.json().get("data", {})
         pub = data.get("public_metrics", {})

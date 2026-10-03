@@ -3,9 +3,39 @@ import { cookies } from "next/headers";
 import axios from "axios";
 import { getApiBase } from "@/lib/http-error";
 
-export const createTRPCContext = async () => {};
+export const createTRPCContext = async (opts?: { req?: Request }) => {
+  let tokenFromHeader: string | undefined;
+  let workspaceFromHeader: string | undefined;
 
-const t = initTRPC.create({});
+  if (opts?.req) {
+    const cookieHeader = opts.req.headers.get("cookie") || "";
+    const tokenMatch = cookieHeader.match(/(?:^|;\s*)access_token=([^;]+)/);
+    if (tokenMatch) {
+      tokenFromHeader = decodeURIComponent(tokenMatch[1]);
+    }
+    const wsMatch = cookieHeader.match(/(?:^|;\s*)workspace_id=([^;]+)/);
+    if (wsMatch) {
+      workspaceFromHeader = decodeURIComponent(wsMatch[1]);
+    }
+    const authHeader = opts.req.headers.get("authorization");
+    if (!tokenFromHeader && authHeader?.startsWith("Bearer ")) {
+      tokenFromHeader = authHeader.slice(7).trim();
+    }
+    const wsHeader = opts.req.headers.get("x-workspace-id");
+    if (!workspaceFromHeader && wsHeader) {
+      workspaceFromHeader = wsHeader.trim();
+    }
+  }
+
+  return {
+    tokenFromHeader,
+    workspaceFromHeader,
+  };
+};
+
+export type Context = Awaited<ReturnType<typeof createTRPCContext>>;
+
+const t = initTRPC.context<Context>().create({});
 
 // Base router and procedure helpers
 export const createTRPCRouter = t.router;
@@ -15,52 +45,139 @@ export const baseProcedure = t.procedure.use(async ({ next }) => {
   return next({ ctx: {} });
 });
 
+interface CachedUserSession {
+  user: any;
+  timestamp: number;
+}
+
+// In-memory cache for validated user profiles to prevent hammering the backend
+// /v1/auth/me on every concurrent procedure or rapid navigation.
+const userSessionCache = new Map<string, CachedUserSession>();
+const userSessionInFlight = new Map<string, Promise<any>>();
+const USER_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+export function invalidateUserSession(token?: string) {
+  if (token) {
+    userSessionCache.delete(token);
+    userSessionInFlight.delete(token);
+  } else {
+    userSessionCache.clear();
+    userSessionInFlight.clear();
+  }
+}
+
+async function fetchUserWithCache(access_token: string, workspace_id?: string) {
+  const cached = userSessionCache.get(access_token);
+  const now = Date.now();
+
+  // Return fresh cached session if still valid
+  if (cached && now - cached.timestamp < USER_CACHE_TTL_MS) {
+    return cached.user;
+  }
+
+  // Deduplicate simultaneous requests for the same token
+  const pending = userSessionInFlight.get(access_token);
+  if (pending) {
+    return pending;
+  }
+
+  const promise = (async () => {
+    try {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${access_token}`,
+      };
+      if (workspace_id) {
+        headers["X-Workspace-ID"] = workspace_id;
+      }
+
+      const res = await axios.get(`${getApiBase()}/v1/auth/me`, {
+        headers,
+        timeout: 8000,
+      });
+
+      const user = {
+        ...res.data,
+        display_name: res.data.name,
+      };
+
+      userSessionCache.set(access_token, {
+        user,
+        timestamp: Date.now(),
+      });
+
+      return user;
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        // 401: Token is genuinely expired, revoked, or invalid
+        if (status === 401) {
+          userSessionCache.delete(access_token);
+          return null;
+        }
+
+        // For transient errors (429 rate limit, 502/503/504 gateway, network error, timeout):
+        // If we have a previously cached user session, keep using it!
+        if (cached?.user) {
+          return cached.user;
+        }
+
+        // If rate limited and no cache, throw clear rate-limit error
+        if (status === 429) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many requests. Please wait a moment.",
+          });
+        }
+      }
+
+      // If network failed but we have a cached user, serve fallback
+      if (cached?.user) {
+        return cached.user;
+      }
+
+      return null;
+    } finally {
+      userSessionInFlight.delete(access_token);
+    }
+  })();
+
+  userSessionInFlight.set(access_token, promise);
+  return promise;
+}
+
 export const getUserProcedure = baseProcedure.use(async ({ ctx, next }) => {
+  let access_token = (ctx as any)?.tokenFromHeader as string | undefined;
+  let workspace_id = (ctx as any)?.workspaceFromHeader as string | undefined;
+
   try {
     const cookieStore = await cookies();
-    const access_token = cookieStore.get("access_token")?.value;
-
-    if (!access_token) {
-      return next({
-        ctx: {
-          ...ctx,
-          user: null,
-        },
-      });
-    }
-
-    const workspace_id = cookieStore.get("workspace_id")?.value;
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${access_token}`,
-    };
-    if (workspace_id) {
-      headers["X-Workspace-ID"] = workspace_id;
-    }
-
-    const res = await axios.get(`${getApiBase()}/v1/auth/me`, {
-      headers,
-      timeout: 5000,
-    });
-
-    const user = {
-      ...res.data,
-      display_name: res.data.name,
-    };
-
-    return next({
-      ctx: {
-        ...ctx,
-        user,
-      },
-    });
+    access_token = cookieStore.get("access_token")?.value ?? access_token;
+    workspace_id = cookieStore.get("workspace_id")?.value ?? workspace_id;
   } catch {
+    // cookies() may throw in certain contexts, fallback to context tokens
+  }
+
+  if (!access_token) {
     return next({
       ctx: {
         ...ctx,
         user: null,
+        token: undefined,
+        workspace_id: undefined,
       },
     });
   }
+
+  const user = await fetchUserWithCache(access_token, workspace_id);
+
+  return next({
+    ctx: {
+      ...ctx,
+      user,
+      token: access_token,
+      workspace_id,
+    },
+  });
 });
 
 export const authedProcedure = getUserProcedure.use(async ({ ctx, next }) => {
@@ -72,6 +189,8 @@ export const authedProcedure = getUserProcedure.use(async ({ ctx, next }) => {
     ctx: {
       ...ctx,
       user: ctx.user,
+      token: (ctx as any).token as string,
+      workspace_id: (ctx as any).workspace_id as string | undefined,
     },
   });
 });
@@ -85,4 +204,3 @@ export const protectedProcedure = (requiredPermissions: string[]) =>
 
     return next({ ctx });
   });
-

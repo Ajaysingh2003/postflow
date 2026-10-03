@@ -9,7 +9,9 @@ from app.core.dependencies import get_current_user, get_current_workspace, membe
 from app.core.security import new_token, normalize_email, token_hash, utcnow
 from app.db.session import get_db
 from app.modules.billing.entitlements import PLAN_DEFAULTS, effective_plan, entitlement_limit
+from app.modules.billing.usage import lock_workspace
 from app.modules.identity import service as identity_service
+from app.modules.identity.mail import deliver_token
 from app.modules.identity.models import User, Workspace, WorkspaceInvitation, WorkspaceMembership
 from app.modules.workspaces.schemas import (
     InvitationAccept,
@@ -111,6 +113,7 @@ def invite(
     db: Session = Depends(get_db),
 ) -> InvitationResponse:
     _can_manage(db, workspace, user)
+    lock_workspace(db, workspace.id)
     seat_count = (
         db.scalar(
             select(func.count())
@@ -119,8 +122,8 @@ def invite(
         )
         or 0
     )
-    seat_limit = entitlement_limit(db, workspace.id, "seats") or 1
-    if seat_count >= seat_limit:
+    seat_limit = entitlement_limit(db, workspace.id, "seats")
+    if seat_limit is not None and seat_count >= seat_limit:
         raise HTTPException(status_code=409, detail="Workspace seat limit reached")
     email = normalize_email(str(payload.email))
     raw = new_token(48)
@@ -135,6 +138,7 @@ def invite(
     db.add(item)
     db.commit()
     db.refresh(item)
+    deliver_token(email, raw, "invitations/accept")
     return InvitationResponse(
         id=item.id,
         email=item.email,
@@ -152,6 +156,7 @@ def bulk_invite(
     db: Session = Depends(get_db),
 ) -> list[InvitationResponse]:
     _can_manage(db, workspace, user)
+    lock_workspace(db, workspace.id)
     seat_count = (
         db.scalar(
             select(func.count())
@@ -160,8 +165,8 @@ def bulk_invite(
         )
         or 0
     )
-    seat_limit = entitlement_limit(db, workspace.id, "seats") or 1
-    if seat_count + len(payload.invitations) > seat_limit:
+    seat_limit = entitlement_limit(db, workspace.id, "seats")
+    if seat_limit is not None and seat_count + len(payload.invitations) > seat_limit:
         available = max(0, seat_limit - seat_count)
         raise HTTPException(
             status_code=409,
@@ -192,6 +197,7 @@ def bulk_invite(
     results = []
     for item, raw in created_pairs:
         db.refresh(item)
+        deliver_token(item.email, raw, "invitations/accept")
         results.append(
             InvitationResponse(
                 id=item.id,

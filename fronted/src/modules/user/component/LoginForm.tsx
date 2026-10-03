@@ -11,7 +11,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTRPC } from "@/trpc/client";
-import { AppSidebar } from "@/components/base/AppSidebar";
+
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -51,7 +51,7 @@ export default function LoginForm() {
   const onSubmit = async (values: LoginFormValues) => login.mutate(values);
 
   return (
-    <div className="w-full max-w-sm">
+    <div className="w-full ">
       <form
         onSubmit={form.handleSubmit(onSubmit)}
         className="space-y-4"
@@ -60,7 +60,7 @@ export default function LoginForm() {
         <div>
           <label
             htmlFor="login-email"
-            className="mb-1.5 block text-xs font-medium text-foreground"
+            className="mb-1.5 block text-[14px] font-medium text-foreground"
           >
             Email address
           </label>
@@ -83,7 +83,7 @@ export default function LoginForm() {
           <div className="mb-1.5 flex items-center justify-between">
             <label
               htmlFor="login-password"
-              className="block text-xs font-medium text-foreground"
+              className="block text-[14px] font-medium text-foreground"
             >
               Password
             </label>
@@ -120,15 +120,7 @@ export default function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-4 text-center text-xs text-muted-foreground">
-        Don&apos;t have an account?{" "}
-        <Link
-          href="/register"
-          className="font-medium text-foreground underline-offset-4 hover:underline"
-        >
-          Sign up
-        </Link>
-      </p>
+     
     </div>
   );
 }

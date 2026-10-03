@@ -30,6 +30,8 @@ async def create_checkout(
     seats: int = 1,
 ) -> dict:
     if not settings.dodo_api_key:
+        if not settings.debug:
+            raise HTTPException(503, "Billing is not configured")
         return {
             "checkout_url": f"{settings.dodo_return_url}?checkout=success&plan={plan_code}&trial_days=3",
             "session_id": f"mock_dodo_sess_{user_id}_{plan_code}",
@@ -57,7 +59,11 @@ async def create_checkout(
     if response.is_error:
         try:
             err_data = response.json()
-            detail = err_data.get("message") or err_data.get("detail") or "Unable to create billing checkout"
+            detail = (
+                err_data.get("message")
+                or err_data.get("detail")
+                or "Unable to create billing checkout"
+            )
         except Exception:  # noqa: BLE001
             detail = "Unable to create billing checkout"
         raise HTTPException(status_code=502, detail=str(detail))
@@ -108,6 +114,7 @@ def reconcile_subscriptions(settings: Settings, db) -> int:
             reconciled += 1
         except Exception:  # noqa: BLE001, S112
             continue
+    db.commit()
     return reconciled
 
 

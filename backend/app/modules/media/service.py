@@ -184,3 +184,18 @@ def scan_clamav(settings: Settings, data: bytes) -> None:
         raise HTTPException(status_code=422, detail="Upload was rejected by malware scanning")
     if "OK" not in result:
         raise HTTPException(status_code=502, detail="Malware scan did not complete")
+
+
+def dimensions(data: bytes, content_type: str) -> tuple[int | None, int | None]:
+    if not content_type.startswith("image/"):
+        return None, None
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if image.width * image.height > 40_000_000:
+                raise HTTPException(422, "Image dimensions exceed the processing limit")
+            image.verify()
+            return image.size
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise HTTPException(422, "Image could not be decoded") from exc

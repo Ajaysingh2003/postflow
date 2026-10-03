@@ -13,3 +13,5 @@ redis==6.4.0
 requests==2.32.3
 sqlalchemy==2.0.52
 uvicorn[standard]==0.52.4
+regex==2026.9.29
+Pillow==12.3.0

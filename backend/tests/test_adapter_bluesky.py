@@ -1,9 +1,14 @@
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from fastapi import HTTPException
 
+from app.db.session import SessionLocal
 from app.modules.channels.adapters.bluesky import (
     BSKY_PUBLIC_API,
     BlueskyAdapter,
@@ -12,12 +17,33 @@ from app.modules.channels.adapters.bluesky import (
 )
 from app.modules.channels.base import PlatformAdapter
 from app.modules.channels.models import ConnectedAccount
-from app.modules.channels.oauth import decrypt_token, encrypt_token
+from app.modules.channels.oauth import create_oauth_state, decrypt_token, encrypt_token
 
 
 class MockVariant:
     def __init__(self, payload: dict[str, Any]) -> None:
         self.payload = payload
+
+
+def oauth_metadata():
+    private = (
+        ec.generate_private_key(ec.SECP256R1())
+        .private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        .decode()
+    )
+    return {
+        "issuer": "https://bsky.social",
+        "token_endpoint": "https://bsky.social/oauth/token",
+        "revocation_endpoint": "https://bsky.social/oauth/revoke",
+        "pds_url": "https://bsky.social",
+        "did": "did:plc:abcdef1234567890",
+        "handle": "creator.bsky.social",
+        "encrypted_dpop_key": encrypt_token(private),
+    }
 
 
 @pytest.fixture
@@ -34,6 +60,8 @@ def mock_bsky_account():
         granted_scopes=["atproto"],
         status="active",
         account_metadata={
+            "oauth": oauth_metadata(),
+            "pds_url": "https://bsky.social",
             "did": "did:plc:abcdef1234567890",
             "handle": "creator.bsky.social",
             "display_name": "Bluesky Creator",
@@ -67,7 +95,7 @@ def test_rich_text_facets_exact_byte_ranges():
     # Multi-byte emoji at start tests UTF-8 byte offsets
     text = "🚀 Check https://postflow.ai and #launch with @alice.bsky.social!"
     text_bytes = text.encode("utf-8")
-    facets = extract_facets(text)
+    facets = extract_facets(text, {"alice.bsky.social": "did:plc:alice123456"})
 
     assert len(facets) == 3
 
@@ -86,76 +114,142 @@ def test_rich_text_facets_exact_byte_ranges():
     assert tag_facet["features"][0]["tag"] == "launch"
 
     # 3. Mention facet
-    mention_facet = next(f for f in facets if f["features"][0]["$type"] == "app.bsky.feed.post#mention")
+    mention_facet = next(
+        f for f in facets if f["features"][0]["$type"] == "app.bsky.feed.post#mention"
+    )
     b_start = mention_facet["index"]["byteStart"]
     b_end = mention_facet["index"]["byteEnd"]
     assert text_bytes[b_start:b_end].decode("utf-8") == "@alice.bsky.social"
 
 
 @pytest.mark.anyio
-async def test_build_auth_url():
-    adapter = BlueskyAdapter(client_id="https://postflow.ai/client-metadata.json")
-    res = await adapter.build_auth_url(
-        workspace_id="ws_1",
-        state="bsky_state_123",
-        code_challenge="pkce_challenge_abc",
-        redirect_uri="https://postflow.ai/callback",
-    )
-    assert "https://bsky.social/oauth/authorize" in res.auth_url
-    assert "client_id=https%3A%2F%2Fpostflow.ai%2Fclient-metadata.json" in res.auth_url
-    assert "code_challenge=pkce_challenge_abc" in res.auth_url
-    assert "code_challenge_method=S256" in res.auth_url
+async def test_build_auth_url_uses_discovery_and_par():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        path = request.url.path
+        if path.endswith("resolveHandle"):
+            return httpx.Response(200, json={"did": "did:plc:abcdef1234567890"})
+        if request.url.host == "plc.directory":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "did:plc:abcdef1234567890",
+                    "service": [
+                        {
+                            "type": "AtprotoPersonalDataServer",
+                            "serviceEndpoint": "https://bsky.social",
+                        }
+                    ],
+                },
+            )
+        if path.endswith("oauth-protected-resource"):
+            return httpx.Response(
+                200,
+                json={
+                    "resource": "https://bsky.social",
+                    "authorization_servers": ["https://bsky.social"],
+                },
+            )
+        if path.endswith("oauth-authorization-server"):
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": "https://bsky.social",
+                    "authorization_endpoint": "https://bsky.social/oauth/authorize",
+                    "token_endpoint": "https://bsky.social/oauth/token",
+                    "pushed_authorization_request_endpoint": "https://bsky.social/oauth/par",
+                    "dpop_signing_alg_values_supported": ["ES256"],
+                },
+            )
+        assert path == "/oauth/par"
+        assert request.headers["DPoP"]
+        assert b"code_challenge=challenge" in request.content
+        return httpx.Response(201, json={"request_uri": "urn:par:example", "expires_in": 90})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        adapter = BlueskyAdapter(http_client=client)
+        with SessionLocal() as db:
+            record, raw = create_oauth_state(
+                db, "ws1", "user1", "bluesky", code_verifier="verifier"
+            )
+            result = await adapter.build_auth_url(
+                "ws1",
+                raw,
+                identifier="creator.bsky.social",
+                code_challenge="challenge",
+                state_record=record,
+                db=db,
+            )
+            assert "request_uri=urn%3Apar%3Aexample" in result.auth_url
+            assert "code_challenge" not in result.auth_url
+            assert (
+                json.loads(decrypt_token(record.encrypted_metadata))["did"]
+                == "did:plc:abcdef1234567890"
+            )
+    assert len(requests) == 5
 
 
 @pytest.mark.anyio
-async def test_handle_callback_app_password():
-    def handler(request: httpx.Request) -> httpx.Response:
-        url_str = str(request.url)
-        if "com.atproto.server.createSession" in url_str:
+async def test_app_password_is_rejected():
+    with pytest.raises(HTTPException):
+        await BlueskyAdapter().handle_callback(
+            "ws", {"identifier": "alice.bsky.social", "password": "not-supported"}, "state"
+        )
+
+
+@pytest.mark.anyio
+async def test_oauth_callback(mock_bsky_account):
+    def handler(request):
+        if request.url.path == "/xrpc/app.bsky.actor.getProfile":
             return httpx.Response(
                 200,
                 json={
-                    "accessJwt": "new_access_jwt_777",
-                    "refreshJwt": "new_refresh_jwt_888",
-                    "did": "did:plc:alice123456",
-                    "handle": "alice.bsky.social",
-                },
-            )
-        if "app.bsky.actor.getProfile" in url_str:
-            return httpx.Response(
-                200,
-                json={
-                    "displayName": "Alice Wonderland",
+                    "did": mock_bsky_account.external_account_id,
+                    "handle": "mockuser.bsky.social",
+                    "displayName": "Mock User",
                     "avatar": "https://cdn.bsky.app/avatar.jpg",
                 },
             )
-        return httpx.Response(404)
+        assert request.url.path == "/oauth/token"
+        assert request.headers["DPoP"]
+        return httpx.Response(
+            200,
+            json={
+                "access_token": "new_access",
+                "refresh_token": "new_refresh",
+                "sub": mock_bsky_account.external_account_id,
+                "token_type": "DPoP",
+                "expires_in": 300,
+            },
+        )
 
-    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    adapter = BlueskyAdapter(http_client=mock_client)
-
-    account = await adapter.handle_callback(
-        workspace_id="ws_b",
-        params={"identifier": "alice.bsky.social", "password": "abcd-efgh-ijkl-mnop"},
-        state="state_val",
-    )
-
-    assert account.platform == "bluesky"
-    assert account.external_account_id == "did:plc:alice123456"
-    assert "Alice Wonderland" in account.display_name
-    assert decrypt_token(account.encrypted_access_token) == "new_access_jwt_777"
-    assert decrypt_token(account.encrypted_refresh_token) == "new_refresh_jwt_888"
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        account = await BlueskyAdapter(http_client=client).handle_callback(
+            "ws",
+            {"code": "code", "iss": "https://bsky.social"},
+            "state",
+            oauth_metadata=mock_bsky_account.account_metadata["oauth"],
+            code_verifier="verifier",
+        )
+    assert decrypt_token(account.encrypted_access_token) == "new_access"
+    assert account.account_metadata["pds_url"] == "https://bsky.social"
+    assert account.account_metadata["avatar_url"] == "https://cdn.bsky.app/avatar.jpg"
+    assert account.avatar_url == "https://cdn.bsky.app/avatar.jpg"
 
 
 @pytest.mark.anyio
 async def test_refresh_tokens(mock_bsky_account):
     def handler(request: httpx.Request) -> httpx.Response:
-        assert "com.atproto.server.refreshSession" in str(request.url)
+        assert request.url.path == "/oauth/token"
+        assert b"grant_type=refresh_token" in request.content
+        assert request.headers["DPoP"]
         return httpx.Response(
             200,
             json={
-                "accessJwt": "refreshed_access_jwt_999",
-                "refreshJwt": "refreshed_refresh_jwt_000",
+                "access_token": "refreshed_access_jwt_999",
+                "refresh_token": "refreshed_refresh_jwt_000",
             },
         )
 
@@ -183,7 +277,9 @@ async def test_validate():
     assert issues[0].code == "grapheme_limit_exceeded"
 
     # Too many images (> 4)
-    issues = await adapter.validate(MockVariant({"text": "Photos", "media_blobs": [{"blob": {}}] * 5}))
+    issues = await adapter.validate(
+        MockVariant({"text": "Photos", "media_blobs": [{"blob": {}}] * 5})
+    )
     assert len(issues) == 1
     assert issues[0].code == "too_many_media"
 
@@ -194,7 +290,7 @@ async def test_publish_success(mock_bsky_account):
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert f"{BSKY_PUBLIC_API}/com.atproto.repo.createRecord" in str(request.url)
-        assert request.headers["Authorization"] == "Bearer bsky_access_jwt_123"
+        assert request.headers["Authorization"] == "DPoP bsky_access_jwt_123"
         import json
 
         recorded_body.update(json.loads(request.content))
@@ -217,7 +313,9 @@ async def test_publish_success(mock_bsky_account):
 
     assert result.success is True
     assert result.external_post_id == "at://did:plc:abcdef1234567890/app.bsky.feed.post/3kxyz123456"
-    assert "https://bsky.app/profile/creator.bsky.social/post/3kxyz123456" in (result.external_url or "")
+    assert "https://bsky.app/profile/creator.bsky.social/post/3kxyz123456" in (
+        result.external_url or ""
+    )
 
     # Verify auto-generated facets were included in payload
     assert recorded_body["collection"] == "app.bsky.feed.post"
@@ -275,6 +373,7 @@ async def test_fetch_metrics(mock_bsky_account):
 @pytest.mark.anyio
 async def test_fetch_account_metrics(mock_bsky_account):
     """Verify whole-account follower and post analytics from original Bluesky API source."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         assert f"{BSKY_PUBLIC_API}/app.bsky.actor.getProfile" in str(request.url)
         return httpx.Response(

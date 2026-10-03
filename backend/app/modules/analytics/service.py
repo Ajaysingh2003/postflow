@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.analytics.models import MetricSnapshot
@@ -56,7 +56,7 @@ def get_workspace_overview(
             .where(
                 Post.workspace_id == workspace_id,
                 PostVariant.status == "published",
-                PostVariant.created_at >= cutoff,
+                func.coalesce(PostVariant.published_at, PostVariant.created_at) >= cutoff,
             )
         )
     )
@@ -220,13 +220,9 @@ def get_variant_analytics(
     )
 
 
-def get_post_analytics(
-    db: Session, workspace_id: str, post_id: str
-) -> PostAnalyticsResponse:
+def get_post_analytics(db: Session, workspace_id: str, post_id: str) -> PostAnalyticsResponse:
     """Aggregate metrics across all variants belonging to a post."""
-    post = db.scalar(
-        select(Post).where(Post.id == post_id, Post.workspace_id == workspace_id)
-    )
+    post = db.scalar(select(Post).where(Post.id == post_id, Post.workspace_id == workspace_id))
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
@@ -256,9 +252,7 @@ def get_post_analytics(
     )
 
 
-async def trigger_workspace_metrics_sync(
-    db: Session, workspace_id: str
-) -> dict[str, int]:
+async def trigger_workspace_metrics_sync(db: Session, workspace_id: str) -> dict[str, int]:
     """Manually trigger immediate metrics synchronization for workspace accounts and variants."""
     now = datetime.now(UTC)
     accounts_synced = 0
@@ -309,7 +303,7 @@ async def trigger_workspace_metrics_sync(
                 Post.workspace_id == workspace_id,
                 PostVariant.status == "published",
                 PostVariant.external_post_id.is_not(None),
-                PostVariant.created_at >= cutoff,
+                func.coalesce(PostVariant.published_at, PostVariant.created_at) >= cutoff,
             )
         )
     )

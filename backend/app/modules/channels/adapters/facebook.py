@@ -1,3 +1,4 @@
+import json
 import logging
 import urllib.parse
 from datetime import UTC, datetime, timedelta
@@ -7,6 +8,9 @@ import httpx
 from fastapi import HTTPException, status
 
 from app.core.config import get_settings
+from app.modules.channels.adapters.management import FacebookManagement
+from app.modules.channels.adapters.media import save_state
+from app.modules.channels.adapters.meta import graph_items
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -18,10 +22,11 @@ from app.modules.channels.base import (
 )
 from app.modules.channels.models import ConnectedAccount
 from app.modules.channels.oauth import decrypt_token, encrypt_token
+from app.modules.channels.support import AdapterHTTP
 
 logger = logging.getLogger(__name__)
 
-GRAPH_API_VERSION = "v21.0"
+GRAPH_API_VERSION = get_settings().graph_api_version
 GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 FACEBOOK_OAUTH_DIALOG = f"https://www.facebook.com/{GRAPH_API_VERSION}/dialog/oauth"
 
@@ -35,7 +40,7 @@ FACEBOOK_SCOPES = [
 ]
 
 
-class FacebookAdapter:
+class FacebookAdapter(FacebookManagement):
     """
     Platform adapter for Facebook.
     Per spec: Publishing is to Pages only, not personal profiles.
@@ -43,6 +48,7 @@ class FacebookAdapter:
     """
 
     platform = "facebook"
+    required_credentials = ("app_id", "app_secret")
 
     def __init__(
         self,
@@ -52,8 +58,10 @@ class FacebookAdapter:
     ) -> None:
         settings = get_settings()
         self.app_id = app_id or settings.facebook_app_id or "facebook_app_id_placeholder"
-        self.app_secret = app_secret or settings.facebook_app_secret or "facebook_app_secret_placeholder"
-        self.redirect_base_url = settings.oauth_redirect_base_url
+        self.app_secret = (
+            app_secret or settings.facebook_app_secret or "facebook_app_secret_placeholder"
+        )
+        self.redirect_base_url = settings.oauth_callback_url(self.platform)
         self._http_client = http_client
 
         self.capabilities = Capabilities(
@@ -62,13 +70,19 @@ class FacebookAdapter:
             max_text_length=63206,
             text_length_type="characters",
             supports_media=True,
-            supported_media_types=["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"],
+            supported_media_types=[
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "image/gif",
+                "video/mp4",
+            ],
             max_media_count=10,
             supports_video=True,
             max_video_duration_seconds=14400,
             supports_threads=False,
             supports_polls=False,
-            supports_alt_text=True,
+            supports_alt_text=False,
             max_alt_text_length=1000,
             supports_links=True,
             supports_tags=False,
@@ -79,10 +93,12 @@ class FacebookAdapter:
             supports_scheduling=True,
         )
 
+    from app.modules.channels.adapters.media import remote_urls as prepare_media
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._http_client is not None:
             return self._http_client
-        return httpx.AsyncClient(timeout=30.0)
+        return AdapterHTTP(self.platform)
 
     async def build_auth_url(self, workspace_id: str, state: str, **opts: Any) -> AuthStart:
         """
@@ -90,6 +106,8 @@ class FacebookAdapter:
         """
         redirect_uri = opts.get("redirect_uri") or self.redirect_base_url
         scopes = opts.get("scopes") or FACEBOOK_SCOPES
+        if opts.get("manage_replies"):
+            scopes = list(dict.fromkeys([*scopes, "pages_manage_engagement"]))
 
         params = {
             "client_id": self.app_id,
@@ -103,7 +121,7 @@ class FacebookAdapter:
             auth_url=auth_url,
             state=state,
             code_verifier=None,
-            metadata={"redirect_uri": redirect_uri},
+            metadata={"redirect_uri": redirect_uri, "requested_scopes": scopes},
         )
 
     async def handle_callback(
@@ -172,16 +190,21 @@ class FacebookAdapter:
             user_data = me_resp.json() if me_resp.status_code == 200 else {}
             fb_user_id = str(user_data.get("id", ""))
             fb_user_name = user_data.get("name", "Facebook User")
+            user_picture = (
+                user_data.get("picture", {}).get("data", {}).get("url")
+                if isinstance(user_data.get("picture"), dict)
+                else None
+            )
 
             # Step 4: Fetch managed Pages with long-lived Page tokens
             pages_resp = await client.get(
                 f"{GRAPH_API_BASE}/me/accounts",
                 params={
-                    "fields": "id,name,access_token,category,tasks,fan_count",
+                    "fields": "id,name,access_token,category,tasks,fan_count,picture",
                     "access_token": user_access_token,
                 },
             )
-            pages_data = pages_resp.json().get("data", []) if pages_resp.status_code == 200 else []
+            pages_data = await graph_items(client, pages_resp)
 
             # Store encrypted long-lived Page Access Tokens mapped by Page ID
             page_tokens: dict[str, str] = {}
@@ -189,6 +212,11 @@ class FacebookAdapter:
             for p in pages_data:
                 pid = str(p.get("id"))
                 ptok = p.get("access_token")
+                page_pic = (
+                    p.get("picture", {}).get("data", {}).get("url")
+                    if isinstance(p.get("picture"), dict)
+                    else None
+                )
                 if pid and ptok:
                     page_tokens[pid] = encrypt_token(ptok) or ""
                     page_summaries.append(
@@ -197,12 +225,15 @@ class FacebookAdapter:
                             "name": p.get("name"),
                             "category": p.get("category"),
                             "fan_count": p.get("fan_count", 0),
+                            "picture_url": page_pic,
                         }
                     )
 
         finally:
             if self._http_client is None:
                 await client.aclose()
+
+        avatar_url = user_picture or (page_summaries[0].get("picture_url") if page_summaries else None)
 
         return ConnectedAccount(
             workspace_id=workspace_id,
@@ -212,11 +243,13 @@ class FacebookAdapter:
             account_type="business",
             encrypted_access_token=encrypt_token(user_access_token),
             token_expires_at=datetime.now(UTC) + timedelta(seconds=expires_in),
-            granted_scopes=FACEBOOK_SCOPES,
+            granted_scopes=opts.get("oauth_metadata", {}).get("requested_scopes", FACEBOOK_SCOPES),
             status="active",
             account_metadata={
                 "fb_user_id": fb_user_id,
                 "fb_user_name": fb_user_name,
+                "picture_url": user_picture,
+                "avatar_url": avatar_url,
                 "page_tokens": page_tokens,
                 "pages": page_summaries,
             },
@@ -242,13 +275,10 @@ class FacebookAdapter:
                     "fb_exchange_token": raw_user_token,
                 },
             )
-            if resp.status_code == 200:
-                data = resp.json()
-                new_user_token = data.get("access_token", raw_user_token)
-                expires_in = data.get("expires_in", 5184000)
-            else:
-                new_user_token = raw_user_token
-                expires_in = 5184000
+            resp.raise_for_status()
+            data = resp.json()
+            new_user_token = data["access_token"]
+            expires_in = data["expires_in"]
 
             # Re-fetch Page tokens
             pages_resp = await client.get(
@@ -258,7 +288,8 @@ class FacebookAdapter:
                     "access_token": new_user_token,
                 },
             )
-            pages_data = pages_resp.json().get("data", []) if pages_resp.status_code == 200 else []
+            pages_resp.raise_for_status()
+            pages_data = await graph_items(client, pages_resp)
 
             page_tokens: dict[str, str] = {}
             page_summaries: list[dict[str, Any]] = []
@@ -300,12 +331,14 @@ class FacebookAdapter:
 
         client = await self._get_client()
         try:
-            await client.delete(
+            resp = await client.delete(
                 f"{GRAPH_API_BASE}/me/permissions",
                 params={"access_token": raw_user_token},
             )
-        except Exception as exc:  # noqa: BLE001
+            resp.raise_for_status()
+        except Exception as exc:
             logger.warning("Error revoking Facebook permissions for %s: %s", account.id, exc)
+            raise
         finally:
             if self._http_client is None:
                 await client.aclose()
@@ -364,7 +397,9 @@ class FacebookAdapter:
         issues: list[Issue] = []
         payload = getattr(variant, "payload", {})
         if not isinstance(payload, dict):
-            return [Issue(field="payload", message="Invalid variant payload format", severity="error")]
+            return [
+                Issue(field="payload", message="Invalid variant payload format", severity="error")
+            ]
 
         # Target Page is required
         page_id = payload.get("page_id") or payload.get("target") or payload.get("target_id")
@@ -380,7 +415,13 @@ class FacebookAdapter:
 
         text = payload.get("text", "") or payload.get("message", "")
         if not text and not payload.get("link") and not payload.get("media_urls"):
-            issues.append(Issue(field="text", message="Facebook post must have a message, link, or media", severity="error"))
+            issues.append(
+                Issue(
+                    field="text",
+                    message="Facebook post must have a message, link, or media",
+                    severity="error",
+                )
+            )
 
         if len(text) > self.capabilities.max_text_length:
             issues.append(
@@ -410,8 +451,10 @@ class FacebookAdapter:
 
         page_token = self._get_page_access_token(account, str(page_id))
         if not page_token:
-            # Fallback to user access token if page token not pre-cached
-            page_token = decrypt_token(account.encrypted_access_token)
+            return PublishResult(
+                success=False,
+                error_message="Reconnect and select an authorized Page with a Page token",
+            )
 
         if not page_token:
             return PublishResult(
@@ -432,16 +475,42 @@ class FacebookAdapter:
 
         client = await self._get_client()
         try:
-            resp = await client.post(
-                f"{GRAPH_API_BASE}/{page_id}/feed",
-                data=data,
-            )
+            urls = payload.get("media_urls", [])
+            types = payload.get("media_types") or ["image/jpeg"] * len(urls)
+            if any(t.startswith("video/") for t in types):
+                if len(urls) != 1:
+                    return PublishResult(
+                        success=False, error_message="Facebook video posts require a single video"
+                    )
+                resp = await client.post(
+                    f"{GRAPH_API_BASE}/{page_id}/videos",
+                    data={"file_url": urls[0], "description": message, "access_token": page_token},
+                )
+            else:
+                photos = list(
+                    (getattr(variant, "publish_state", None) or {}).get("facebook_photos", [])
+                )
+                for url in urls[len(photos) :]:
+                    photo = await client.post(
+                        f"{GRAPH_API_BASE}/{page_id}/photos",
+                        data={"url": url, "published": "false", "access_token": page_token},
+                    )
+                    photo.raise_for_status()
+                    photos.append(photo.json()["id"])
+                    await save_state(variant, facebook_photos=photos)
+                for index, photo in enumerate(photos):
+                    data[f"attached_media[{index}]"] = json.dumps({"media_fbid": photo})
+                resp = await client.post(
+                    f"{GRAPH_API_BASE}/{page_id}/feed",
+                    data=data,
+                )
         except Exception as exc:  # noqa: BLE001
             logger.error("Network error publishing to Facebook Page %s: %s", page_id, exc)
             return PublishResult(
                 success=False,
                 error_message=f"Network error: {exc}",
                 is_retryable=True,
+                outcome_unknown=isinstance(exc, httpx.TransportError),
             )
         finally:
             if self._http_client is None:
@@ -457,7 +526,7 @@ class FacebookAdapter:
                 raw_response=res_json,
             )
 
-        is_retryable = resp.status_code in {429, 500, 502, 503, 504}
+        is_retryable = resp.status_code == 429
         error_msg = f"Facebook Graph API error (HTTP {resp.status_code}): {resp.text}"
         logger.warning("Facebook publish failed for Page %s: %s", page_id, error_msg)
 
@@ -466,6 +535,9 @@ class FacebookAdapter:
             error_message=error_msg,
             raw_response={"status_code": resp.status_code, "body": resp.text},
             is_retryable=is_retryable,
+            status_code=resp.status_code,
+            auth_error=resp.status_code == 401,
+            outcome_unknown=resp.status_code >= 500,
         )
 
     async def delete_post(self, account: ConnectedAccount, external_post_id: str) -> None:
@@ -474,7 +546,9 @@ class FacebookAdapter:
         """
         # Resolve page token or user token
         page_id = external_post_id.split("_")[0] if "_" in external_post_id else ""
-        token = self._get_page_access_token(account, page_id) or decrypt_token(account.encrypted_access_token)
+        token = self._get_page_access_token(account, page_id) or decrypt_token(
+            account.encrypted_access_token
+        )
         if not token:
             raise ValueError("Missing decrypted access token")
 
@@ -490,14 +564,18 @@ class FacebookAdapter:
 
         if resp.status_code not in {200, 204}:
             logger.warning("Failed to delete Facebook post %s: %s", external_post_id, resp.text)
-            raise RuntimeError(f"Failed to delete Facebook post (HTTP {resp.status_code}): {resp.text}")
+            raise RuntimeError(
+                f"Failed to delete Facebook post (HTTP {resp.status_code}): {resp.text}"
+            )
 
     async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
         """
         Fetch post reactions, comments, shares, and post insights.
         """
         page_id = external_post_id.split("_")[0] if "_" in external_post_id else ""
-        token = self._get_page_access_token(account, page_id) or decrypt_token(account.encrypted_access_token)
+        token = self._get_page_access_token(account, page_id) or decrypt_token(
+            account.encrypted_access_token
+        )
         if not token:
             raise ValueError("Missing decrypted access token")
 
@@ -524,8 +602,10 @@ class FacebookAdapter:
                 await client.aclose()
 
         if resp.status_code != 200:
-            logger.warning("Failed to fetch Facebook metrics for %s: %s", external_post_id, resp.text)
-            return Metrics()
+            logger.warning(
+                "Failed to fetch Facebook metrics for %s: %s", external_post_id, resp.text
+            )
+            raise RuntimeError("Metrics request failed or is unsupported")
 
         data = resp.json()
         likes = data.get("reactions", {}).get("summary", {}).get("total_count", 0)
@@ -534,6 +614,8 @@ class FacebookAdapter:
 
         impressions = 0
         clicks = 0
+        if insights_resp.status_code != 200:
+            raise RuntimeError("Insights are unavailable; no zero snapshot was recorded")
         if insights_resp.status_code == 200:
             for item in insights_resp.json().get("data", []):
                 m_name = item.get("name")
@@ -542,8 +624,6 @@ class FacebookAdapter:
                     impressions = int(val)
                 elif m_name == "post_clicks":
                     clicks = int(val)
-
-        impressions = impressions or (likes + comments + shares)
 
         return Metrics(
             impressions=impressions,
@@ -567,7 +647,7 @@ class FacebookAdapter:
         pages = account.account_metadata.get("pages", [])
         page_id = str(pages[0].get("id")) if pages else ""
         if not page_id:
-            return AccountMetrics()
+            raise RuntimeError("Account metrics request failed or is unsupported")
 
         page_token = self._get_page_access_token(account, page_id) or raw_user_token
 
@@ -595,8 +675,10 @@ class FacebookAdapter:
                 await client.aclose()
 
         if page_resp.status_code != 200:
-            logger.warning("Failed to fetch Facebook Page stats for %s: %s", page_id, page_resp.text)
-            return AccountMetrics()
+            logger.warning(
+                "Failed to fetch Facebook Page stats for %s: %s", page_id, page_resp.text
+            )
+            raise RuntimeError("Account metrics request failed or is unsupported")
 
         page_data = page_resp.json()
         followers = page_data.get("followers_count") or page_data.get("fan_count", 0)
@@ -604,6 +686,8 @@ class FacebookAdapter:
         impressions = 0
         engagements = 0
         views = 0
+        if insights_resp.status_code != 200:
+            raise RuntimeError("Insights are unavailable; no zero snapshot was recorded")
         if insights_resp.status_code == 200:
             for item in insights_resp.json().get("data", []):
                 m_name = item.get("name")

@@ -4,8 +4,9 @@ Features declare Pydantic input/output schemas and prompt templates.
 Platform profiles declare style guidelines, limits, and available feature IDs.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
@@ -23,6 +24,8 @@ class AssistantProfile:
     style_guidelines: list[str] = field(default_factory=list)
     character_limit: int = 500
     feature_ids: list[str] = field(default_factory=list)
+    payload_builder: Callable | None = None
+    prepare_input: Callable | None = None
 
 
 @dataclass
@@ -52,3 +55,9 @@ class LLMResponse:
     tokens_completion: int = 0
     total_tokens: int = 0
     model: str = "mock"
+
+
+class LanguageModel(Protocol):
+    async def generate_structured(
+        self, messages: list[LLMMessage], response_model: type[TOutput], temperature: float = 0.7
+    ) -> tuple[TOutput, LLMResponse]: ...

@@ -1,39 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { RefObject, useEffect, useRef, useState } from "react";
 
 import {
   BarChart3,
-  Bookmark,
   BookOpen,
   Calendar,
-  ChevronDown,
   ChevronUp,
   CreditCard,
-  Database,
-  FileSpreadsheet,
-  FileText,
-  History,
-  Inbox,
   LayoutDashboard,
   LogOut,
-  Mail,
+  LucideIcon,
+  MessageSquare,
   MoreHorizontal,
   PenTool,
+  Plug,
   Plus,
-  Radio,
-  Send,
+  Repeat2,
   Settings,
   Sparkles,
-  Target,
   User,
-  UserCheck,
-  Users,
-  Workflow,
-  Zap,
-  LucideIcon,
 } from "lucide-react";
 
 import {
@@ -47,20 +35,38 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { Linkedin } from "@/lib/icons";
-import CreatePost from "@/modules/dashboard/component/CreatePost";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import ProfileMenu from "./ProfileMenu";
-// import ProfileMenu from "@/modules/user/component/ProfileMenu";
+
+/* -------------------------------------------------------------------------- */
+/*                                   ROUTES                                   */
+/* -------------------------------------------------------------------------- */
+
+const ROUTES = {
+  dashboard: "/dashboard",
+  content: "/dashboard/content",
+  compose: "/dashboard/content",
+  schedule: "/dashboard/content/schedule",
+  assistant: "/dashboard/assistant",
+  repurpose: "/dashboard/assistant/repurpose",
+  posts: "/dashboard/posts",
+  channels: "/dashboard/channels",
+  analytics: "/dashboard/analytics",
+  docs: "/dashboard/help",
+  settings: "/dashboard/settings",
+  profile: "/dashboard/settings/profile",
+  billing: "/settings/billing",
+} as const;
+
+/* -------------------------------------------------------------------------- */
+/*                                 NAVIGATION                                 */
+/* -------------------------------------------------------------------------- */
 
 type NavItem = {
   label: string;
@@ -68,157 +74,215 @@ type NavItem = {
   icon: LucideIcon;
   exact?: boolean;
   badge?: string;
-  children?: NavItem[];
 };
-
-/* -------------------------------------------------------------------------- */
-/*                     LINKEDIN OUTREACH & OUTLIFY NAVIGATION                 */
-/* -------------------------------------------------------------------------- */
 
 const overviewNavigation: NavItem[] = [
   {
     label: "Dashboard",
-    href: "/dashboard",
+    href: ROUTES.dashboard,
     icon: LayoutDashboard,
     exact: true,
   },
-  {
-    label: "Unified Inbox",
-    href: "/dashboard/inbox",
-    icon: Inbox,
-    badge: "3",
-  },
 ];
 
-const contentNavigation: NavItem[] = [
+const createNavigation: NavItem[] = [
   {
-    label: "Content Engine",
-    href: "/dashboard/content",
+    label: "Content",
+    href: ROUTES.content,
     icon: PenTool,
-    children: [
-      {
-        label: "AI Post Writer",
-        href: "/dashboard/content/generator",
-        icon: Sparkles,
-      },
-      {
-        label: "Queue & Schedule",
-        href: "/dashboard/content/schedule",
-        icon: Calendar,
-      },
-      {
-        label: "Drafts",
-        href: "/dashboard/content/drafts",
-        icon: FileText,
-      },
-      {
-        label: "Viral Library",
-        href: "/dashboard/content/inspiration",
-        icon: Radio,
-      },
-    ],
+    exact: true,
+  },
+  {
+    label: "Schedule",
+    href: ROUTES.schedule,
+    icon: Calendar,
+  },
+  {
+    label: "AI Assistant",
+    href: ROUTES.assistant,
+    icon: Sparkles,
   },
 ];
 
-const outreachNavigation: NavItem[] = [
+const manageNavigation: NavItem[] = [
   {
-    label: "Campaigns",
-    href: "/dashboard/campaigns",
-    icon: Send,
-    children: [
-      {
-        label: "All Sequences",
-        href: "/dashboard/campaigns",
-        icon: Workflow,
-        exact: true,
-      },
-      {
-        label: "Connection Invites",
-        href: "/dashboard/campaigns/connections",
-        icon: UserCheck,
-      },
-      {
-        label: "Smart InMails",
-        href: "/dashboard/campaigns/inmails",
-        icon: Mail,
-      },
-    ],
+    label: "Posts & Replies",
+    href: ROUTES.posts,
+    icon: MessageSquare,
   },
   {
-    label: "Prospects & Leads",
-    href: "/dashboard/leads",
-    icon: Users,
-    children: [
-      {
-        label: "Lead Database",
-        href: "/dashboard/leads/database",
-        icon: Database,
-      },
-      {
-        label: "Saved Lists",
-        href: "/dashboard/leads/lists",
-        icon: Bookmark,
-      },
-      {
-        label: "CSV & Sales Nav Import",
-        href: "/dashboard/leads/import",
-        icon: FileSpreadsheet,
-      },
-      {
-        label: "Email & Phone Finder",
-        href: "/dashboard/leads/enrichment",
-        icon: Sparkles,
-      },
-    ],
+    label: "Channels",
+    href: ROUTES.channels,
+    icon: Plug,
   },
   {
-    label: "Auto-Engager",
-    href: "/dashboard/engager",
-    icon: Zap,
-  },
-];
-
-const analyticsNavigation: NavItem[] = [
-  {
-    label: "Outreach Stats",
-    href: "/dashboard/analytics/outreach",
+    label: "Analytics",
+    href: ROUTES.analytics,
     icon: BarChart3,
-  },
-  {
-    label: "Content Growth",
-    href: "/dashboard/analytics/content",
-    icon: Target,
-  },
-  {
-    label: "Activity Log",
-    href: "/dashboard/history",
-    icon: History,
   },
 ];
 
 const resourceNavigation: NavItem[] = [
   {
-    label: "Best Practices",
-    href: "/docs",
+    label: "Docs",
+    href: ROUTES.docs,
     icon: BookOpen,
   },
   {
     label: "Settings",
-    href: "/dashboard/settings",
+    href: ROUTES.settings,
     icon: Settings,
   },
 ];
 
 /* -------------------------------------------------------------------------- */
-/*                                ACTIVE STATE                                */
+/*                               SHARED STYLES                                */
 /* -------------------------------------------------------------------------- */
 
-function isItemActive(pathname: string, item: NavItem) {
+const NAV_BUTTON_BASE = `
+  relative
+  flex
+  h-9
+  w-full
+  items-center
+  gap-2.5
+  overflow-visible
+  rounded-lg
+  px-2.5
+  text-[13px]
+  font-medium
+  text-neutral-600
+  dark:text-[#a3a3a3]
+  transition-all
+  duration-150
+  hover:bg-neutral-200/70
+  hover:text-neutral-900
+  dark:hover:bg-[#222222]
+  dark:hover:text-white
+`;
+
+const ACTIVE_RAIL = [
+  "secondary-btns",
+  "!text-neutral-900 dark:!text-white",
+  "before:pointer-events-none",
+  "before:absolute",
+  "before:-left-[9px]",
+  "before:top-1/2",
+  "before:z-20",
+  "before:h-[24px]",
+  "before:w-[3px]",
+  "before:-translate-y-1/2",
+  "before:rounded-r-full",
+  "before:bg-[#7C5CFC]",
+  "before:shadow-[0_0_8px_rgba(124,92,252,0.35)]",
+  "before:content-['']",
+];
+
+const ACCOUNT_MENU_ITEM = `
+  flex
+  w-full
+  cursor-pointer
+  items-center
+  gap-2.5
+  rounded-lg
+  px-2.5
+  py-2
+  text-left
+  text-[13px]
+  text-neutral-700
+  dark:text-[#b7b7b7]
+  transition-colors
+  hover:bg-neutral-100
+  hover:text-neutral-900
+  dark:hover:bg-[#292929]
+  dark:hover:text-white
+`;
+
+const MORE_MENU_ITEM = `
+  flex
+  h-9
+  w-full
+  items-center
+  gap-2.5
+  rounded-lg
+  px-2.5
+  text-left
+  text-[12px]
+  font-medium
+  text-neutral-700
+  dark:text-[#b5b5b5]
+  transition-colors
+  hover:bg-neutral-100
+  hover:text-neutral-900
+  dark:hover:bg-white/[0.06]
+  dark:hover:text-white
+`;
+
+const QUICK_BUTTON = `
+  secondary-btns
+  flex
+  h-9
+  min-w-0
+  flex-1
+  items-center
+  justify-center
+  gap-1.5
+  rounded-lg
+  px-2.5
+  text-[12px]
+  font-medium
+  text-neutral-700
+  dark:text-[#d4d4d4]
+  transition-all
+  duration-150
+  hover:text-neutral-900
+  dark:hover:text-white
+`;
+
+/* -------------------------------------------------------------------------- */
+/*                                   HELPERS                                  */
+/* -------------------------------------------------------------------------- */
+
+function isItemActive(
+  pathname: string,
+  item: { href: string; exact?: boolean },
+) {
   if (item.exact) {
     return pathname === item.href || pathname === `${item.href}/`;
   }
-
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}
+
+function useOutsideClick(
+  ref: RefObject<HTMLElement | null>,
+  active: boolean,
+  onOutside: () => void,
+) {
+  useEffect(() => {
+    if (!active) return;
+
+    function handleOutsideClick(event: MouseEvent | TouchEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        onOutside();
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, [ref, active, onOutside]);
+}
+
+function getInitials(name: string, email: string) {
+  const source = name.trim() || email.trim();
+  if (!source) return "PF";
+
+  const parts = source.split(/[\s@._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "PF";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -233,27 +297,8 @@ function NavigationGroup({
   items: NavItem[];
 }) {
   const pathname = usePathname();
-  const { open } = useSidebar();
-
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    items.forEach((item) => {
-      if (item.children?.some((child) => isItemActive(pathname, child))) {
-        setExpanded((prev) => ({
-          ...prev,
-          [item.href]: true,
-        }));
-      }
-    });
-  }, [pathname, items]);
-
-  function toggleExpand(href: string) {
-    setExpanded((prev) => ({
-      ...prev,
-      [href]: !prev[href],
-    }));
-  }
+  const { open: desktopOpen, isMobile, setOpenMobile } = useSidebar();
+  const open = isMobile || desktopOpen;
 
   return (
     <SidebarGroup className="px-1 py-1.5">
@@ -284,287 +329,23 @@ function NavigationGroup({
           {items.map((item) => {
             const Icon = item.icon;
             const active = isItemActive(pathname, item);
-            const hasActiveChild =
-              item.children?.some((child) => isItemActive(pathname, child)) ??
-              false;
-            const isExpanded = expanded[item.href] ?? hasActiveChild;
 
-            /* Nested item */
-            if (item.children) {
-              const activeChildIndex = item.children.findIndex((child) =>
-                isItemActive(pathname, child),
-              );
-              return (
-                <SidebarMenuItem key={item.href} className="overflow-visible">
-                  <SidebarMenuButton
-                    type="button"
-                    tooltip={item.label}
-                    onClick={() => toggleExpand(item.href)}
-                    aria-expanded={isExpanded}
-                    className={cn(
-                      `
-                        relative
-                        flex
-                        h-9
-                        w-full
-                        cursor-pointer
-                        items-center
-                        gap-2.5
-                        overflow-visible
-                        rounded-lg
-                        px-2.5
-                        text-[13px]
-                        font-medium
-                        text-neutral-600
-                        dark:text-[#a3a3a3]
-                        transition-all
-                        duration-150
-
-                        hover:bg-neutral-200/70
-                        hover:text-neutral-900
-                        dark:hover:bg-[#222222]
-                        dark:hover:text-white
-
-                        [&_svg]:transition-colors
-                      `,
-                      hasActiveChild && [
-                        "secondary-btn",
-                        "!text-neutral-900 dark:!text-white",
-                        "before:pointer-events-none",
-                        "before:absolute",
-                        "before:-left-[9px]",
-                        "before:top-1/2",
-                        "before:z-20",
-                        "before:h-[24px]",
-                        "before:w-[3px]",
-                        "before:-translate-y-1/2",
-                        "before:rounded-r-full",
-                        "before:bg-[#7C5CFC]",
-                        "before:shadow-[0_0_8px_rgba(124,92,252,0.35)]",
-                        "before:content-['']",
-                      ],
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "size-[17px] shrink-0 transition-colors",
-                        hasActiveChild
-                          ? "!text-neutral-900 dark:!text-white"
-                          : "text-neutral-500 dark:text-[#737373]",
-                      )}
-                    />
-
-                    {open && (
-                      <>
-                        <span className="truncate">{item.label}</span>
-
-                        {item.badge && (
-                          <span
-                            className={cn(
-                              `
-                                ml-auto
-                                rounded-md
-                                px-1.5
-                                py-0.5
-                                text-[9px]
-                              `,
-                              hasActiveChild
-                                ? "bg-neutral-300 dark:bg-white/10 text-neutral-900 dark:text-white/70"
-                                : "bg-neutral-200 dark:bg-[#272727] text-neutral-600 dark:text-[#8a8a8a]",
-                            )}
-                          >
-                            {item.badge}
-                          </span>
-                        )}
-
-                        <ChevronDown
-                          className={cn(
-                            `
-                              ml-auto
-                              size-3.5
-                              shrink-0
-                              text-neutral-400
-                              dark:text-[#666666]
-                              transition-transform
-                              duration-200
-                            `,
-                            isExpanded && "rotate-180",
-                            hasActiveChild
-                              ? "!text-neutral-900 dark:!text-white/60"
-                              : "!text-neutral-500 dark:!text-[#666666]",
-                          )}
-                        />
-                      </>
-                    )}
-                  </SidebarMenuButton>
-
-                  {/* Child Items */}
-                  {open && isExpanded && (
-                    <div className="relative ml-[18px] mt-1">
-                      <span
-                        className="
-                          pointer-events-none
-                          absolute
-                          left-0
-                          top-0
-                          h-full
-                          w-px
-                          bg-neutral-300
-                          dark:bg-white/[0.10]
-                        "
-                      />
-
-                      {activeChildIndex >= 0 && (
-                        <span
-                          className="
-                            pointer-events-none
-                            absolute
-                            left-0
-                            top-0
-                            w-[1.5px]
-                            rounded-full
-                            bg-[#7C5CFC]
-                            shadow-[0_0_6px_rgba(124,92,252,0.8),0_0_14px_rgba(124,92,252,0.35)]
-                            transition-[height]
-                            duration-300
-                            ease-out
-
-                            after:absolute
-                            after:-bottom-[2px]
-                            after:left-1/2
-                            after:h-[5px]
-                            after:w-[5px]
-                            after:-translate-x-1/2
-                            after:rounded-full
-                            after:bg-[#A78BFA]
-                            after:shadow-[0_0_6px_#7C5CFC,0_0_12px_rgba(124,92,252,0.8)]
-                            after:content-['']
-                          "
-                          style={{
-                            height: `${activeChildIndex * 34 + 16}px`,
-                          }}
-                        />
-                      )}
-
-                      <SidebarMenuSub className="ml-0 space-y-[2px] overflow-visible border-l-0 pl-2.5">
-                        {item.children.map((child) => {
-                          const ChildIcon = child.icon;
-                          const childActive = isItemActive(pathname, child);
-
-                          return (
-                            <SidebarMenuSubItem
-                              key={child.href}
-                              className="overflow-visible"
-                            >
-                              <SidebarMenuSubButton
-                                render={<Link href={child.href} />}
-                                className={cn(
-                                  `
-                                    relative
-                                    h-8
-                                    overflow-visible
-                                    rounded-md
-                                    px-2
-                                    text-[12px]
-                                    font-medium
-                                    text-neutral-600
-                                    dark:text-[#858585]
-                                    transition-all
-                                    duration-150
-
-                                    hover:bg-neutral-200/70
-                                    hover:text-neutral-900
-                                    dark:hover:bg-[#222222]
-                                    dark:hover:text-white
-                                  `,
-                                  childActive && [
-                                    "secondary-btn",
-                                    "!text-neutral-900 dark:!text-white",
-                                  ],
-                                )}
-                              >
-                                <span className="flex w-full items-center gap-2">
-                                  <ChildIcon
-                                    className={cn(
-                                      "size-3.5 shrink-0 transition-colors",
-                                      childActive
-                                        ? "!text-neutral-900 dark:!text-white"
-                                        : "!text-neutral-500 dark:!text-[#606060]",
-                                    )}
-                                  />
-
-                                  <span
-                                    className={cn(
-                                      "truncate",
-                                      childActive
-                                        ? "!text-neutral-900 dark:!text-white"
-                                        : "text-neutral-600 dark:text-[#858585]",
-                                    )}
-                                  >
-                                    {child.label}
-                                  </span>
-                                </span>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          );
-                        })}
-                      </SidebarMenuSub>
-                    </div>
-                  )}
-                </SidebarMenuItem>
-              );
-            }
-
-            /* Regular Item */
             return (
               <SidebarMenuItem key={item.href} className="overflow-visible">
                 <SidebarMenuButton
                   tooltip={item.label}
-                  className={cn(
-                    `
-                      relative
-                      flex
-                      h-9
-                      w-full
-                      items-center
-                      gap-2.5
-                      overflow-visible
-                      rounded-lg
-                      px-2.5
-                      text-[13px]
-                      font-medium
-                      text-neutral-600
-                      dark:text-[#a3a3a3]
-                      transition-all
-                      duration-150
-
-                      hover:bg-neutral-200/70
-                      hover:text-neutral-900
-                      dark:hover:bg-[#222222]
-                      dark:hover:text-white
-                    `,
-                    active && [
-                      "secondary-btn",
-                      "!text-neutral-900 dark:!text-white",
-                      "before:pointer-events-none",
-                      "before:absolute",
-                      "before:-left-[9px]",
-                      "before:top-1/2",
-                      "before:z-20",
-                      "before:h-[24px]",
-                      "before:w-[3px]",
-                      "before:-translate-y-1/2",
-                      "before:rounded-r-full",
-                      "before:bg-[#7C5CFC]",
-                      "before:shadow-[0_0_8px_rgba(124,92,252,0.35)]",
-                      "before:content-['']",
-                    ],
-                  )}
+                  render={
+                    <Link
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      onClick={() => {
+                        if (isMobile) setOpenMobile(false);
+                      }}
+                    />
+                  }
+                  className={cn(NAV_BUTTON_BASE, active && ACTIVE_RAIL)}
                 >
-                  <Link
-                    href={item.href}
-                    className="flex w-full items-center gap-2.5"
-                  >
+                  <span className="flex w-full items-center gap-2.5">
                     <Icon
                       className={cn(
                         "size-[17px] shrink-0 transition-colors",
@@ -578,7 +359,7 @@ function NavigationGroup({
                       <>
                         <span
                           className={cn(
-                            "truncate",
+                            "truncate text-[14px] font-medium transition-colors",
                             active && "!text-neutral-900 dark:!text-white",
                           )}
                         >
@@ -588,13 +369,7 @@ function NavigationGroup({
                         {item.badge && (
                           <span
                             className={cn(
-                              `
-                                ml-auto
-                                rounded-md
-                                px-1.5
-                                py-0.5
-                                text-[9px]
-                              `,
+                              "ml-auto rounded-md px-1.5 py-0.5 text-[9px]",
                               active
                                 ? "bg-neutral-300 dark:bg-white/10 text-neutral-900 dark:text-white/70"
                                 : "bg-neutral-200 dark:bg-[#292929] text-neutral-600 dark:text-[#999]",
@@ -605,7 +380,7 @@ function NavigationGroup({
                         )}
                       </>
                     )}
-                  </Link>
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
@@ -616,19 +391,16 @@ function NavigationGroup({
   );
 }
 
-
-
-
-export type Workspace = {
-  id: string;
-  name: string;
-  slug: string;
-  created_at: string;
-};
-
 /* -------------------------------------------------------------------------- */
 /*                              USER PROFILE                                  */
 /* -------------------------------------------------------------------------- */
+
+const ACCOUNT_MENU = [
+  { label: "Profile", href: ROUTES.profile, icon: User },
+  { label: "Connected Channels", href: ROUTES.channels, icon: Plug },
+  { label: "Billing", href: ROUTES.billing, icon: CreditCard },
+  { label: "Settings", href: ROUTES.settings, icon: Settings },
+] as const;
 
 function SidebarUserFooter() {
   const { open } = useSidebar();
@@ -636,32 +408,22 @@ function SidebarUserFooter() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
+  useOutsideClick(dropdownRef, isOpen, () => setIsOpen(false));
 
-    function handleOutsideClick(event: MouseEvent | TouchEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleOutsideClick);
-    document.addEventListener("touchstart", handleOutsideClick);
-
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-      document.removeEventListener("touchstart", handleOutsideClick);
-    };
-  }, [isOpen]);
   const trpc = useTRPC();
   const { data } = useQuery(trpc.user.me.queryOptions());
+  const logout = useMutation(
+    trpc.user.logout.mutationOptions({
+      onSuccess: () => {
+        router.replace("/login");
+        router.refresh();
+      },
+    }),
+  );
 
   const name = data?.display_name || "";
   const email = data?.email || "";
-  const initials = "AS";
+  const initials = getInitials(name, email);
 
   function navigate(path: string) {
     setIsOpen(false);
@@ -698,92 +460,24 @@ function SidebarUserFooter() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate("/dashboard/settings/profile")}
-            className="
-              flex
-              w-full
-              cursor-pointer
-              items-center
-              gap-2.5
-              rounded-lg
-              px-2.5
-              py-2
-              text-left
-              text-[13px]
-              text-neutral-700
-              dark:text-[#b7b7b7]
-              transition-colors
-              hover:bg-neutral-100
-              hover:text-neutral-900
-              dark:hover:bg-[#292929]
-              dark:hover:text-white
-            "
-          >
-            <User className="size-4 text-neutral-500 dark:text-[#777]" />
-            LinkedIn Accounts
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate("/dashboard/settings/billing")}
-            className="
-              flex
-              w-full
-              cursor-pointer
-              items-center
-              gap-2.5
-              rounded-lg
-              px-2.5
-              py-2
-              text-left
-              text-[13px]
-              text-neutral-700
-              dark:text-[#b7b7b7]
-              transition-colors
-              hover:bg-neutral-100
-              hover:text-neutral-900
-              dark:hover:bg-[#292929]
-              dark:hover:text-white
-            "
-          >
-            <CreditCard className="size-4 text-neutral-500 dark:text-[#777]" />
-            Billing & Limits
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate("/dashboard/settings")}
-            className="
-              flex
-              w-full
-              cursor-pointer
-              items-center
-              gap-2.5
-              rounded-lg
-              px-2.5
-              py-2
-              text-left
-              text-[13px]
-              text-neutral-700
-              dark:text-[#b7b7b7]
-              transition-colors
-              hover:bg-neutral-100
-              hover:text-neutral-900
-              dark:hover:bg-[#292929]
-              dark:hover:text-white
-            "
-          >
-            <Settings className="size-4 text-neutral-500 dark:text-[#777]" />
-            Settings
-          </button>
+          {ACCOUNT_MENU.map(({ label, href, icon: ItemIcon }) => (
+            <button
+              key={href}
+              type="button"
+              onClick={() => navigate(href)}
+              className={ACCOUNT_MENU_ITEM}
+            >
+              <ItemIcon className="size-4 text-neutral-500 dark:text-[#777]" />
+              {label}
+            </button>
+          ))}
 
           <div className="my-1 h-px bg-neutral-200 dark:bg-[#303030]" />
 
           <button
             type="button"
-            onClick={() => setIsOpen(false)}
+            disabled={logout.isPending}
+            onClick={() => logout.mutate()}
             className="
               flex
               w-full
@@ -832,7 +526,7 @@ function SidebarUserFooter() {
       >
         <Avatar className="size-8 shrink-0 border border-neutral-300 dark:border-[#323232]">
           <AvatarImage alt={name} />
-          <AvatarFallback className="bg-[#0077b5]/15 text-[11px] font-semibold text-[#0077b5]">
+          <AvatarFallback className="bg-[#7C5CFC]/15 text-[11px] font-semibold text-[#7C5CFC]">
             {initials}
           </AvatarFallback>
         </Avatar>
@@ -869,34 +563,14 @@ function SidebarUserFooter() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                 LOGO                                       */
-/* -------------------------------------------------------------------------- */
-
-function BrandLogo() {
-  return (
-    <div
-      className="
-        flex
-        size-8
-        shrink-0
-        items-center
-        justify-center
-        rounded-lg
-        border
-        border-neutral-200
-        dark:border-white/[0.06]
-        bg-neutral-200
-        dark:bg-[#202020]
-      "
-    >
-      <Linkedin className="size-[17px] text-[#0a66c2]" strokeWidth={2.2} />
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*                           PRIMARY CREATE ACTION                            */
 /* -------------------------------------------------------------------------- */
+
+const MORE_CREATE_OPTIONS = [
+  { label: "AI Draft", href: ROUTES.assistant, icon: Sparkles },
+  { label: "Repurpose Content", href: ROUTES.repurpose, icon: Repeat2 },
+  { label: "Connect Channel", href: ROUTES.channels, icon: Plug },
+] as const;
 
 function CreateActionButton() {
   const router = useRouter();
@@ -905,196 +579,101 @@ function CreateActionButton() {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!moreOpen) return;
+  useOutsideClick(moreRef, moreOpen, () => setMoreOpen(false));
 
-    function handleOutsideClick(event: MouseEvent | TouchEvent) {
-      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
-        setMoreOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleOutsideClick);
-    document.addEventListener("touchstart", handleOutsideClick);
-
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-      document.removeEventListener("touchstart", handleOutsideClick);
-    };
-  }, [moreOpen]);
-
-  const [openPostBuilder, setOpenPostBuilder] = useState(false);
   return (
-    <>
-      <div className="flex gap-2">
-        {/* <CreatePost open={openPostBuilder} setOpen={setOpenPostBuilder} /> */}
-        <button
-          type="button"
-          onClick={() => router.push("/dashboard/content/generator") }
-          className={cn( 
-            `
-          primary-btn
-          flex
-          !h-9
-          items-center
-          justify-center
-          rounded-lg
-          text-[13px]
-          font-medium
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => router.push(ROUTES.compose)}
+        className={cn(
+          `
+            primary-btn
+            flex
+            !h-9
+            items-center
+            justify-center
+            rounded-lg
+            text-[13px]
+            font-medium
           `,
-            open ? "w-full gap-2" : "size-9 !px-3",
-          )}
-        >
-          <Plus className="size-4 shrink-0" strokeWidth={2.2} />
-          {open && <span>New Post</span>}
-        </button>
-
-        {open && (
-          <div ref={moreRef} className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setMoreOpen((prev) => !prev)}
-              aria-label="More create options"
-              aria-expanded={moreOpen}
-              className={cn(
-                `
-              secondary-btn
-              flex
-              size-9
-              shrink-0
-              items-center
-              justify-center
-              rounded-lg
-              !px-0
-              text-neutral-600
-              dark:text-[#a3a3a3]
-              transition-all
-              duration-150
-              hover:text-neutral-900
-              dark:hover:text-white
-              `,
-                moreOpen && "!text-neutral-900 dark:!text-white",
-              )}
-            >
-              <MoreHorizontal className="size-4" strokeWidth={2} />
-            </button>
-
-            {moreOpen && (
-              <div
-                className="
-            absolute
-            left-0
-            top-[calc(100%+6px)]
-            z-50
-            w-48
-            overflow-hidden
-            rounded-xl
-            border
-            border-neutral-200
-            dark:border-white/[0.07]
-            bg-white
-            dark:bg-[#1d1d1d]
-            p-1.5
-            shadow-xl
-            dark:shadow-2xl
-            dark:shadow-black/50
-            "
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    router.push("/dashboard/content/generator");
-                  }}
-                  className="
-                flex
-                h-9
-                w-full
-                items-center
-                gap-2.5
-                rounded-lg
-                px-2.5
-                text-left
-                text-[12px]
-                font-medium
-                text-neutral-700
-                dark:text-[#b5b5b5]
-                transition-colors
-                hover:bg-neutral-100
-                hover:text-neutral-900
-                dark:hover:bg-white/[0.06]
-                dark:hover:text-white
-                "
-                >
-                  <Sparkles className="size-3.5 text-neutral-500 dark:text-[#777]" />
-                  Generate AI Post
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    router.push("/dashboard/campaigns/new");
-                  }}
-                  className="
-                flex
-                h-9
-                w-full
-                items-center
-                gap-2.5
-                rounded-lg
-                px-2.5
-                text-left
-                text-[12px]
-                font-medium
-                text-neutral-700
-                dark:text-[#b5b5b5]
-                transition-colors
-                hover:bg-neutral-100
-                hover:text-neutral-900
-                dark:hover:bg-white/[0.06]
-                dark:hover:text-white
-                "
-                >
-                  <Send className="size-3.5 text-neutral-500 dark:text-[#777]" />
-                  New Sequence
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    router.push("/dashboard/leads/import");
-                  }}
-                  className="
-                flex
-                h-9
-                w-full
-                items-center
-                gap-2.5
-                rounded-lg
-                px-2.5
-                text-left
-                text-[12px]
-                font-medium
-                text-neutral-700
-                dark:text-[#b5b5b5]
-                transition-colors
-                hover:bg-neutral-100
-                hover:text-neutral-900
-                dark:hover:bg-white/[0.06]
-                dark:hover:text-white
-                "
-                >
-                  <FileSpreadsheet className="size-3.5 text-neutral-500 dark:text-[#777]" />
-                  Import CSV / Sales Nav
-                </button>
-              </div>
-            )}
-          </div>
+          open ? "w-full gap-2" : "size-9 !px-3",
         )}
-      </div>
-    </>
+      >
+        <Plus className="size-4 shrink-0" strokeWidth={2.2} />
+        {open && <span>New Post</span>}
+      </button>
+
+      {open && (
+        <div ref={moreRef} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setMoreOpen((prev) => !prev)}
+            aria-label="More create options"
+            aria-expanded={moreOpen}
+            className={cn(
+              `
+                secondary-btns
+                flex
+                size-9
+                shrink-0
+                items-center
+                justify-center
+                rounded-lg
+                !px-0
+                text-neutral-600
+                dark:text-[#a3a3a3]
+                transition-all
+                duration-150
+                hover:text-neutral-900
+                dark:hover:text-white
+              `,
+              moreOpen && "!text-neutral-900 dark:!text-white",
+            )}
+          >
+            <MoreHorizontal className="size-4" strokeWidth={2} />
+          </button>
+
+          {moreOpen && (
+            <div
+              className="
+                absolute
+                left-0
+                top-[calc(100%+6px)]
+                z-50
+                w-48
+                overflow-hidden
+                rounded-xl
+                border
+                border-neutral-200
+                dark:border-white/[0.07]
+                bg-white
+                dark:bg-[#1d1d1d]
+                p-1.5
+                shadow-xl
+                dark:shadow-2xl
+                dark:shadow-black/50
+              "
+            >
+              {MORE_CREATE_OPTIONS.map(({ label, href, icon: OptionIcon }) => (
+                <button
+                  key={href}
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    router.push(href);
+                  }}
+                  className={MORE_MENU_ITEM}
+                >
+                  <OptionIcon className="size-3.5 text-neutral-500 dark:text-[#777]" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1106,9 +685,9 @@ function QuickCreateActions() {
     return (
       <button
         type="button"
-        onClick={() => router.push("/dashboard/content/generator")}
+        onClick={() => router.push(ROUTES.assistant)}
         className="
-          secondary-btn
+          secondary-btns
           flex
           size-9
           items-center
@@ -1121,9 +700,9 @@ function QuickCreateActions() {
           hover:text-neutral-900
           dark:hover:text-white
         "
-        aria-label="Write post"
+        aria-label="AI assistant"
       >
-        <PenTool className="size-4 shrink-0" strokeWidth={2} />
+        <Sparkles className="size-4 shrink-0" strokeWidth={2} />
       </button>
     );
   }
@@ -1132,64 +711,26 @@ function QuickCreateActions() {
     <div className="flex w-full items-center gap-1.5">
       <button
         type="button"
-        onClick={() => router.push("/dashboard/content/generator")}
-        className="
-          secondary-btn
-          flex
-          h-9
-          min-w-0
-          flex-1
-          items-center
-          justify-center
-          gap-1.5
-          rounded-lg
-          px-2.5
-          text-[12px]
-          font-medium
-          text-neutral-700
-          dark:text-[#d4d4d4]
-          transition-all
-          duration-150
-          hover:text-neutral-900
-          dark:hover:text-white
-        "
+        onClick={() => router.push(ROUTES.assistant)}
+        className={QUICK_BUTTON}
       >
-        <PenTool
+        <Sparkles
           className="size-3.5 shrink-0 text-neutral-600 dark:text-[#d4d4d4]"
           strokeWidth={2}
         />
-        <span className="truncate">Write Post</span>
+        <span className="truncate">AI Assist</span>
       </button>
 
       <button
         type="button"
-        onClick={() => router.push("/dashboard/leads/database")}
-        className="
-          secondary-btn
-          flex
-          h-9
-          min-w-0
-          flex-1
-          items-center
-          justify-center
-          gap-1.5
-          rounded-lg
-          px-2.5
-          text-[12px]
-          font-medium
-          text-neutral-700
-          dark:text-[#d4d4d4]
-          transition-all
-          duration-150
-          hover:text-neutral-900
-          dark:hover:text-white
-        "
+        onClick={() => router.push(ROUTES.schedule)}
+        className={QUICK_BUTTON}
       >
-        <Target
+        <Calendar
           className="size-3.5 shrink-0 text-neutral-600 dark:text-[#d4d4d4]"
           strokeWidth={2}
         />
-        <span className="truncate">Find Leads</span>
+        <span className="truncate">Schedule</span>
       </button>
     </div>
   );
@@ -1200,71 +741,24 @@ function QuickCreateActions() {
 /* -------------------------------------------------------------------------- */
 
 export function AppSidebar() {
-  const { open } = useSidebar();
-
   return (
     <Sidebar
-      collapsible="icon"
+      collapsible="offcanvas"
       className="
-        border-none
+        border-r
         border-border
+        w-[var(--sidebar-width)]
         bg-primary
         text-foreground
       "
     >
       {/* HEADER */}
-
-      <SidebarHeader
-        className={`border-b border-border bg-primary ${
-          open ? "px-3 py-2.5" : "px-2 py-2"
-        }`}
-      >
-        <ProfileMenu/>
-        {/* <div
-          className={cn(
-            `
-              flex
-              h-10
-              items-center
-              gap-2.5
-            `,
-            !open && "justify-center",
-          )}
-        >
-          <BrandLogo />
-
-          {open && (
-            <div className="min-w-0 flex-1">
-              <p
-                className="
-                  truncate
-                  text-[14px]
-                  font-semibold
-                  tracking-[-0.01em]
-                  text-neutral-900
-                  dark:text-white
-                "
-              >
-                InScale
-              </p>
-
-              <p
-                className="
-                  truncate
-                  text-[10px]
-                  text-neutral-500
-                  dark:text-[#656565]
-                "
-              >
-                Growth &amp; Outreach Suite
-              </p>
-            </div>
-          )}
-        </div> */}
+      <SidebarHeader className="border-b border-border bg-primary px-3 py-2.5">
+        <ProfileMenu />
 
         <div className="mt-2 flex flex-col gap-2.5">
           <CreateActionButton />
-          {open && <QuickCreateActions />}
+          <QuickCreateActions />
         </div>
       </SidebarHeader>
 
@@ -1280,12 +774,8 @@ export function AppSidebar() {
         "
       >
         <NavigationGroup label="Overview" items={overviewNavigation} />
-        <NavigationGroup label="Outlify (Content)" items={contentNavigation} />
-        <NavigationGroup
-          label="Outreach (Sequences)"
-          items={outreachNavigation}
-        />
-        <NavigationGroup label="Analytics" items={analyticsNavigation} />
+        <NavigationGroup label="Create" items={createNavigation} />
+        <NavigationGroup label="Manage" items={manageNavigation} />
       </SidebarContent>
 
       {/* FOOTER */}

@@ -48,6 +48,7 @@ class BillingWebhookEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class UsageLedger(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "usage_ledger"
+    __table_args__ = (UniqueConstraint("workspace_id", "kind", "reference_id"),)
 
     workspace_id: Mapped[str] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
@@ -70,3 +71,11 @@ class EntitlementGrant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     limit_value: Mapped[int | None] = mapped_column(Integer)
     source: Mapped[str] = mapped_column(String(30), default="plan")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Plan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "plans"
+    code: Mapped[str] = mapped_column(String(40), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    limits: Mapped[dict] = mapped_column(JSON, default=dict)
+    active: Mapped[bool] = mapped_column(default=True)

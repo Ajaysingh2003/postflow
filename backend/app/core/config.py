@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,7 +15,25 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     worker_poll_seconds: int = 5
     scheduler_poll_seconds: int = 10
-    oauth_redirect_base_url: str = "http://localhost:18000/api/v1/channels/oauth/callback"
+    oauth_redirect_base_url: str = "http://localhost:18000/api/v1/channels/{platform}/callback"
+    token_encryption_key: str | None = None
+    token_encryption_previous_keys: str = ""
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    mail_from: str = "postflow <noreply@postflow.ai>"
+    frontend_url: str = "http://localhost:3000"
+    linkedin_api_version: str = "202609"
+    graph_api_version: str = "v23.0"
+    threads_app_id: str | None = None
+    threads_app_secret: str | None = None
+    bluesky_private_key: str | None = None
+    bluesky_key_id: str = "postflow-1"
+    llm_mock_enabled: bool = False
+    llm_max_output_tokens: int = 4096
+    llm_cost_micros_per_token: int = 5
+    x_monthly_spend_limit_micros: int = 10_000_000
 
     # Identity
     google_client_id: str | None = None
@@ -47,10 +66,9 @@ class Settings(BaseSettings):
     # AI Assistant
     llm_provider_url: str | None = None
     llm_provider_api_key: str | None = None
-    llm_model: str = "muse-spark-1.3-contributor"
+    llm_model: str = ""
 
     # Media & Storage
-    storage_driver: str = "r2"
     r2_account_id: str | None = None
     r2_access_key_id: str | None = None
     r2_secret_access_key: str | None = None
@@ -73,6 +91,22 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 
+    def oauth_callback_url(self, platform: str) -> str:
+        return self.oauth_redirect_base_url.replace(
+            "/oauth/callback", "/{platform}/callback"
+        ).format(platform=platform)
+
+    @model_validator(mode="after")
+    def production_configuration(self):
+        if self.app_env == "production":
+            if len(self.app_secret) < 32 or self.app_secret.startswith(
+                ("development-", "replace-")
+            ):
+                raise ValueError("Production APP_SECRET must contain at least 32 random characters")
+            if self.llm_mock_enabled:
+                raise ValueError("Mock AI output cannot be enabled in production")
+        return self
+
     def dodo_product_id(self, plan_code: str) -> str | None:
         mapping = {
             "starter": self.dodo_product_starter or self.dodo_product_creator,
@@ -82,7 +116,7 @@ class Settings(BaseSettings):
             "agency": self.dodo_product_agency or self.dodo_product_business,
         }
         val = mapping.get(plan_code)
-        if not val and not self.dodo_api_key:
+        if not val and not self.dodo_api_key and self.debug:
             return f"pdt_mock_{plan_code}"
         return val
 

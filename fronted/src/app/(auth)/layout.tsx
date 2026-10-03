@@ -10,13 +10,10 @@ export const metadata: Metadata = {
 
 function layout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid bg-primary grid-cols-1 md:grid-cols-12  ">
-      <div className="col-span-12 md:col-span-6">
-        {/* <InteractiveAuthScreen /> */}
-        <ConnectionAnimation />
-      </div>
-      <div className="col-span-12 flex items-center justify-center w-full  p-3 md:col-span-6 rounded-lg  overflow-hidden">
-        <div className="bg-background w-full border border-border rounded-xl shadow-sm ">
+    <div className="grid bg-primary ">
+      
+      <div className="flex items-center justify-center w-full  overflow-hidden">
+        <div className=" w-full border border-border rounded-xl shadow-sm ">
           <CardWrapper>{children}</CardWrapper>
         </div>
       </div>

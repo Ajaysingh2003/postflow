@@ -44,6 +44,7 @@ def list_features(
             name=f.name,
             description=f.description,
             platforms=f.platforms,
+            input_schema=f.input_schema.model_json_schema(),
         )
         for f in features
     ]
@@ -83,6 +84,8 @@ async def run_feature_endpoint(
         platform=payload.platform,
         voice_profile_id=payload.voice_profile_id,
         db=db,
+        connected_account_id=payload.connected_account_id,
+        validation_context=payload.validation_context,
     )
     return ExecuteFeatureResponse(
         feature_id=feature_id,
@@ -93,7 +96,9 @@ async def run_feature_endpoint(
     )
 
 
-@router.post("/voice-profiles", response_model=VoiceProfileResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/voice-profiles", response_model=VoiceProfileResponse, status_code=status.HTTP_201_CREATED
+)
 def create_voice_profile_endpoint(
     payload: VoiceProfileCreate,
     user: User = Depends(get_current_user),
@@ -161,4 +166,56 @@ def list_assistant_runs_endpoint(
             .order_by(AssistantRun.created_at.desc())
             .limit(100)
         )
+    )
+
+
+@router.post("/features/{feature_id}/stream")
+async def stream_feature(
+    feature_id: str,
+    payload: ExecuteFeatureRequest,
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    import json
+
+    from fastapi import HTTPException
+    from fastapi.responses import StreamingResponse
+
+    async def events():
+        yield 'event: progress\ndata: {"status":"validating_and_generating"}\n\n'
+        try:
+            output, issues, record = await execute_feature(
+                workspace.id,
+                user.id,
+                feature_id,
+                payload.input_data,
+                platform=payload.platform,
+                voice_profile_id=payload.voice_profile_id,
+                db=db,
+                connected_account_id=payload.connected_account_id,
+                validation_context=payload.validation_context,
+            )
+            yield (
+                "event: complete\ndata: "
+                + json.dumps(
+                    {
+                        "output": output,
+                        "tokens_used": record.tokens_used,
+                        "validation_issues": [i.model_dump() for i in issues],
+                    }
+                )
+                + "\n\n"
+            )
+        except HTTPException as exc:
+            yield (
+                "event: error\ndata: "
+                + json.dumps({"status": exc.status_code, "detail": exc.detail})
+                + "\n\n"
+            )
+        except Exception:  # noqa: BLE001
+            yield 'event: error\ndata: {"status":502,"detail":"Assistant provider request failed"}\n\n'
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream", headers={"Cache-Control": "no-store"}
     )

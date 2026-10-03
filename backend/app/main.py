@@ -18,6 +18,7 @@ from app.modules.assistant.router import router as assistant_router
 from app.modules.billing.router import router as billing_router
 from app.modules.channels.reddit_router import router as reddit_router
 from app.modules.channels.router import router as channels_router
+from app.modules.content.management_router import router as management_router
 from app.modules.content.router import router as content_router
 from app.modules.identity.router import router as identity_router
 from app.modules.media.router import router as media_router
@@ -107,6 +108,7 @@ for module_router in (
     channels_router,
     reddit_router,
     content_router,
+    management_router,
     media_router,
     publishing_router,
     assistant_router,

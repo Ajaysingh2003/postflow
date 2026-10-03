@@ -265,7 +265,7 @@ ALL_FEATURES: list[AssistantFeature] = [
         output_schema=s.RedditAIReplySuggestionOutput,
         prompt_template=(
             "Draft authentic, non-spam replies to this Reddit comment:\n\n"
-            "Parent Comment:\n\"{parent_comment}\"\n\n"
+            'Parent Comment:\n"{parent_comment}"\n\n'
             "Original Post Title: {post_title}\n"
             "Context: {post_context}\n"
             "Desired Tone: {tone}\n\n"
@@ -520,9 +520,7 @@ ALL_FEATURES: list[AssistantFeature] = [
         platforms=["*"],
         input_schema=s.RewriteWithToneInput,
         output_schema=s.RewriteWithToneOutput,
-        prompt_template=(
-            "Rewrite the following text in tone '{tone}':\n\n{text}"
-        ),
+        prompt_template=("Rewrite the following text in tone '{tone}':\n\n{text}"),
     ),
     AssistantFeature(
         id="repurpose_content",
@@ -551,3 +549,16 @@ ALL_FEATURES: list[AssistantFeature] = [
         ),
     ),
 ]
+
+
+ALL_FEATURES.append(
+    AssistantFeature(
+        id="threads_post",
+        name="Threads post",
+        description="Conversational Threads copy within 500 characters",
+        platforms=["threads"],
+        input_schema=s.FacebookPagePostInput,
+        output_schema=s.FacebookPagePostOutput,
+        prompt_template="Write a Threads post about {topic}. Tone: {tone}. Keep it within 500 characters. {style_guidelines}",
+    )
+)

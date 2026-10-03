@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.channels.base import Capabilities, Target
 
@@ -21,8 +21,63 @@ class ConnectedAccountResponse(BaseModel):
     status: str
     token_expires_at: datetime | None = None
     account_metadata: dict[str, Any] = Field(default_factory=dict)
+    avatar_url: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("account_metadata")
+    @classmethod
+    def public_metadata(cls, value):
+        def clean(item):
+            if isinstance(item, dict):
+                return {
+                    k: clean(v)
+                    for k, v in item.items()
+                    if k != "oauth"
+                    and not any(word in k.lower() for word in ("token", "secret", "private_key"))
+                }
+            if isinstance(item, list):
+                return [clean(v) for v in item]
+            return item
+
+        return clean(value)
+
+    @model_validator(mode="after")
+    def populate_avatar_url(self) -> "ConnectedAccountResponse":
+        if not self.avatar_url and self.account_metadata:
+            meta = self.account_metadata
+            candidates = [
+                meta.get("avatar_url"),
+                meta.get("profile_image_url"),
+                meta.get("picture_url"),
+                meta.get("avatar"),
+                meta.get("icon_img"),
+                meta.get("threads_profile_picture_url"),
+            ]
+            for url in candidates:
+                if url and isinstance(url, str):
+                    self.avatar_url = url.replace("&amp;", "&")
+                    return self
+
+            pic = meta.get("picture")
+            if isinstance(pic, str):
+                self.avatar_url = pic.replace("&amp;", "&")
+                return self
+            if isinstance(pic, dict):
+                url = pic.get("data", {}).get("url")
+                if url and isinstance(url, str):
+                    self.avatar_url = url.replace("&amp;", "&")
+                    return self
+
+            ig_accounts = meta.get("instagram_accounts")
+            if isinstance(ig_accounts, list) and ig_accounts:
+                first_ig = ig_accounts[0]
+                if isinstance(first_ig, dict):
+                    url = first_ig.get("profile_picture_url")
+                    if url and isinstance(url, str):
+                        self.avatar_url = url.replace("&amp;", "&")
+                        return self
+        return self
 
 
 class ConnectRequest(BaseModel):

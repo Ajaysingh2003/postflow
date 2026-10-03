@@ -62,9 +62,7 @@ def _get_workspace_variant(db: Session, workspace_id: str, variant_id: str) -> P
 
 
 def _get_workspace_post(db: Session, workspace_id: str, post_id: str) -> Post:
-    post = db.scalar(
-        select(Post).where(Post.id == post_id, Post.workspace_id == workspace_id)
-    )
+    post = db.scalar(select(Post).where(Post.id == post_id, Post.workspace_id == workspace_id))
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -236,7 +234,9 @@ class RedditMultiCommunityPostRequest(BaseModel):
     account_id: str = Field(..., description="Connected Reddit account ID")
     base_text: str = Field(..., min_length=5, description="Base post body or content")
     title: str = Field(default="", description="Base title (optional)")
-    subreddits: list[str] = Field(..., min_length=1, max_length=10, description="List of target subreddits")
+    subreddits: list[str] = Field(
+        ..., min_length=1, max_length=10, description="List of target subreddits"
+    )
     scheduled_time: datetime | None = Field(default=None, description="Optional scheduled UTC time")
     publish_now: bool = Field(default=False, description="Whether to publish immediately")
     adapted_variants: list[dict[str, Any]] | None = Field(
@@ -339,6 +339,19 @@ async def post_to_multiple_subreddits_endpoint(
             detail=f"Reddit account is {account.status}; please reconnect",
         )
 
+    if len({s.lower().removeprefix("r/") for s in payload.subreddits}) != len(payload.subreddits):
+        raise HTTPException(422, "Each subreddit must be selected once")
+    if len(payload.subreddits) > 1:
+        adapted = payload.adapted_variants or []
+        bodies = [v.get("body", "").strip() for v in adapted]
+        if (
+            len(adapted) != len(payload.subreddits)
+            or not all(bodies)
+            or len(set(bodies)) != len(bodies)
+        ):
+            raise HTTPException(
+                422, "Provide a distinct, explicitly approved variant for every subreddit"
+            )
     # 1. Create parent Post
     base_title = payload.title.strip() if payload.title else payload.base_text[:60].strip()
     post = Post(
@@ -365,9 +378,15 @@ async def post_to_multiple_subreddits_endpoint(
             None,
         )
 
-        sub_title = (adapted.get("title") if adapted else None) or base_title or f"Discussion in r/{clean_sub}"
+        sub_title = (
+            (adapted.get("title") if adapted else None)
+            or base_title
+            or f"Discussion in r/{clean_sub}"
+        )
         sub_body = (adapted.get("body") if adapted else None) or payload.base_text
-        sub_flair = (adapted.get("recommended_flair") or adapted.get("flair_id")) if adapted else None
+        sub_flair = (
+            (adapted.get("recommended_flair") or adapted.get("flair_id")) if adapted else None
+        )
         sub_type = (adapted.get("post_type") if adapted else None) or "text"
 
         variant_payload = {
@@ -393,7 +412,7 @@ async def post_to_multiple_subreddits_endpoint(
         if payload.scheduled_time:
             await schedule_variant(db, variant.id, payload.scheduled_time)
         elif payload.publish_now:
-            await publish_variant_job(db, variant.id)
+            await publish_variant_job(variant.id, db)
 
         created_variants.append(
             {
@@ -412,3 +431,56 @@ async def post_to_multiple_subreddits_endpoint(
         "variants_count": len(created_variants),
         "variants": created_variants,
     }
+
+
+class ReconcilePublicationRequest(BaseModel):
+    external_post_id: str = Field(min_length=1, max_length=255)
+
+
+@router.post("/variants/{variant_id}/reconcile", response_model=VariantPublishResultResponse)
+async def reconcile_publication(
+    variant_id: str,
+    payload: ReconcilePublicationRequest,
+    workspace: Workspace = Depends(get_current_workspace),
+    _=Depends(require_roles("owner", "admin")),
+    db: Session = Depends(get_db),
+):
+    variant = _get_workspace_variant(db, workspace.id, variant_id)
+    if not variant.publish_state.get("outcome_unknown"):
+        raise HTTPException(409, "Only an uncertain publication can be reconciled")
+    account = db.get(ConnectedAccount, variant.connected_account_id)
+    if not account or account.workspace_id != workspace.id:
+        raise HTTPException(404, "Account not found")
+    from app.modules.channels.registry import channel_registry
+
+    await channel_registry.require(variant.platform).fetch_metrics(
+        account, payload.external_post_id
+    )
+    from app.core.security import utcnow
+
+    variant.external_post_id = payload.external_post_id
+    variant.status = "published"
+    variant.published_at = utcnow()
+    variant.publish_state = {**variant.publish_state, "outcome_unknown": False, "reconciled": True}
+    variant.last_error = None
+    variant.publishing_started_at = None
+    from app.modules.publishing.models import PublishAttempt
+
+    db.add(
+        PublishAttempt(
+            variant_id=variant.id,
+            started_at=utcnow(),
+            finished_at=utcnow(),
+            result="reconciled",
+            response_payload={"external_post_id": payload.external_post_id},
+        )
+    )
+    if all(v.status in {"published", "failed"} for v in variant.post.variants):
+        variant.post.status = "published"
+    db.commit()
+    return VariantPublishResultResponse(
+        variant_id=variant.id,
+        status=variant.status,
+        external_post_id=variant.external_post_id,
+        attempt_count=variant.attempt_count,
+    )

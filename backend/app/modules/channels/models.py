@@ -10,7 +10,9 @@ class ConnectedAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "connected_accounts"
     __table_args__ = (
         UniqueConstraint(
-            "workspace_id", "platform", "external_account_id",
+            "workspace_id",
+            "platform",
+            "external_account_id",
             name="uq_connected_accounts_workspace_platform_external_id",
         ),
     )
@@ -24,11 +26,46 @@ class ConnectedAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     account_type: Mapped[str] = mapped_column(String(32), default="personal")
     encrypted_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     encrypted_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
-    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     granted_scopes: Mapped[list[str]] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(32), default="active", index=True)
     account_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    @property
+    def avatar_url(self) -> str | None:
+        meta = self.account_metadata or {}
+        candidates = [
+            meta.get("avatar_url"),
+            meta.get("profile_image_url"),
+            meta.get("picture_url"),
+            meta.get("avatar"),
+            meta.get("icon_img"),
+            meta.get("threads_profile_picture_url"),
+        ]
+        for url in candidates:
+            if url and isinstance(url, str):
+                return url.replace("&amp;", "&")
+
+        pic = meta.get("picture")
+        if isinstance(pic, str):
+            return pic.replace("&amp;", "&")
+        if isinstance(pic, dict):
+            url = pic.get("data", {}).get("url")
+            if url and isinstance(url, str):
+                return url.replace("&amp;", "&")
+
+        ig_accounts = meta.get("instagram_accounts")
+        if isinstance(ig_accounts, list) and ig_accounts:
+            first_ig = ig_accounts[0]
+            if isinstance(first_ig, dict):
+                url = first_ig.get("profile_picture_url")
+                if url and isinstance(url, str):
+                    return url.replace("&amp;", "&")
+
+        return None
 
 
 class MastodonApp(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -51,7 +88,9 @@ class SubredditProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     flair_required: Mapped[bool] = mapped_column(Boolean, default=False)
     available_flairs: Mapped[list[dict]] = mapped_column(JSON, default=list)
     title_requirements: Mapped[dict] = mapped_column(JSON, default=dict)
-    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    fetched_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
 
 class OAuthState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -68,3 +107,4 @@ class OAuthState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     redirect_uri: Mapped[str | None] = mapped_column(String(500), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    encrypted_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)

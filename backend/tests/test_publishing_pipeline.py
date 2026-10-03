@@ -300,6 +300,7 @@ async def test_validate_reddit_cached_flair_requirement(test_setup):
     with SessionLocal() as db:
         # Create cached SubredditProfile requiring flair
         sub_profile = SubredditProfile(
+            fetched_at=datetime.now(UTC),
             name="science",
             display_name="r/science",
             flair_required=True,
@@ -604,7 +605,7 @@ async def test_publish_variant_auth_error(mock_adapter, test_setup):
         db.refresh(account)
         assert variant.status == "failed"
         assert account.status == "needs_reauth"
-        assert "Account marked needs_reauth" in variant.last_error
+        assert "reconnect this account" in variant.last_error
 
 
 # ==============================================================================

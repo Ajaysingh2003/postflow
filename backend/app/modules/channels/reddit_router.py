@@ -1,4 +1,6 @@
 import logging
+import re
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_workspace, require_content_access
+from app.core.security import as_utc
 from app.db.session import get_db
 from app.modules.channels.adapters.reddit import RedditAdapter
 from app.modules.channels.models import ConnectedAccount, SubredditProfile
@@ -51,6 +54,36 @@ def _get_workspace_reddit_account(
             detail=f"Reddit account is {account.status}; please reconnect",
         )
     return account
+
+
+@router.get("/{account_id}/subreddits/{name}")
+async def get_subreddit_profile(
+    account_id: str,
+    name: str,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Return fresh community requirements for the account's editor and assistant."""
+    account = _get_workspace_reddit_account(db, workspace.id, account_id)
+    clean_name = name.strip().removeprefix("r/").lower()
+    if not re.fullmatch(r"[a-z0-9_]{2,21}", clean_name):
+        raise HTTPException(422, "Enter a valid subreddit name")
+    profile = db.scalar(select(SubredditProfile).where(SubredditProfile.name == clean_name))
+    if (
+        not profile
+        or not profile.fetched_at
+        or as_utc(profile.fetched_at) < datetime.now(UTC) - timedelta(hours=24)
+    ):
+        profile = await RedditAdapter().refresh_subreddit_profile(db, account, clean_name)
+    return {
+        "name": profile.name,
+        "rules": profile.rules,
+        "allowed_post_types": profile.allowed_post_types,
+        "flair_required": profile.flair_required,
+        "available_flairs": profile.available_flairs,
+        "title_requirements": profile.title_requirements,
+        "fetched_at": profile.fetched_at,
+    }
 
 
 @router.post("/{account_id}/preview")

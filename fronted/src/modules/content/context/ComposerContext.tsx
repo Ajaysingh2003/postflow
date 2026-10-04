@@ -18,6 +18,15 @@ import {
   emptySettings,
   type ComposerSettings,
 } from "../composerTypes";
+import type { SidecarBridge } from "../studio/sidecarBridge";
+import type { Account } from "@/modules/studio/types";
+
+type StudioNavigation = {
+  account: Account;
+  accounts: Account[];
+  onSelect: (id: string) => void;
+  onPosts: () => void;
+};
 
 export type Platform = "linkedin" | "x";
 export type ComposerState = {
@@ -45,6 +54,10 @@ const fresh = (): ComposerState => ({
   localId: "scratch",
 });
 type Value = {
+  studioNavigation: StudioNavigation | null;
+  setStudioNavigation: Dispatch<SetStateAction<StudioNavigation | null>>;
+  sidecarBridge: SidecarBridge | null;
+  setSidecarBridge: Dispatch<SetStateAction<SidecarBridge | null>>;
   workspaceError: string | null;
   retryWorkspace: () => void;
   uploadBusy: boolean;
@@ -54,14 +67,18 @@ type Value = {
   state: ComposerState;
   isHydrated: boolean;
   isComposerOpen: boolean;
-  setIsComposerOpen:  Dispatch<SetStateAction<boolean>>;
+  setIsComposerOpen: Dispatch<SetStateAction<boolean>>;
   setDraftId: (id: string | null) => void;
   setContent: (text: string) => void;
   setPlatform: (platform: Platform) => void;
   setActivePostIndex: (index: number) => void;
   setTone: (tone: string | null) => void;
   replaceDraft: (text: string) => void;
-  replaceDraftIfCurrent: (localId: string, expected: string, text: string) => void;
+  replaceDraftIfCurrent: (
+    localId: string,
+    expected: string,
+    text: string,
+  ) => void;
   appendContent: (text: string) => void;
   insertContent: (
     text: string,
@@ -99,6 +116,11 @@ export function ComposerProvider({
     ...initialData,
   }));
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [studioNavigation, setStudioNavigation] =
+    useState<StudioNavigation | null>(null);
+  const [sidecarBridge, setSidecarBridge] = useState<SidecarBridge | null>(
+    null,
+  );
   const saveLock = useRef(false);
   const [isComposerOpen, setIsComposerOpen] = useState<boolean>(false);
   const isHydrated = !!storageKey && storageKey === hydratedKey;
@@ -193,6 +215,10 @@ export function ComposerProvider({
   return (
     <Context.Provider
       value={{
+        studioNavigation,
+        setStudioNavigation,
+        sidecarBridge,
+        setSidecarBridge,
         workspaceError: workspace.error?.message ?? null,
         retryWorkspace: () => {
           void workspace.refetch();
@@ -223,7 +249,11 @@ export function ComposerProvider({
         setTone: (tone) => setState((s) => ({ ...s, tone })),
         replaceDraft: setContent,
         replaceDraftIfCurrent: (localId, expected, content) =>
-          setState((s) => s.localId === localId && s.content === expected ? { ...s, content } : s),
+          setState((s) =>
+            s.localId === localId && s.content === expected
+              ? { ...s, content }
+              : s,
+          ),
         clearDraft: () => setContent(""),
         resetComposer: () => createNewDraft(),
         appendContent: (text) =>

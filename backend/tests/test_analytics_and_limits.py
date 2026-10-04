@@ -325,6 +325,7 @@ def test_post_and_variant_analytics_endpoints(analytics_adapter, test_setup):
                 impressions=800,
                 likes=60,
                 comments=10,
+                extras={"bookmark_count": 7, "unavailable_metrics": ["reach"]},
             )
         )
         # Add metric snapshot to v2
@@ -349,6 +350,7 @@ def test_post_and_variant_analytics_endpoints(analytics_adapter, test_setup):
     assert resp_v.status_code == 200
     assert resp_v.json()["impressions"] == 800
     assert resp_v.json()["likes"] == 60
+    assert resp_v.json()["extras"] == {"bookmark_count": 7, "unavailable_metrics": ["reach"]}
 
     # 2. Post aggregated analytics
     resp_p = client.get(f"/api/v1/analytics/posts/{post_id}", headers=headers)

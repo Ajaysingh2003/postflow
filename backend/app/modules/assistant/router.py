@@ -86,6 +86,8 @@ async def run_feature_endpoint(
         db=db,
         connected_account_id=payload.connected_account_id,
         validation_context=payload.validation_context,
+        writing_instructions=payload.writing_instructions,
+        output_language=payload.output_language,
     )
     return ExecuteFeatureResponse(
         feature_id=feature_id,

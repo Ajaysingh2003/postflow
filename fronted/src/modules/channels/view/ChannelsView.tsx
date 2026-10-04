@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Account } from "@/modules/studio/types";
+
 import {
   CHANNELS,
   channelAccounts,
@@ -20,6 +21,7 @@ import {
   reconnectHint,
   type ChannelConfig,
 } from "../channel-config";
+
 import ChannelsPanel from "../component/ChannelsPanel";
 import AccountManager from "../component/AccountManager";
 import ChannelIcon from "../component/ChannelIcon";

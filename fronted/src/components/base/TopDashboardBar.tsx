@@ -3,19 +3,17 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ChevronRight,
-  Plus,
-  Sparkles,
-} from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { ChevronRight, FileText, Plus, Sparkles } from "lucide-react";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { useTRPC } from "@/trpc/client";
 import { useComposer } from "@/modules/content/context/ComposerContext";
 import { cn } from "@/lib/utils";
+import { AccountSwitcher } from "@/modules/content/studio/AccountSwitcher";
 
-function getPageMetadata(pathname: string): { title: string; section?: string } {
+function getPageMetadata(pathname: string): {
+  title: string;
+  section?: string;
+} {
   if (pathname === "/dashboard" || pathname === "/dashboard/") {
     return { title: "Overview", section: "Dashboard" };
   }
@@ -59,19 +57,17 @@ function getPageMetadata(pathname: string): { title: string; section?: string } 
 export default function TopDashboardBar() {
   const pathname = usePathname();
   const { title, section } = getPageMetadata(pathname);
-  const { isComposerOpen, setIsComposerOpen } = useComposer();
-
-  const trpc = useTRPC();
-  const { data: currentWorkspace } = useQuery(
-    trpc.workspace.current.queryOptions(),
-  );
-
-  const workspaceName = currentWorkspace?.name || "Personal Workspace";
+  const { isComposerOpen, setIsComposerOpen, studioNavigation } = useComposer();
+  const contentStudio = [
+    "/dashboard/content",
+    "/dashboard/content/compose",
+    "/dashboard/content/generator",
+  ].includes(pathname);
 
   return (
-    <header className="flex h-14 w-full items-center justify-between border-b border-border bg-background/95 px-4 md:px-6 backdrop-blur-sm">
+    <header className="flex h-14 min-w-0 w-full items-center justify-between border-b border-border bg-background/95 px-4 md:px-6 backdrop-blur-sm">
       {/* Left: Sidebar Toggle + Dynamic Breadcrumb */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex min-w-0 items-center gap-2.5">
         <SidebarTrigger
           className="size-8 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors"
           aria-label="Toggle sidebar"
@@ -79,25 +75,53 @@ export default function TopDashboardBar() {
 
         <div className="h-4 w-px bg-border/70" />
 
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs">
-          {section && (
-            <>
-              <span className="text-neutral-400 dark:text-neutral-500 font-medium">
-                {section}
+        {contentStudio ? (
+          <div className="flex min-w-0 items-center gap-2">
+            {studioNavigation ? (
+              <AccountSwitcher
+                account={studioNavigation.account}
+                accounts={studioNavigation.accounts}
+                onSelect={studioNavigation.onSelect}
+              />
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Writing account…
               </span>
-              <ChevronRight className="size-3 text-neutral-300 dark:text-neutral-600" />
-            </>
-          )}
-          <span className="font-semibold text-neutral-900 dark:text-neutral-100 text-[13px] tracking-tight">
-            {title}
-          </span>
-        </nav>
+            )}
+            <button
+              type="button"
+              onClick={studioNavigation?.onPosts}
+              disabled={!studioNavigation}
+              aria-label="Your posts"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/[0.06]"
+            >
+              <FileText className="size-3.5" />
+              <span className="hidden sm:inline">Your posts</span>
+            </button>
+          </div>
+        ) : (
+          <nav
+            aria-label="Breadcrumb"
+            className="flex items-center gap-1.5 text-xs"
+          >
+            {section && (
+              <>
+                <span className="text-neutral-400 dark:text-neutral-500 font-medium">
+                  {section}
+                </span>
+                <ChevronRight className="size-3 text-neutral-300 dark:text-neutral-600" />
+              </>
+            )}
+            <span className="font-semibold text-neutral-900 dark:text-neutral-100 text-[13px] tracking-tight">
+              {title}
+            </span>
+          </nav>
+        )}
       </div>
 
       {/* Right: Active workspace indicator + AI Assistant Toggle + Quick New Post action */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex shrink-0 items-center gap-2.5">
         {/* Workspace Pill */}
-       
 
         {/* AI Writing Assistant Toggle */}
         <button
@@ -113,12 +137,23 @@ export default function TopDashboardBar() {
           )}
         >
           <Sparkles className="size-3.5 text-violet-500" strokeWidth={2} />
-
         </button>
 
         {/* Quick New Post */}
         <Link
           href="/dashboard/content/compose"
+          onClick={(event) => {
+            if (
+              [
+                "/dashboard/content",
+                "/dashboard/content/compose",
+                "/dashboard/content/generator",
+              ].includes(pathname)
+            ) {
+              event.preventDefault();
+              window.dispatchEvent(new Event("postflow:new-draft"));
+            }
+          }}
           className="primary-btn flex !h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium"
         >
           <Plus className="size-3.5" strokeWidth={2.2} />

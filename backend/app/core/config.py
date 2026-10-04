@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     x_client_secret: str | None = None
     linkedin_client_id: str | None = None
     linkedin_client_secret: str | None = None
+    linkedin_scopes: str = "openid,profile,email,w_member_social"
     reddit_client_id: str | None = None
     reddit_client_secret: str | None = None
     reddit_user_agent: str = "postflow:v0.1.0"

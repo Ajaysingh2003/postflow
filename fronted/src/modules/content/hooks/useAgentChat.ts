@@ -8,6 +8,7 @@ import {
 } from "../agentStream";
 import type { ComposerState } from "../context/ComposerContext";
 import type { SourceAsset } from "../assets";
+import type { SidecarBridge, SidecarReply } from "../studio/sidecarBridge";
 
 type Activity = Extract<AgentEvent, { type: "activity" }>;
 export type AgentRun = {
@@ -21,9 +22,14 @@ export type AgentRun = {
   artifact?: DraftArtifact;
   error?: string;
   attachments: SourceAsset[];
+  replace?: SidecarReply["replace"];
 };
 
-export function useAgentChat(state: ComposerState, scope: string) {
+export function useAgentChat(
+  state: ComposerState,
+  scope: string,
+  bridge?: SidecarBridge | null,
+) {
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -59,6 +65,17 @@ export function useAgentChat(state: ComposerState, scope: string) {
       },
     ]);
     try {
+      if (bridge) {
+        const result = await bridge.send(
+          prompt.trim(),
+          attachments,
+          abort.signal,
+        );
+        if (abort.signal.aborted)
+          throw new DOMException("Cancelled", "AbortError");
+        update((run) => ({ ...run, ...result, status: "succeeded" }));
+        return true;
+      }
       const included = new Set(attachments.map((asset) => asset.asset_id));
       let size = attachments.reduce((total, asset) => total + asset.size, 0);
       const recent = current

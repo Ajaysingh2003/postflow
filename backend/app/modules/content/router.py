@@ -132,10 +132,18 @@ def list_posts(
     workspace: Workspace = Depends(get_current_workspace), db: Session = Depends(get_db),
     offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
     variant_status: str | None = Query(default=None),
+    connected_account_id: str | None = Query(default=None),
 ) -> list[Post]:
     query = select(Post).where(Post.workspace_id == workspace.id)
+    conditions = []
     if variant_status:
-        query = query.where(Post.variants.any(PostVariant.status == variant_status))
+        conditions.append(PostVariant.status.in_(variant_status.split(",")))
+    if connected_account_id:
+        conditions.append(PostVariant.connected_account_id == connected_account_id)
+    if conditions:
+        from sqlalchemy import and_
+
+        query = query.where(Post.variants.any(and_(*conditions)))
     return list(
         db.scalars(
             query

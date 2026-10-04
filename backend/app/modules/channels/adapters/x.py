@@ -368,6 +368,13 @@ class XAdapter(XManagement):
                     message="Quote posting requires X Enterprise access and is not enabled",
                 )
             )
+        if payload.get("reply_settings") not in {
+            None, "following", "mentionedUsers", "subscribers", "verified"
+        }:
+            issues.append(Issue(field="reply_settings", message="Choose a supported reply audience"))
+        for field in ("paid_partnership", "made_with_ai"):
+            if field in payload and not isinstance(payload[field], bool):
+                issues.append(Issue(field=field, message="Disclosure must be true or false"))
         poll = payload.get("poll")
         if poll:
             options = poll.get("options", [])
@@ -430,6 +437,9 @@ class XAdapter(XManagement):
                 success=True, external_post_id=ids[0], raw_response={"thread_ids": ids}
             )
         body: dict[str, Any] = {"text": payload.get("text", "")}
+        for field in ("reply_settings", "paid_partnership", "made_with_ai"):
+            if payload.get(field) is not None:
+                body[field] = payload[field]
         if payload.get("poll"):
             body["poll"] = payload["poll"]
 

@@ -59,6 +59,7 @@ export const CHANNELS: ChannelConfig[] = [
     icon: "reddit.svg",
     iconStyle: "bg-orange-50 dark:bg-orange-950/30",
     features: ["Subreddits", "Text & link posts"],
+    comingSoon: true,
   },
   {
     id: "bluesky",

@@ -74,6 +74,7 @@ class VariantAnalyticsResponse(BaseModel):
     shares: int = 0
     clicks: int = 0
     latest_snapshot_at: datetime | None = None
+    extras: dict[str, Any] = Field(default_factory=dict)
 
 
 class PostAnalyticsResponse(BaseModel):

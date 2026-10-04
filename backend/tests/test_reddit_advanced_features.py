@@ -94,6 +94,56 @@ def test_reddit_adapter_media_capabilities():
     assert adapter.capabilities.max_media_count == 0
 
 
+def test_editor_loads_cached_community_rules_without_provider_call(reddit_env, monkeypatch):
+    async def unexpected_refresh(*args):
+        raise AssertionError("A fresh cache must not call Reddit")
+
+    monkeypatch.setattr(RedditAdapter, "refresh_subreddit_profile", unexpected_refresh)
+    response = reddit_env["client"].get(
+        f"/api/v1/channels/reddit/{reddit_env['account_id']}/subreddits/programming",
+        headers=reddit_env["headers"],
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["flair_required"] is True
+    assert data["available_flairs"] == [{"id": "flair_tech", "text": "Architecture"}]
+    assert data["rules"][0]["short_name"] == "No Spam"
+
+
+def test_editor_refreshes_stale_community_requirements(reddit_env, monkeypatch):
+    with SessionLocal.begin() as db:
+        profile = db.scalar(select(SubredditProfile).where(SubredditProfile.name == "programming"))
+        profile.fetched_at = datetime.now(UTC) - timedelta(days=2)
+    called = []
+
+    async def refresh(self, db, account, name):
+        called.append((account.id, name))
+        profile = db.scalar(select(SubredditProfile).where(SubredditProfile.name == name))
+        profile.fetched_at = datetime.now(UTC)
+        profile.available_flairs = [{"id": "new", "text": "Updated"}]
+        db.commit()
+        return profile
+
+    monkeypatch.setattr(RedditAdapter, "refresh_subreddit_profile", refresh)
+    response = reddit_env["client"].get(
+        f"/api/v1/channels/reddit/{reddit_env['account_id']}/subreddits/programming",
+        headers=reddit_env["headers"],
+    )
+    assert response.status_code == 200
+    assert called == [(reddit_env["account_id"], "programming")]
+    assert response.json()["available_flairs"][0]["id"] == "new"
+
+
+def test_editor_community_lookup_is_account_scoped_and_validated(reddit_env):
+    root = "/api/v1/channels/reddit"
+    client, headers = reddit_env["client"], reddit_env["headers"]
+    assert client.get(f"{root}/{uuid4()}/subreddits/programming", headers=headers).status_code == 404
+    assert client.get(f"{root}/{reddit_env['account_id']}/subreddits/invalid-name", headers=headers).status_code == 422
+    with SessionLocal.begin() as db:
+        db.get(ConnectedAccount, reddit_env["account_id"]).status = "needs_reauth"
+    assert client.get(f"{root}/{reddit_env['account_id']}/subreddits/programming", headers=headers).status_code == 400
+
+
 @pytest.mark.anyio
 async def test_reddit_media_post_validation():
     adapter = RedditAdapter()

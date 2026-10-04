@@ -4,11 +4,7 @@ import { useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
-  Check,
-  Layers3,
-  Link2,
   Plus,
-  RefreshCw,
   Search,
   ShieldCheck,
 } from "lucide-react";

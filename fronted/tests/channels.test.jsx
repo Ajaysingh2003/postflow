@@ -71,9 +71,11 @@ describe("channel management", () => {
     expect(html).not.toContain("<img");
   });
   test("unavailable channels have disabled actions", () => {
-    const html = renderToStaticMarkup(<ChannelCard channel={CHANNELS.find((item) => item.id === "tiktok")} accounts={[]} loading={false} onConnect={noop} onManage={noop} />);
-    expect(html).toContain("Coming soon");
-    expect(html).toContain('disabled=""');
+    for (const channelId of ["tiktok", "reddit"]) {
+      const html = renderToStaticMarkup(<ChannelCard channel={CHANNELS.find((item) => item.id === channelId)} accounts={[]} loading={false} onConnect={noop} onManage={noop} />);
+      expect(html).toContain("Coming soon");
+      expect(html).toContain('disabled=""');
+    }
   });
   test("account loading failure is an explicit error rather than a false empty state", () => {
     const html = renderToStaticMarkup(<ChannelsPanel accounts={[]} error="Connection unavailable" connectingPlatform={null} onRefresh={noop} onConnect={noop} onManage={noop} onAdd={noop} />);

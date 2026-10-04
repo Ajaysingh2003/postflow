@@ -11,14 +11,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class XThreadWriterInput(BaseModel):
-    text: str = Field(min_length=10, max_length=10_000)
+    text: str = Field(min_length=1, max_length=10_000)
     max_tweets: int = Field(default=5, ge=2, le=20)
     include_numbering: bool = True
 
 
 class XThreadWriterOutput(BaseModel):
-    tweets: list[str]
+    tweets: list[str] = Field(description="Only publishable post text, without editing notes or explanations")
     total_tweets: int
+    notes: str = Field(default="", description="Optional editing explanation; never part of the posts")
 
 
 class XHookVariantsInput(BaseModel):
@@ -442,13 +443,14 @@ class VoiceProfileTrainOutput(BaseModel):
 
 
 class RewriteWithToneInput(BaseModel):
-    text: str = Field(min_length=5, max_length=10_000)
+    text: str = Field(min_length=1, max_length=10_000)
     tone: str | None = None
     voice_profile_id: str | None = None
 
 
 class RewriteWithToneOutput(BaseModel):
-    rewritten_text: str
+    rewritten_text: str = Field(description="Only the publishable draft text, without editing notes or explanations")
+    notes: str = Field(default="", description="Optional editing explanation; never part of the draft")
 
 
 class RepurposeContentInput(BaseModel):
@@ -499,6 +501,8 @@ class ExecuteFeatureRequest(BaseModel):
     voice_profile_id: str | None = None
     connected_account_id: str | None = None
     validation_context: dict[str, Any] = Field(default_factory=dict)
+    writing_instructions: str = Field(default="", max_length=2000)
+    output_language: str = Field(default="", max_length=80)
 
 
 class ExecuteFeatureResponse(BaseModel):

@@ -1,14 +1,53 @@
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
 import pytest
 from fastapi import HTTPException
 
+from app.modules.channels.adapters.media import upload_x
 from app.modules.channels.adapters.x import X_API_BASE, X_TOKEN_URL, XAdapter
 from app.modules.channels.base import PlatformAdapter
 from app.modules.channels.models import ConnectedAccount
 from app.modules.channels.oauth import decrypt_token, encrypt_token
+
+
+@pytest.mark.anyio
+async def test_x_audience_and_disclosures_are_forwarded(mock_account):
+    sent = []
+
+    def handler(request):
+        import json
+
+        sent.append(json.loads(request.content))
+        return httpx.Response(201, json={"data": {"id": "post_123"}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        adapter = XAdapter(http_client=client)
+        payload = {"text": "A post", "reply_settings": "following", "paid_partnership": True, "made_with_ai": False}
+        assert not await adapter.validate(MockVariant(payload))
+        result = await adapter.publish(mock_account, MockVariant(payload))
+        assert result.success
+        assert sent == [payload]
+        invalid = await adapter.validate(MockVariant({"text": "A post", "reply_settings": "everyone", "made_with_ai": "yes"}))
+        assert {issue.field for issue in invalid} == {"reply_settings", "made_with_ai"}
+
+
+@pytest.mark.anyio
+async def test_x_thread_attachment_is_sent_with_first_item(mock_account, monkeypatch):
+    monkeypatch.setattr("app.modules.channels.adapters.media.service.read_ready", lambda *_: b"image")
+
+    def handler(request):
+        return httpx.Response(200, json={"data": {"id": "media_1"}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        adapter = XAdapter(http_client=client)
+        variant = SimpleNamespace(payload={"thread": [{"text": "First", "paid_partnership": True}, {"text": "Second"}]}, publish_state={})
+        await upload_x(adapter, mock_account, variant, [(SimpleNamespace(content_type="image/jpeg"), "")])
+        assert variant.payload["thread"][0] == {"text": "First", "paid_partnership": True, "media_ids": ["media_1"]}
+        assert variant.payload["thread"][1] == {"text": "Second"}
+        assert "media_ids" not in variant.payload
 
 
 class MockVariant:

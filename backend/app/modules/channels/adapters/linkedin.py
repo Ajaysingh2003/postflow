@@ -32,16 +32,22 @@ LINKEDIN_REST_BASE = "https://api.linkedin.com/rest"
 # Supported LinkedIn REST API version
 LINKEDIN_API_VERSION = get_settings().linkedin_api_version
 
-# Standard scopes for personal profiles and company organization pages
-LINKEDIN_SCOPES = [
+# Standard scopes for personal profiles
+LINKEDIN_DEFAULT_SCOPES = [
     "openid",
     "profile",
     "email",
     "w_member_social",
+]
+
+# Additional scopes for company organization pages (requires Community Management API product)
+LINKEDIN_ORGANIZATION_SCOPES = [
     "w_organization_social",
     "r_organization_social",
     "rw_organization_admin",
 ]
+
+LINKEDIN_SCOPES = LINKEDIN_DEFAULT_SCOPES + LINKEDIN_ORGANIZATION_SCOPES
 
 
 class LinkedInAdapter(LinkedInManagement):
@@ -57,6 +63,7 @@ class LinkedInAdapter(LinkedInManagement):
         self,
         client_id: str | None = None,
         client_secret: str | None = None,
+        scopes: list[str] | None = None,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         settings = get_settings()
@@ -66,6 +73,12 @@ class LinkedInAdapter(LinkedInManagement):
         self.client_secret = (
             client_secret or settings.linkedin_client_secret or "linkedin_client_secret_placeholder"
         )
+        if scopes:
+            self.scopes = scopes
+        elif settings.linkedin_scopes:
+            self.scopes = [s.strip() for s in settings.linkedin_scopes.split(",") if s.strip()]
+        else:
+            self.scopes = list(LINKEDIN_DEFAULT_SCOPES)
         self.redirect_base_url = settings.oauth_callback_url(self.platform)
         self._http_client = http_client
 
@@ -119,7 +132,9 @@ class LinkedInAdapter(LinkedInManagement):
         Build LinkedIn OAuth 2.0 authorization URL.
         """
         redirect_uri = opts.get("redirect_uri") or self.redirect_base_url
-        scopes = opts.get("scopes") or LINKEDIN_SCOPES
+        scopes = opts.get("scopes") or self.scopes
+        if opts.get("manage_organizations"):
+            scopes = list(dict.fromkeys([*scopes, *LINKEDIN_ORGANIZATION_SCOPES]))
         if opts.get("manage_replies"):
             scopes = list(dict.fromkeys([*scopes, "r_organization_social_feed", "w_organization_social_feed", "r_member_social_feed", "w_member_social_feed"]))
 
@@ -190,7 +205,7 @@ class LinkedInAdapter(LinkedInManagement):
         refresh_token = token_data.get("refresh_token")
         expires_in = token_data.get("expires_in", 5184000)  # Default 60 days
         granted_scope_str = token_data.get("scope", "")
-        granted_scopes = granted_scope_str.split(" ") if granted_scope_str else opts.get("oauth_metadata", {}).get("requested_scopes", LINKEDIN_SCOPES)
+        granted_scopes = granted_scope_str.split(" ") if granted_scope_str else opts.get("oauth_metadata", {}).get("requested_scopes", self.scopes)
 
         # Fetch OpenID user profile
         user_info = await self._fetch_userinfo(access_token)

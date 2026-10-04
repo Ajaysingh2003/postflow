@@ -520,7 +520,11 @@ ALL_FEATURES: list[AssistantFeature] = [
         platforms=["*"],
         input_schema=s.RewriteWithToneInput,
         output_schema=s.RewriteWithToneOutput,
-        prompt_template=("Rewrite the following text in tone '{tone}':\n\n{text}"),
+        prompt_template=(
+            "Rewrite the following text in tone '{tone}':\n\n{text}\n\n"
+            "Return only publishable draft text in rewritten_text. Put any requested editing "
+            "explanation, change list, or optional suggestions in notes, never in rewritten_text."
+        ),
     ),
     AssistantFeature(
         id="repurpose_content",

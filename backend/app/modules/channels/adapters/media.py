@@ -92,7 +92,13 @@ async def upload_x(self, account, variant, assets):
                     max(1, int(processing.get("check_after_secs", 60))),
                 )
             await save_state(variant, x_processing_media=None)
-        variant.payload = {**variant.payload, "media_ids": ids}
+        if variant.payload.get("thread"):
+            items = list(variant.payload["thread"])
+            first = items[0]
+            items[0] = {**({"text": first} if isinstance(first, str) else first), "media_ids": ids}
+            variant.payload = {**variant.payload, "thread": items}
+        else:
+            variant.payload = {**variant.payload, "media_ids": ids}
     finally:
         if self._http_client is None:
             await client.aclose()

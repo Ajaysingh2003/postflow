@@ -1,0 +1,187 @@
+.refine-popover {
+  width: 510px;
+  padding: 0;
+  border-radius: 15px;
+  border: 1px solid var(--border);
+  box-shadow:
+    0 18px 55px #00000013,
+    0 3px 10px #00000008;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 15px;
+}
+.refine-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.refine-search input,
+.refine-followup input {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  font-size: 15px;
+}
+.refine-search > button {
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+.refine-commands {
+  padding: 7px;
+  max-height: min(480px, 65vh);
+  overflow-y: auto;
+}
+.refine-command {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 12px;
+  border-radius: 7px;
+  padding: 9px 10px;
+  height: 33px;
+  font-size: 14px;
+  font-weight: 400;
+}
+.refine-command svg {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.refine-command.is-active {
+  background: var(--muted);
+}
+.refine-custom {
+  height: auto;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  padding-top: 12px;
+  white-space: normal;
+  text-align: left;
+}
+.refine-custom span {
+  flex: 1;
+}
+.refine-heading {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 9px 2px;
+  color: var(--muted-foreground);
+}
+.refine-heading h3 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+}
+.refine-result {
+  outline: none;
+  padding: 13px 15px 8px;
+  min-height: 70px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  font-size: 16px;
+}
+.refine-result mark {
+  color: #17331d;
+  background: #c5f7c9;
+}
+.refine-count {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 0 15px 12px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.refine-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 5px 15px 11px;
+}
+.refine-actions button {
+  border-radius: 10px;
+  font-size: 14px;
+}
+.refine-replace {
+  background: #8763ef;
+  color: white;
+}
+.refine-replace:hover {
+  background: #7553db;
+}
+.refine-actions kbd {
+  background: #0000000c;
+  border-radius: 5px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: inherit;
+  font-family: inherit;
+}
+.refine-followup {
+  display: flex;
+  align-items: center;
+  padding: 3px 15px 12px;
+}
+.refine-loading,
+.refine-error,
+.refine-empty {
+  padding: 18px 15px;
+  font-size: 14px;
+}
+.refine-loading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--muted-foreground);
+}
+.refine-error {
+  color: var(--destructive);
+}
+.refine-settings {
+  max-height: min(480px, 60vh);
+  overflow: auto;
+  padding: 4px 15px 16px;
+}
+.refine-settings > p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+  margin: 5px 0 15px;
+}
+.refine-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.refine-setting textarea {
+  min-height: 64px;
+  font-size: 14px;
+}
+.refine-settings .refine-account {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-bottom: 12px;
+}
+.refine-settings > label {
+  display: block;
+  margin-bottom: 10px;
+}
+.refine-settings-footer {
+  padding: 10px 15px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}

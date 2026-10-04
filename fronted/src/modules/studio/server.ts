@@ -14,6 +14,9 @@ import type {
   PostActions,
   RepliesPage,
   Variant,
+  SubredditProfile,
+  VariantMetrics,
+  ValidationResult,
 } from "./types";
 
 async function backend<T>(
@@ -55,6 +58,7 @@ export const studioRouter = createTRPCRouter({
       z.object({
         offset: z.number().int().min(0).default(0),
         status: z.string().optional(),
+        connected_account_id: id.optional(),
       }),
     )
     .query(({ input }) =>
@@ -62,6 +66,7 @@ export const studioRouter = createTRPCRouter({
         offset: input.offset,
         limit: 100,
         variant_status: input.status,
+        connected_account_id: input.connected_account_id,
       }),
     ),
   post: authedProcedure
@@ -84,6 +89,43 @@ export const studioRouter = createTRPCRouter({
       "/channels/capabilities",
     ),
   ),
+  accountCapabilities: authedProcedure
+    .input(z.object({ id }))
+    .query(({ input }) =>
+      backend<Payload>("GET", `/channels/accounts/${input.id}/capabilities`),
+    ),
+  subreddit: authedProcedure
+    .input(z.object({ id, name: z.string().regex(/^[a-zA-Z0-9_]{2,21}$/) }))
+    .query(({ input }) =>
+      backend<SubredditProfile>(
+        "GET",
+        `/channels/reddit/${input.id}/subreddits/${input.name}`,
+      ),
+    ),
+  metrics: authedProcedure
+    .input(z.object({ id }))
+    .query(({ input }) =>
+      backend<VariantMetrics>("GET", `/analytics/variants/${input.id}`),
+    ),
+  syncMetrics: authedProcedure.mutation(() =>
+    backend<Payload>("POST", "/analytics/sync-now", {}),
+  ),
+  updateMedia: authedProcedure
+    .input(z.object({ id, alt_text: z.string().max(1000) }))
+    .mutation(({ input }) =>
+      backend<Payload>("PATCH", `/media/${input.id}`, {
+        alt_text: input.alt_text,
+      }),
+    ),
+  validate: authedProcedure
+    .input(z.object({ id }))
+    .mutation(({ input }) =>
+      backend<ValidationResult>(
+        "POST",
+        `/publishing/variants/${input.id}/validate`,
+        {},
+      ),
+    ),
   actions: authedProcedure
     .input(z.object({ id }))
     .query(({ input }) =>
@@ -151,10 +193,17 @@ export const studioRouter = createTRPCRouter({
     )
     .mutation(({ input }) => backend<Post>("POST", "/posts", input)),
   editDraft: authedProcedure
-    .input(z.object({ id, payload: fields }))
+    .input(
+      z.object({
+        id,
+        payload: fields,
+        media_asset_ids: z.array(id).optional(),
+      }),
+    )
     .mutation(({ input }) =>
       backend<Variant>("PATCH", `/variants/${input.id}`, {
         payload: input.payload,
+        media_asset_ids: input.media_asset_ids,
       }),
     ),
   publish: authedProcedure
@@ -193,16 +242,32 @@ export const studioRouter = createTRPCRouter({
         platform: z.string(),
         input_data: fields,
         connected_account_id: id.optional(),
+        validation_context: fields.optional(),
+        voice_profile_id: id.optional(),
+        writing_instructions: z.string().max(2000).optional(),
+        output_language: z.string().max(80).optional(),
       }),
     )
     .mutation(({ input }) =>
-      backend<{ output: Payload }>(
+      backend<{
+        output: Payload;
+        tokens_used: number;
+        validation_issues: {
+          field: string;
+          message: string;
+          severity: string;
+        }[];
+      }>(
         "POST",
         `/assistant/features/${encodeURIComponent(input.feature)}/run`,
         {
           platform: input.platform,
           input_data: input.input_data,
           connected_account_id: input.connected_account_id,
+          validation_context: input.validation_context,
+          voice_profile_id: input.voice_profile_id,
+          writing_instructions: input.writing_instructions,
+          output_language: input.output_language,
         },
       ),
     ),

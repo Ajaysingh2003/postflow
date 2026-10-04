@@ -29,6 +29,29 @@ def test_post_and_variants_creation(client, auth):
     assert len(data["variants"]) == 2
 
 
+def test_post_list_filters_status_on_the_selected_account_variant(client, auth):
+    from app.modules.channels.models import ConnectedAccount
+    from app.modules.content.models import Post, PostVariant
+
+    with SessionLocal.begin() as db:
+        user = db.query(User).filter_by(email="owner@example.com").one()
+        workspace = db.query(Workspace).filter_by(owner_user_id=user.id).one()
+        first = ConnectedAccount(workspace_id=workspace.id, platform="x", external_account_id="one", display_name="One", encrypted_access_token="unused", status="active")
+        second = ConnectedAccount(workspace_id=workspace.id, platform="x", external_account_id="two", display_name="Two", encrypted_access_token="unused", status="active")
+        db.add_all([first, second])
+        db.flush()
+        post = Post(workspace_id=workspace.id, author_id=user.id, title="Different account statuses")
+        db.add(post)
+        db.flush()
+        db.add_all([PostVariant(post_id=post.id, platform="x", connected_account_id=first.id, status="published", idempotency_key="one"), PostVariant(post_id=post.id, platform="x", connected_account_id=second.id, status="failed", idempotency_key="two")])
+        first_id, second_id = first.id, second.id
+    path = "/api/v1/posts"
+    assert client.get(path, headers=auth, params={"connected_account_id": first_id, "variant_status": "draft,failed"}).json() == []
+    response = client.get(path, headers=auth, params={"connected_account_id": second_id, "variant_status": "draft,failed"})
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
 def test_workspace_invitation_selection_and_editor_permissions(client, auth):
     with SessionLocal.begin() as db:
         owner = db.query(User).filter_by(email="owner@example.com").one()

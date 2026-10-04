@@ -75,6 +75,37 @@ export interface InputField {
   enum?: string[];
   anyOf?: InputField[];
   items?: InputField;
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+}
+
+export interface SubredditProfile {
+  name: string;
+  rules: { short_name: string; description: string }[];
+  allowed_post_types: string[];
+  flair_required: boolean;
+  available_flairs: { id: string; text: string }[];
+  title_requirements: Payload;
+  fetched_at: string;
+}
+
+export interface ValidationResult {
+  is_valid: boolean;
+  issues: { field: string; message: string; severity: string }[];
+}
+
+export interface VariantMetrics {
+  likes: number;
+  comments: number;
+  shares: number;
+  impressions: number;
+  engagements: number;
+  reach: number;
+  clicks: number;
+  latest_snapshot_at: string | null;
+  extras: Payload;
 }
 
 export interface Feature {
@@ -82,12 +113,16 @@ export interface Feature {
   name: string;
   description: string;
   platforms: string[];
-  input_schema: { properties?: Record<string, InputField>; required?: string[] };
+  input_schema: {
+    properties?: Record<string, InputField>;
+    required?: string[];
+  };
 }
 
 export function variantText(variant: Variant): string {
   for (const key of ["text", "caption", "body"]) {
-    if (typeof variant.payload[key] === "string") return variant.payload[key] as string;
+    if (typeof variant.payload[key] === "string")
+      return variant.payload[key] as string;
   }
   return "";
 }

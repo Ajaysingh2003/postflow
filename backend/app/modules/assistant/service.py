@@ -73,6 +73,8 @@ async def execute_feature(
     llm=None,
     connected_account_id=None,
     validation_context=None,
+    writing_instructions="",
+    output_language="",
 ):
     if len(json.dumps(input_data)) > 64000:
         raise HTTPException(413, "Assistant input is too large")
@@ -147,6 +149,10 @@ async def execute_feature(
             "platform": target,
         }
         prompt = feature.prompt_template.format(**kwargs)
+        if writing_instructions or output_language:
+            prompt += "\nCreator writing preferences (preserve platform rules and output schema): " + json.dumps(
+                {"instructions": writing_instructions, "language": output_language}
+            )
         selected = inputs.get("target_platforms", [])
         if selected:
             for p in selected:

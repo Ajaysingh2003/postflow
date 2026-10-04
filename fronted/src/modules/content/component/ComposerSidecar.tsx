@@ -132,28 +132,44 @@ export function ComposerSidecar({
   styleOwner?: string;
 }) {
   const trpc = useTRPC();
-  const { state, replaceDraftIfCurrent, isHydrated } = useComposer();
+  const {
+    state: composerState,
+    replaceDraftIfCurrent,
+    isHydrated,
+    sidecarBridge,
+  } = useComposer();
+  const state = sidecarBridge
+    ? { ...composerState, content: sidecarBridge.content }
+    : composerState;
   const workspace = useQuery(trpc.workspace.current.queryOptions());
   const account = useQuery(
-    trpc.workspace.getLinkedInConnection.queryOptions({
-      connectionId: state.composer.connection_id ?? undefined,
-    }),
+    trpc.workspace.getLinkedInConnection.queryOptions(
+      {
+        connectionId: state.composer.connection_id ?? undefined,
+      },
+      { enabled: !sidecarBridge },
+    ),
   );
   const accountName = [account.data?.first_name, account.data?.last_name]
     .filter(Boolean)
     .join(" ");
   const writingStyleOwner =
     styleOwner ||
+    sidecarBridge?.styleOwner ||
     accountName ||
     account.data?.public_identifier ||
     workspace.data?.name ||
     "Workspace";
   const query = useQuery(trpc.content.getCommands.queryOptions());
-  const scope = `${workspace.data?.id ?? "loading"}:${state.localId}:${account.data?.id ?? "no-account"}`;
-  const agent = useAgentChat(state, scope);
+  const scope =
+    sidecarBridge?.scope ??
+    `${workspace.data?.id ?? "loading"}:${state.localId}:${account.data?.id ?? "no-account"}`;
+  const agent = useAgentChat(state, scope, sidecarBridge);
   const files = useAssetQueue(scope);
   const fileInput = useRef<HTMLInputElement>(null);
-  const contextReady = isHydrated && !account.isPending && !!workspace.data;
+  const contextReady = sidecarBridge
+    ? sidecarBridge.ready
+    : isHydrated && !account.isPending && !!workspace.data;
 
   const [openPersona, setOpenPersona] = useState(false);
 
@@ -416,7 +432,13 @@ export function ComposerSidecar({
                           content={state.content}
                           ready={run.status === "succeeded"}
                           replace={(expected, next) =>
-                            replaceDraftIfCurrent(state.localId, expected, next)
+                            run.replace
+                              ? run.replace(expected, next)
+                              : replaceDraftIfCurrent(
+                                  state.localId,
+                                  expected,
+                                  next,
+                                )
                           }
                         />
                       )}

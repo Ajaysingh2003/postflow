@@ -1,10 +1,5 @@
-import GeneratorView from '@/modules/content/view/GeneratorView'
-import React from 'react'
+import ContentStudio from "@/modules/content/studio/ContentStudio";
 
-function page() {
-  return (
-    <GeneratorView/>
-  )
+export default function Page() {
+  return <ContentStudio />;
 }
-
-export default page

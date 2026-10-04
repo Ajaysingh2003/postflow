@@ -14,9 +14,12 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.db.session import SessionLocal
 from app.main import app
+from app.modules.assistant.base import LLMResponse
+from app.modules.assistant.schemas import RewriteWithToneInput, XThreadWriterInput
 from app.modules.assistant.service import (
     execute_feature,
     fetch_untrusted_url_content,
@@ -25,6 +28,60 @@ from app.modules.assistant.service import (
 from app.modules.channels.models import SubredditProfile
 from app.modules.identity.models import PasswordCredential, SessionToken, User
 from app.modules.workspaces.models import Workspace, WorkspaceMembership
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("text", ["a", "hi", "test"])
+@pytest.mark.parametrize("platform", ["x", "linkedin"])
+async def test_short_current_drafts_reach_the_assistant_provider(test_setup, text, platform):
+    class CapturingLLM:
+        async def generate_structured(self, messages, response_model):
+            self.messages = messages
+            return response_model(rewritten_text="A useful post", notes="Fixed punctuation"), LLMResponse(content="", total_tokens=3)
+
+    llm = CapturingLLM()
+    with SessionLocal() as db:
+        output, issues, run = await execute_feature(
+            workspace_id=test_setup["workspace_id"], user_id=test_setup["user_id"],
+            feature_id="rewrite_with_tone", input_data={"text": text, "tone": "Polish"},
+            platform=platform, db=db, llm=llm,
+        )
+    assert text in llm.messages[1].content
+    assert output["rewritten_text"] == "A useful post"
+    assert output["notes"] == "Fixed punctuation"
+    assert "never in rewritten_text" in llm.messages[1].content
+    assert not issues
+    assert run.status == "succeeded"
+    assert run.tokens_used == 3
+
+
+@pytest.mark.parametrize("schema", [RewriteWithToneInput, XThreadWriterInput])
+def test_assistant_still_rejects_empty_input(schema):
+    assert schema(text="a").text == "a"
+    with pytest.raises(ValidationError):
+        schema(text="")
+
+
+@pytest.mark.anyio
+async def test_account_writing_preferences_reach_provider_and_preserve_validation(test_setup):
+    class CapturingLLM:
+        async def generate_structured(self, messages, response_model):
+            self.messages = messages
+            return response_model(rewritten_text="A clear, useful post"), LLMResponse(content="", total_tokens=12)
+
+    llm = CapturingLLM()
+    with SessionLocal() as db:
+        output, issues, run = await execute_feature(
+            workspace_id=test_setup["workspace_id"], user_id=test_setup["user_id"],
+            feature_id="rewrite_with_tone", input_data={"text": "Please improve this draft", "tone": "Direct"},
+            platform="x", db=db, llm=llm, writing_instructions="Avoid clichés", output_language="Hindi",
+        )
+    assert output["rewritten_text"] == "A clear, useful post"
+    assert not issues
+    assert "Hindi" in llm.messages[1].content
+    assert "Avoid" in llm.messages[1].content
+    assert "untrusted" in llm.messages[0].content
+    assert run.tokens_used == 12
 
 
 @pytest.fixture

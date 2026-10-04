@@ -1,5 +1,5 @@
 
-import GeneratorView from '@/modules/content/view/GeneratorView'
+import GeneratorView from '@/modules/content/studio/ContentStudio'
 import React from 'react'
 
 function page() {

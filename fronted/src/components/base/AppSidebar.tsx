@@ -585,7 +585,10 @@ function CreateActionButton() {
     <div className="flex gap-2">
       <button
         type="button"
-        onClick={() => router.push(ROUTES.compose)}
+        onClick={() => {
+          if (["/dashboard/content", "/dashboard/content/compose", "/dashboard/content/generator"].includes(window.location.pathname)) window.dispatchEvent(new Event("postflow:new-draft"));
+          else router.push(ROUTES.compose);
+        }}
         className={cn(
           `
             primary-btn

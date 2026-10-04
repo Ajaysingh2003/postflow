@@ -217,6 +217,7 @@ def get_variant_analytics(
         shares=latest_snap.shares_reposts if latest_snap else 0,
         clicks=latest_snap.clicks if latest_snap else 0,
         latest_snapshot_at=latest_snap.fetched_at if latest_snap else None,
+        extras=latest_snap.extras if latest_snap else {},
     )
 
 

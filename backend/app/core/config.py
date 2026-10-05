@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     facebook_app_secret: str | None = None
     instagram_app_id: str | None = None
     instagram_app_secret: str | None = None
+    facebook_redirect_uri: str | None = None
+    instagram_redirect_uri: str | None = None
 
     # Billing
     dodo_api_key: str | None = None
@@ -93,6 +95,14 @@ class Settings(BaseSettings):
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 
     def oauth_callback_url(self, platform: str) -> str:
+        platform = platform.lower()
+        explicit_uri = {
+            "facebook": self.facebook_redirect_uri,
+            "instagram": self.instagram_redirect_uri,
+        }.get(platform)
+        if explicit_uri:
+            # Registered provider URIs are exact values: do not normalize or format them.
+            return explicit_uri
         return self.oauth_redirect_base_url.replace(
             "/oauth/callback", "/{platform}/callback"
         ).format(platform=platform)

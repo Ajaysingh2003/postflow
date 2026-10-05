@@ -283,11 +283,11 @@ class FacebookManagement(ManagedPosts):
 
 class InstagramManagement(ManagedPosts):
     def post_actions(self, account, variant):
-        permitted = "instagram_manage_comments" in set(account.granted_scopes or [])
+        permitted = "instagram_business_manage_comments" in set(account.granted_scopes or [])
         return PostActions(can_read_replies=permitted, can_reply=permitted, reply_requires_parent=True, max_reply_length=2200, external_url=variant.payload.get("permalink") or (variant.publish_state or {}).get("external_url"), notices=["Select a comment to reply to. Caption edits and post deletion must be made on Instagram; comment management requires an approved permission."])
 
     def graph_node(self, identifier):
-        return f"https://graph.facebook.com/{get_settings().graph_api_version}/{quote(identifier, safe='')}"
+        return f"https://graph.instagram.com/{get_settings().graph_api_version}/{quote(identifier, safe='')}"
 
     async def original_post_url(self, account, variant):
         existing = self.post_actions(account, variant).external_url

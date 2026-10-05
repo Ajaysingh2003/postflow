@@ -154,7 +154,16 @@ async def start_oauth(
     # Enforce billing plan connected accounts quota
     from app.modules.billing.entitlements import check_connected_accounts_limit
 
-    check_connected_accounts_limit(db, workspace.id)
+    # Reconnecting an existing platform consumes no new slot. The callback still
+    # checks capacity before creating any new external account.
+    existing_platform = db.scalar(
+        select(ConnectedAccount.id).where(
+            ConnectedAccount.workspace_id == workspace.id,
+            ConnectedAccount.platform == platform.lower(),
+        ).limit(1)
+    )
+    if existing_platform is None:
+        check_connected_accounts_limit(db, workspace.id)
 
     # Generate PKCE verifier if adapter / platform uses PKCE
     code_verifier, code_challenge = generate_pkce_pair()
@@ -248,6 +257,7 @@ async def handle_callback_post(
         existing.token_expires_at = account_from_adapter.token_expires_at
         existing.granted_scopes = account_from_adapter.granted_scopes
         existing.account_metadata = account_from_adapter.account_metadata
+        existing.last_synced_at = account_from_adapter.last_synced_at
         existing.status = "active"
         target_account = existing
     else:

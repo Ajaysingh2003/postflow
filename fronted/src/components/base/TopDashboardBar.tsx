@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, FileText, Plus, Sparkles } from "lucide-react";
+import { Bot, ChevronRight, FileText, Plus, Sparkles } from "lucide-react";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useComposer } from "@/modules/content/context/ComposerContext";
@@ -65,7 +65,7 @@ export default function TopDashboardBar() {
   ].includes(pathname);
 
   return (
-    <header className="flex h-14 min-w-0 w-full items-center justify-between border-b border-border bg-background/95 px-4 md:px-6 backdrop-blur-sm">
+    <header className="flex h-14 min-w-0 w-full items-center justify-between zborder-b border-border bg-background/95 px-4 md:px-6 backdrop-blur-sm">
       {/* Left: Sidebar Toggle + Dynamic Breadcrumb */}
       <div className="flex min-w-0 items-center gap-2.5">
         <SidebarTrigger
@@ -136,11 +136,11 @@ export default function TopDashboardBar() {
               : "border-border/80 bg-neutral-50/80 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 dark:bg-white/[0.04] dark:text-neutral-300 dark:hover:bg-white/[0.08] dark:hover:text-white",
           )}
         >
-          <Sparkles className="size-3.5 text-violet-500" strokeWidth={2} />
+          <Bot className="size-3.5 text-violet-500" strokeWidth={2} />
         </button>
 
         {/* Quick New Post */}
-        <Link
+        {/* <Link
           href="/dashboard/content/compose"
           onClick={(event) => {
             if (
@@ -158,7 +158,7 @@ export default function TopDashboardBar() {
         >
           <Plus className="size-3.5" strokeWidth={2.2} />
           <span className="hidden sm:inline">New Post</span>
-        </Link>
+        </Link> */}
       </div>
     </header>
   );

@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import {
   REFINE_COMMANDS,
+  refineCommands,
   readRefinePreferences,
   refinementChanges,
   type RefinePreferences,
@@ -122,12 +123,13 @@ export default function RefinePopover({
     if (view === "result" && !busy && result && !error)
       responseFocus.current?.focus();
   }, [view, busy, result, error]);
-  const filtered = REFINE_COMMANDS.filter((item) =>
+  const commands = refineCommands(platform);
+  const filtered = commands.filter((item) =>
     item.label.toLowerCase().includes(query.toLowerCase()),
   );
   const changes = refinementChanges(source, result?.text ?? "");
   const label =
-    REFINE_COMMANDS.find((item) => item.id === last?.command)?.label ??
+    commands.find((item) => item.id === last?.command)?.label ??
     last?.custom ??
     "Refine";
 
@@ -254,7 +256,7 @@ export default function RefinePopover({
             )}
             <div className="refine-commands" aria-label="Refine commands">
               {filtered.map((item, index) => {
-                const Icon = icons[REFINE_COMMANDS.indexOf(item)];
+                const Icon = icons[REFINE_COMMANDS.findIndex((command) => command.id === item.id)] ?? WandSparkles;
                 return (
                   <Button
                     key={item.id}
@@ -298,7 +300,7 @@ export default function RefinePopover({
             </div>
             <div className="refine-settings">
               <p>Customize these commands to fit your tone and style.</p>
-              {REFINE_COMMANDS.map((item) => (
+              {commands.map((item) => (
                 <div className="refine-setting" key={item.id}>
                   <Label htmlFor={`refine-${item.id}`}>{item.label}</Label>
                   <Textarea

@@ -71,6 +71,30 @@ export const REFINE_COMMANDS = [
   },
 ] as const;
 
+export type RefineCommand = { id: string; label: string; instruction: string };
+
+const PLATFORM_REFINE_COMMANDS: Record<string, RefineCommand[]> = {
+  threads: [
+    { id: "threads_conversation", label: "Make it conversational", instruction: "Rewrite as a natural Threads post. Keep the author's voice, avoid marketing language, and keep it within 500 characters." },
+    { id: "threads_question", label: "Invite a reply", instruction: "End with one specific, natural question related to the post. Avoid engagement bait and keep the entire post within 500 characters." },
+  ],
+  facebook: [
+    { id: "facebook_question", label: "Add a community question", instruction: "Add one relevant question that invites the Page's readers to share their experience. Avoid engagement bait, generic questions, and requests for likes or shares." },
+    { id: "facebook_cta", label: "Add a call to action", instruction: "Add a short, clear next step grounded in the existing post. Preserve links. Do not invent offers, deadlines, discounts, or buttons." },
+    { id: "facebook_link", label: "Tighten link-post copy", instruction: "Make this Facebook link-post copy concise. Explain why the linked content is useful without inventing facts about it. Preserve the URL and the author's point." },
+  ],
+  instagram: [
+    { id: "instagram_hook", label: "Improve the caption opening", instruction: "Improve the first line of this Instagram caption so it clearly introduces the story. Avoid clickbait, hype, and invented claims. Preserve the rest of the message and hashtags." },
+    { id: "instagram_hashtags", label: "Tidy the hashtags", instruction: "Keep only a small set of specific, relevant hashtags based on this caption. Remove duplicates and generic tags. Put the hashtags at the end. Preserve the caption's meaning and avoid invented claims." },
+    { id: "instagram_spacing", label: "Format the caption", instruction: "Improve this Instagram caption's paragraphs and line breaks for mobile reading. Preserve its wording, links, mentions, and relevant hashtags." },
+    { id: "instagram_cta", label: "Add a save or share prompt", instruction: "Add one understated reason to save or share this Instagram post, only if it offers something useful to revisit. Avoid engagement bait, generic prompts, and invented claims." },
+  ],
+};
+
+export function refineCommands(platform: string): RefineCommand[] {
+  return [...(PLATFORM_REFINE_COMMANDS[platform] ?? []), ...REFINE_COMMANDS];
+}
+
 export type RefinePreferences = {
   language: string;
   commands: Record<string, string>;
@@ -101,7 +125,7 @@ export function refineInstructions(
   preferences: RefinePreferences,
   followup = "",
 ) {
-  const preset = REFINE_COMMANDS.find((item) => item.id === command);
+  const preset = [...REFINE_COMMANDS, ...Object.values(PLATFORM_REFINE_COMMANDS).flat()].find((item) => item.id === command);
   return [
     preset?.instruction ?? custom,
     preferences.commands[command],

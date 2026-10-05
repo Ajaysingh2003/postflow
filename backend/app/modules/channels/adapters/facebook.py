@@ -33,6 +33,7 @@ FACEBOOK_OAUTH_DIALOG = f"https://www.facebook.com/{GRAPH_API_VERSION}/dialog/oa
 # Official permissions needed to manage, publish, and fetch analytics for Facebook Pages
 FACEBOOK_SCOPES = [
     "pages_show_list",
+    "business_management",
     "pages_read_engagement",
     "pages_manage_posts",
     "pages_read_user_content",
@@ -163,6 +164,8 @@ class FacebookAdapter(FacebookManagement):
                 )
 
             short_token = token_resp.json().get("access_token")
+            if not short_token:
+                raise HTTPException(400, "Facebook token exchange returned no access token")
 
             # Step 2: Exchange for long-lived user token (~60 days)
             long_resp = await client.get(
@@ -189,6 +192,8 @@ class FacebookAdapter(FacebookManagement):
             )
             user_data = me_resp.json() if me_resp.status_code == 200 else {}
             fb_user_id = str(user_data.get("id", ""))
+            if not fb_user_id:
+                raise HTTPException(400, "Could not retrieve the Facebook user profile")
             fb_user_name = user_data.get("name", "Facebook User")
             user_picture = (
                 user_data.get("picture", {}).get("data", {}).get("url")
@@ -196,44 +201,16 @@ class FacebookAdapter(FacebookManagement):
                 else None
             )
 
-            # Step 4: Fetch managed Pages with long-lived Page tokens
-            pages_resp = await client.get(
-                f"{GRAPH_API_BASE}/me/accounts",
-                params={
-                    "fields": "id,name,access_token,category,tasks,fan_count,picture",
-                    "access_token": user_access_token,
-                },
-            )
-            pages_data = await graph_items(client, pages_resp)
-
-            # Store encrypted long-lived Page Access Tokens mapped by Page ID
-            page_tokens: dict[str, str] = {}
-            page_summaries: list[dict[str, Any]] = []
-            for p in pages_data:
-                pid = str(p.get("id"))
-                ptok = p.get("access_token")
-                page_pic = (
-                    p.get("picture", {}).get("data", {}).get("url")
-                    if isinstance(p.get("picture"), dict)
-                    else None
-                )
-                if pid and ptok:
-                    page_tokens[pid] = encrypt_token(ptok) or ""
-                    page_summaries.append(
-                        {
-                            "id": pid,
-                            "name": p.get("name"),
-                            "category": p.get("category"),
-                            "fan_count": p.get("fan_count", 0),
-                            "picture_url": page_pic,
-                        }
-                    )
+            # Only replace the destination snapshot after every Graph page was fetched.
+            page_tokens, page_summaries = await self._fetch_pages(client, user_access_token)
 
         finally:
             if self._http_client is None:
                 await client.aclose()
 
-        avatar_url = user_picture or (page_summaries[0].get("picture_url") if page_summaries else None)
+        avatar_url = user_picture or (
+            page_summaries[0].get("picture_url") if page_summaries else None
+        )
 
         return ConnectedAccount(
             workspace_id=workspace_id,
@@ -245,6 +222,7 @@ class FacebookAdapter(FacebookManagement):
             token_expires_at=datetime.now(UTC) + timedelta(seconds=expires_in),
             granted_scopes=opts.get("oauth_metadata", {}).get("requested_scopes", FACEBOOK_SCOPES),
             status="active",
+            last_synced_at=datetime.now(UTC),
             account_metadata={
                 "fb_user_id": fb_user_id,
                 "fb_user_name": fb_user_name,
@@ -280,32 +258,7 @@ class FacebookAdapter(FacebookManagement):
             new_user_token = data["access_token"]
             expires_in = data["expires_in"]
 
-            # Re-fetch Page tokens
-            pages_resp = await client.get(
-                f"{GRAPH_API_BASE}/me/accounts",
-                params={
-                    "fields": "id,name,access_token,category,tasks,fan_count",
-                    "access_token": new_user_token,
-                },
-            )
-            pages_resp.raise_for_status()
-            pages_data = await graph_items(client, pages_resp)
-
-            page_tokens: dict[str, str] = {}
-            page_summaries: list[dict[str, Any]] = []
-            for p in pages_data:
-                pid = str(p.get("id"))
-                ptok = p.get("access_token")
-                if pid and ptok:
-                    page_tokens[pid] = encrypt_token(ptok) or ""
-                    page_summaries.append(
-                        {
-                            "id": pid,
-                            "name": p.get("name"),
-                            "category": p.get("category"),
-                            "fan_count": p.get("fan_count", 0),
-                        }
-                    )
+            page_tokens, page_summaries = await self._fetch_pages(client, new_user_token)
 
             meta = dict(account.account_metadata)
             meta["page_tokens"] = page_tokens
@@ -314,6 +267,7 @@ class FacebookAdapter(FacebookManagement):
             account.encrypted_access_token = encrypt_token(new_user_token)
             account.token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
             account.account_metadata = meta
+            account.last_synced_at = datetime.now(UTC)
             account.status = "active"
             return account
 
@@ -343,43 +297,77 @@ class FacebookAdapter(FacebookManagement):
             if self._http_client is None:
                 await client.aclose()
 
-    async def list_targets(self, account: ConnectedAccount) -> list[Target]:
-        """
-        List all Facebook Pages managed by the user.
-        Pages only; personal profiles are never returned.
-        """
-        targets: list[Target] = []
-        raw_user_token = decrypt_token(account.encrypted_access_token)
-        if not raw_user_token:
-            return targets
-
-        client = await self._get_client()
+    async def _fetch_pages(
+        self, client: httpx.AsyncClient, user_access_token: str
+    ) -> tuple[dict[str, str], list[dict[str, Any]]]:
+        """Fetch a complete, encrypted destination snapshot for the parent connection."""
         try:
-            resp = await client.get(
+            response = await client.get(
                 f"{GRAPH_API_BASE}/me/accounts",
                 params={
-                    "fields": "id,name,category,fan_count,tasks",
-                    "access_token": raw_user_token,
+                    "fields": "id,name,access_token,tasks,picture",
+                    "access_token": user_access_token,
                 },
             )
-            if resp.status_code == 200:
-                for p in resp.json().get("data", []):
-                    pid = str(p.get("id"))
-                    targets.append(
-                        Target(
-                            id=pid,
-                            name=p.get("name", f"Page {pid}"),
-                            target_type="page",
-                            description=f"Category: {p.get('category')}, Fans: {p.get('fan_count', 0)}",
-                            metadata={"category": p.get("category"), "tasks": p.get("tasks", [])},
-                        )
-                    )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Error listing Facebook Pages for %s: %s", account.id, exc)
-        finally:
-            if self._http_client is None:
-                await client.aclose()
+            pages = await graph_items(client, response)
+        except (httpx.HTTPError, TypeError, ValueError, RuntimeError) as exc:
+            # Provider URLs/body text can contain credentials; expose only our message.
+            raise HTTPException(
+                502, "Could not sync Facebook Pages. Please reconnect and grant Page access."
+            ) from exc
 
+        tokens: dict[str, str] = {}
+        summaries: dict[str, dict[str, Any]] = {}
+        for page in pages:
+            if not isinstance(page, dict):
+                raise HTTPException(502, "Facebook returned an invalid Page response")
+            page_id = str(page.get("id") or "")
+            page_token = page.get("access_token")
+            tasks = page.get("tasks", [])
+            if not isinstance(tasks, list):
+                raise HTTPException(502, "Facebook returned invalid Page tasks")
+            # Never offer destinations for which publishing is explicitly disallowed.
+            if "tasks" in page and not {"CREATE_CONTENT", "MANAGE"}.intersection(tasks):
+                continue
+            if not page_id or not isinstance(page_token, str) or not page_token:
+                continue
+            picture = page.get("picture")
+            picture_url = picture.get("data", {}).get("url") if isinstance(picture, dict) else None
+            tokens[page_id] = encrypt_token(page_token) or ""
+            summaries[page_id] = {
+                "id": page_id,
+                "name": page.get("name") or f"Page {page_id}",
+                "tasks": tasks,
+                "picture_url": picture_url,
+            }
+        return tokens, list(summaries.values())
+
+    async def list_targets(self, account: ConnectedAccount) -> list[Target]:
+        """Expose persisted Pages linked to this parent OAuth connection."""
+        if account.status != "active":
+            raise HTTPException(409, "Reconnect Facebook to choose a Page")
+        metadata = account.account_metadata or {}
+        tokens = metadata.get("page_tokens", {})
+        targets = [
+            Target(
+                id=str(page["id"]),
+                name=page.get("name") or f"Page {page['id']}",
+                target_type="page",
+                metadata={
+                    "parent_connection_id": account.id,
+                    "tasks": page.get("tasks", []),
+                    "picture_url": page.get("picture_url"),
+                },
+            )
+            for page in metadata.get("pages", [])
+            if page.get("id") and tokens.get(str(page["id"]))
+        ]
+        if not targets:
+            raise HTTPException(
+                409,
+                "No publishable Facebook Pages are connected. Reconnect Facebook, grant Page "
+                "and business access, and select the Pages you manage.",
+            )
         return targets
 
     def _get_page_access_token(self, account: ConnectedAccount, page_id: str) -> str | None:
@@ -454,13 +442,6 @@ class FacebookAdapter(FacebookManagement):
             return PublishResult(
                 success=False,
                 error_message="Reconnect and select an authorized Page with a Page token",
-            )
-
-        if not page_token:
-            return PublishResult(
-                success=False,
-                error_message="Missing decrypted Page Access Token for Facebook Page",
-                is_retryable=False,
             )
 
         message = payload.get("text") or payload.get("message", "")
@@ -686,8 +667,6 @@ class FacebookAdapter(FacebookManagement):
         impressions = 0
         engagements = 0
         views = 0
-        if insights_resp.status_code != 200:
-            raise RuntimeError("Insights are unavailable; no zero snapshot was recorded")
         if insights_resp.status_code == 200:
             for item in insights_resp.json().get("data", []):
                 m_name = item.get("name")
@@ -698,6 +677,12 @@ class FacebookAdapter(FacebookManagement):
                     engagements = int(val)
                 elif m_name == "page_views_total":
                     views = int(val)
+        else:
+            logger.info(
+                "Facebook Page insights unavailable for %s (status %s); saving page counts",
+                page_id,
+                insights_resp.status_code,
+            )
 
         return AccountMetrics(
             followers_count=followers,

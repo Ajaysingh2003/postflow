@@ -18,4 +18,7 @@ export type EditorProps = {
   ) => void;
   onMedia: () => void;
   media: ReactNode;
+  mediaIds?: string[];
+  mediaAssets?: Payload[];
+  onMediaOrderChange?: (ids: string[]) => void;
 };

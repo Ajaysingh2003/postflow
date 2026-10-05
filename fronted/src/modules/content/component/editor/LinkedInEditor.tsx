@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   Repeat2,
   Send,
+  Sparkles,
   ThumbsUp,
   Users,
   X,
@@ -35,7 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import AccountAvatar, { accountName } from "./AccountAvatar";
+import AccountAvatar, { accountName, type EditorAccount } from "./AccountAvatar";
 import MediaPreview from "./MediaPreview";
 import type { DraftWorkspace } from "./useDraftWorkspace";
 import { fileType, uploadAsset, validateSource } from "../../assets";
@@ -43,6 +44,7 @@ import { attachmentSchema, type DraftAttachment } from "../../composerTypes";
 import { MentionDropdown } from "./MentionDropdown";
 import { getCaretCoordinates } from "./caretCoordinates";
 import type { MentionSearchResult } from "../../server/procedures";
+import LinkedInRefine from "./LinkedInRefine";
 
 const POST_LIMIT = 3000;
 const COMMENT_LIMIT = 1250;
@@ -116,14 +118,30 @@ const CARD =
 const TOOL_BTN =
   "flex size-9 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/50 disabled:pointer-events-none disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-white/8 dark:hover:text-white";
 
+export type LinkedInEditorWorkspace = Pick<DraftWorkspace,
+  "state" | "setContent" | "setSettings" | "uploadBusy" | "setUploadBusy" | "saving" | "replaceDraftIfCurrent"
+> & { account?: EditorAccount | null };
+
 export default function LinkedInEditor({
   workspace: w,
   preview,
   onBusy,
+  onRefine,
+  onMedia,
+  media,
+  extraTools,
+  children,
+  firstComment = true,
 }: {
-  workspace: DraftWorkspace;
+  workspace: LinkedInEditorWorkspace;
   preview: boolean;
   onBusy: (busy: boolean) => void;
+  onRefine?: (text: string | undefined, start: number, end: number, anchor: HTMLElement) => void;
+  onMedia?: () => void;
+  media?: ReactNode;
+  extraTools?: ReactNode;
+  children?: ReactNode;
+  firstComment?: boolean;
 }) {
   const trpc = useTRPC();
   const input = useRef<HTMLInputElement>(null);
@@ -398,6 +416,13 @@ export default function LinkedInEditor({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (onRefine && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
+      e.preventDefault();
+      const { selectionStart: start, selectionEnd: end } = e.currentTarget;
+      onRefine(start < end ? state.content.slice(start, end) : undefined, start, end, e.currentTarget);
+      setMentionActive(false);
+      return;
+    }
     if (!mentionActive) return;
 
     const currentItems = displayMentions;
@@ -487,21 +512,19 @@ export default function LinkedInEditor({
                 <span aria-hidden>·</span>
 
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild disabled={preview}>
-                    <button
-                      type="button"
-                      aria-label="Change post visibility"
-                      className="group -ml-0.5 inline-flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[12px] font-medium text-neutral-500 outline-none transition-colors hover:bg-neutral-100 hover:text-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-400/50 disabled:pointer-events-none data-[state=open]:bg-neutral-100 data-[state=open]:text-neutral-800 dark:text-neutral-400 dark:hover:bg-white/8 dark:hover:text-neutral-100 dark:data-[state=open]:bg-white/8"
-                    >
+                  <DropdownMenuTrigger
+                    disabled={preview}
+                    aria-label="Change post visibility"
+                    className="group -ml-0.5 inline-flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[12px] font-medium text-neutral-500 outline-none transition-colors hover:bg-neutral-100 hover:text-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-400/50 disabled:pointer-events-none data-open:bg-neutral-100 data-open:text-neutral-800 dark:text-neutral-400 dark:hover:bg-white/8 dark:hover:text-neutral-100 dark:data-open:bg-white/8"
+                  >
                       <visibility.Icon className="size-3.5" strokeWidth={1.8} />
                       <span>{visibility.label}</span>
                       {!preview && (
                         <ChevronDown
-                          className="size-3 text-neutral-400 transition-transform duration-150 group-data-[state=open]:rotate-180"
+                          className="size-3 text-neutral-400 transition-transform duration-150 group-data-open:rotate-180"
                           strokeWidth={2}
                         />
                       )}
-                    </button>
                   </DropdownMenuTrigger>
 
                   <DropdownMenuContent
@@ -598,7 +621,9 @@ export default function LinkedInEditor({
         </div>
 
         {/* Media */}
-        {!!state.composer.attachments.length && (
+        {media}
+        {children}
+        {media === undefined && !!state.composer.attachments.length && (
           <div
             className={`grid gap-2 border-t-[0.5px] border-black/10 p-3 dark:border-white/10 ${
               state.composer.attachments.length > 1
@@ -675,7 +700,7 @@ export default function LinkedInEditor({
                 disabled={uploading}
                 title="Add photos"
                 aria-label="Add photos"
-                onClick={() => pick(false)}
+                onClick={() => onMedia ? onMedia() : pick(false)}
                 className={TOOL_BTN}
               >
                 {uploading ? (
@@ -689,7 +714,7 @@ export default function LinkedInEditor({
                 title="Add PDF carousel"
                 aria-label="Add PDF carousel"
                 disabled={uploading}
-                onClick={() => pick(true)}
+                onClick={() => onMedia ? onMedia() : pick(true)}
                 className={TOOL_BTN}
               >
                 <FileText size={18} strokeWidth={1.8} />
@@ -704,6 +729,27 @@ export default function LinkedInEditor({
               >
                 <AtSign size={18} strokeWidth={1.8} />
               </button>
+              {extraTools}
+              {onRefine ? (
+                <button
+                  type="button"
+                  aria-label="Refine post"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    const start = editor.current?.selectionStart ?? 0;
+                    const end = editor.current?.selectionEnd ?? 0;
+                    onRefine(end > start ? state.content.slice(start, end) : undefined, start, end, event.currentTarget);
+                    setMentionActive(false);
+                  }}
+                  className="ml-1 inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/50 dark:text-neutral-400 dark:hover:bg-white/8 dark:hover:text-white"
+                >
+                  <Sparkles size={17} strokeWidth={1.8} />
+                  Refine
+                  <ChevronDown size={13} />
+                </button>
+              ) : (
+                <LinkedInRefine workspace={w} editor={editor} onOpen={() => setMentionActive(false)} />
+              )}
             </div>
 
             <div
@@ -776,7 +822,7 @@ export default function LinkedInEditor({
       />
 
       {/* First comment */}
-      {showComment || state.composer.comment ? (
+      {firstComment && (showComment || state.composer.comment ? (
         <div className={`overflow-hidden ${CARD}`}>
           <div className="flex items-center justify-between border-b-[0.5px] border-black/10 bg-[#f5f5f5] px-4 py-2.5 dark:border-white/10 dark:bg-white/[0.03]">
             <div className="flex items-center gap-2 text-[13.5px] font-medium text-neutral-800 dark:text-neutral-200">
@@ -829,7 +875,7 @@ export default function LinkedInEditor({
             Add first comment
           </button>
         )
-      )}
+      ))}
 
       {/* Mention dialog */}
       <Dialog

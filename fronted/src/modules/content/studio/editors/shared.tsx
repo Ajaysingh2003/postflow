@@ -41,10 +41,21 @@ export function GrowingText({
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const element = ref.current;
-    if (element) {
+    if (!element) return;
+    const resize = () => {
       element.style.height = "auto";
       element.style.height = `${element.scrollHeight}px`;
-    }
+    };
+    resize();
+    let width = element.clientWidth;
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth === width) return;
+      width = element.clientWidth;
+      resize();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
   }, [value]);
   return (
     <Textarea

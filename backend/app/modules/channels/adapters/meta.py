@@ -9,7 +9,9 @@ async def graph_items(client, response):
     while True:
         response.raise_for_status()
         data = response.json()
-        items.extend(data.get("data", []))
+        if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+            raise TypeError("Invalid Meta account edge response")
+        items.extend(data["data"])
         next_url = data.get("paging", {}).get("next")
         if not next_url:
             return items

@@ -15,7 +15,8 @@ import {
   xLength,
 } from "../src/modules/content/studio/model";
 import RedditEditor from "../src/modules/content/studio/editors/RedditEditor";
-import LinkedInEditor from "../src/modules/content/studio/editors/LinkedInEditor";
+import LinkedInEditor from "../src/modules/content/component/editor/ConnectedLinkedInEditor";
+import { TRPCReactProvider } from "../src/trpc/client";
 import BlueskyEditor from "../src/modules/content/studio/editors/BlueskyEditor";
 import MastodonEditor from "../src/modules/content/studio/editors/MastodonEditor";
 import XEditor from "../src/modules/content/studio/editors/XEditor";
@@ -299,20 +300,58 @@ describe("platform editors", () => {
   });
   test("LinkedIn has its own audience, media/poll controls and native preview", () => {
     const html = renderToStaticMarkup(
-      <LinkedInEditor {...props("linkedin", { text: "A LinkedIn post" })} />,
+      <TRPCReactProvider>
+        <LinkedInEditor
+          {...props("linkedin", { text: "A LinkedIn post" })}
+          account={{ ...account("linkedin"), account_metadata: { picture_url: "https://example.com/profile.jpg" } }}
+        />
+      </TRPCReactProvider>,
     );
-    expect(html).toContain('aria-label="LinkedIn post"');
-    expect(html).toContain("Connections only");
+    expect(html).toContain('aria-label="LinkedIn post content"');
+    expect(html).toContain('aria-label="Change post visibility"');
     expect(html).toContain('aria-label="Add a poll"');
+    expect(html).toContain('aria-label="Refine post"');
+    expect(html).toContain("Refine");
+    expect(html).toContain('src="https://example.com/profile.jpg"');
+    expect(html).not.toMatch(/<button[^>]*><button/);
     const preview = renderToStaticMarkup(
-      <LinkedInEditor
-        {...props("linkedin", { text: "Published text" })}
-        preview={true}
-      />,
+      <TRPCReactProvider>
+        <LinkedInEditor
+          {...props("linkedin", { text: "Published text" })}
+          preview={true}
+        />
+      </TRPCReactProvider>,
     );
     expect(preview).toContain("Published text");
     expect(preview).not.toContain("textarea");
     expect(preview).toContain("Repost");
+    expect(preview).not.toContain('aria-label="Refine post"');
+  });
+  test("the component LinkedIn editor keeps thread posts, attached media, polls and locked states", () => {
+    const values = props("linkedin", {
+      thread: [
+        { text: "First", visibility: "CONNECTIONS" },
+        { text: "Second", poll: { question: "Question?", options: ["A", "B"] } },
+      ],
+    });
+    const html = renderToStaticMarkup(
+      <TRPCReactProvider>
+        <LinkedInEditor {...values} media={<div>Attached media</div>} />
+      </TRPCReactProvider>,
+    );
+    expect(html).toContain("First");
+    expect(html).toContain("Second");
+    expect(html).toContain("Connections only");
+    expect(html.match(/Attached media/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Poll question"');
+    expect(html).toContain("Add to thread");
+    const locked = renderToStaticMarkup(
+      <TRPCReactProvider>
+        <LinkedInEditor {...values} readOnly />
+      </TRPCReactProvider>,
+    );
+    expect(locked).not.toContain('aria-label="Refine post"');
+    expect(locked).not.toContain("Add to thread");
   });
   test("X polls use shadcn inputs and selects with platform limits", () => {
     const html = renderToStaticMarkup(

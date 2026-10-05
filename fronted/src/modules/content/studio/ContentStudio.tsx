@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -44,7 +46,7 @@ import {
 } from "./model";
 import XEditor from "./editors/XEditor";
 import RedditEditor from "./editors/RedditEditor";
-import LinkedInEditor from "./editors/LinkedInEditor";
+import LinkedInEditor from "../component/editor/ConnectedLinkedInEditor";
 import BlueskyEditor from "./editors/BlueskyEditor";
 import MastodonEditor from "./editors/MastodonEditor";
 import FacebookEditor from "./editors/FacebookEditor";
@@ -72,6 +74,7 @@ import {
 import MediaPicker, { MediaPreview } from "./MediaPicker";
 import PublishedDetails, { PublishedMetrics } from "./PublishedDetails";
 import { cn } from "@/lib/utils";
+import { editorMedia, socialEditorIssues } from "../component/editor/socialEditorModel";
 
 const emptySubscribe = () => () => {};
 const clientSnapshot = () => true;
@@ -311,7 +314,7 @@ function AccountStudio({
       { id: account.id },
       {
         enabled:
-          ["reddit", "linkedin", "facebook"].includes(account.platform) &&
+          ["reddit", "linkedin", "facebook", "instagram"].includes(account.platform) &&
           account.status === "active",
       },
     ),
@@ -809,7 +812,13 @@ function AccountStudio({
         ),
       },
       connected_account_id: account.id,
-      validation_context: validationPayload,
+      validation_context: account.platform === "instagram" && snapshot.mediaIds.length ? {
+        ...validationPayload,
+        // These are real attachment references for text validation. Publishing
+        // resolves provider-accessible media URLs separately.
+        media_urls: snapshot.mediaIds.map((id) => `/api/media/${encodeURIComponent(id)}/content`),
+        media_types: editorMedia(snapshot.payload, snapshot.mediaIds, assets).types,
+      } : validationPayload,
       output_language: request.preferences.language,
       writing_instructions: subreddit.data
         ? `Respect this community's rules: ${JSON.stringify(subreddit.data.rules)}`.slice(
@@ -855,6 +864,11 @@ function AccountStudio({
   }
   async function preflight(mode: "schedule" | "publish") {
     if (account.status !== "active" || !editable || busy) return;
+    const formatIssues = socialEditorIssues(account.platform, writingPayload, editorMedia(writingPayload, writingMediaIds, assets), capabilities.data ?? {});
+    if (formatIssues.length) {
+      setIssues(formatIssues);
+      return;
+    }
     setIssues([]);
     const savedVariant = await save();
     if (!savedVariant) return;
@@ -976,7 +990,7 @@ function AccountStudio({
         .toLowerCase()
         .includes(search.toLowerCase()),
     );
-  const targetField = account.platform === "linkedin" ? "target_urn" : "target";
+  const targetField = account.platform === "linkedin" ? "target_urn" : account.platform === "facebook" ? "page_id" : account.platform === "instagram" ? "target_id" : "target";
   return (
     <div className="@container flex h-full min-h-0 min-w-0 bg-background text-[13px] text-foreground relative">
       <Dialog open={postsOpen} onOpenChange={setPostsOpen}>
@@ -1194,28 +1208,29 @@ function AccountStudio({
                 Publishing is in progress. This post will update automatically.
               </p>
             )}
-            {targets.data?.targets.length &&
-            ["linkedin", "facebook"].includes(account.platform) ? (
-              <label className="flex items-center gap-3 text-[10px] text-muted-foreground mb-6 [&_select]:max-w-[80%] [&_select]:p-2 [&_select]:text-[11px] [&_select]:border [&_select]:border-border [&_select]:rounded-[7px] [&_select]:bg-background">
-                Publish as
-                <select
-                  value={String(writingPayload[targetField] ?? "")}
-                  disabled={!editable || busy}
-                  onChange={(e) =>
-                    change({
-                      ...writingPayload,
-                      [targetField]: e.target.value || null,
-                    })
-                  }
+            {["linkedin", "facebook", "instagram"].includes(account.platform) ? (
+              <div className="mb-5 flex flex-wrap items-center gap-3">
+                <Label className="text-xs text-muted-foreground" htmlFor={`publish-target-${account.id}`}>Publish as</Label>
+                <Select
+                  items={[
+                    ...(account.platform === "linkedin" ? [{ value: "", label: account.display_name }] : []),
+                    ...(targets.data?.targets ?? []).map((target) => ({ value: target.id, label: target.name })),
+                  ]}
+                  value={String(writingPayload[targetField] || (account.platform === "instagram" ? writingPayload.ig_user_id : account.platform === "facebook" ? writingPayload.target_id : null) || writingPayload.target || "")}
+                  disabled={!editable || busy || preview || targets.isPending || account.status !== "active" || (account.platform !== "linkedin" && !targets.data?.targets.length)}
+                  onValueChange={(value) => change({ ...writingPayload, [targetField]: value || null })}
                 >
-                  <option value="">{account.display_name}</option>
-                  {targets.data.targets.map((target) => (
-                    <option key={target.id} value={target.id}>
-                      {target.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <SelectTrigger id={`publish-target-${account.id}`} aria-label="Publishing account" className="max-w-full min-w-[180px] text-xs">
+                    <SelectValue placeholder={account.status !== "active" ? "Reconnect to choose an account" : targets.isPending ? "Loading accounts…" : account.platform === "facebook" ? "Choose a Page" : "Choose an account"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {account.platform === "linkedin" && <SelectItem value="">{account.display_name}</SelectItem>}
+                    {(targets.data?.targets ?? []).map((target) => <SelectItem key={target.id} value={target.id}>{target.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {targets.error && <p role="alert" className="text-xs text-destructive">Could not load publishing accounts. {targets.error.message}</p>}
+                {!targets.isPending && !targets.error && !targets.data?.targets.length && account.platform !== "linkedin" && account.status === "active" && <p className="text-xs text-muted-foreground">No publishing accounts found. <Link href="/dashboard/channels" className="underline">Manage connection</Link></p>}
+              </div>
             ) : null}
             {account.platform === "reddit" && (
               <datalist id="studio-subreddits">
@@ -1252,6 +1267,9 @@ function AccountStudio({
                     }
                   />
                 ),
+                mediaIds: writingMediaIds,
+                mediaAssets: assets,
+                onMediaOrderChange: (mediaIds: string[]) => update({ ...current.current, payload: writingPayload, mediaIds }),
               };
               const PlatformEditor =
                 PLATFORM_EDITORS[account.platform] ?? TextPostEditor;

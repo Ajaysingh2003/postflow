@@ -5,11 +5,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 
 from app.core.config import get_settings
 from app.modules.channels.adapters.management import InstagramManagement
-from app.modules.channels.adapters.meta import graph_items
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -21,21 +20,21 @@ from app.modules.channels.base import (
 )
 from app.modules.channels.models import ConnectedAccount
 from app.modules.channels.oauth import decrypt_token, encrypt_token
-from app.modules.channels.support import AdapterHTTP
+from app.modules.channels.support import AdapterHTTP, require_credentials
 
 logger = logging.getLogger(__name__)
 
 GRAPH_API_VERSION = get_settings().graph_api_version
-GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
-INSTAGRAM_OAUTH_DIALOG = f"https://www.facebook.com/{GRAPH_API_VERSION}/dialog/oauth"
+GRAPH_API_BASE = f"https://graph.instagram.com/{GRAPH_API_VERSION}"
+INSTAGRAM_OAUTH_DIALOG = "https://www.instagram.com/oauth/authorize"
+INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
+INSTAGRAM_GRAPH_BASE = "https://graph.instagram.com"
 
 # Required permissions for Instagram Professional (Business and Creator) accounts
 INSTAGRAM_SCOPES = [
-    "instagram_basic",
-    "instagram_content_publish",
-    "instagram_manage_insights",
-    "pages_show_list",
-    "pages_read_engagement",
+    "instagram_business_basic",
+    "instagram_business_content_publish",
+    "instagram_business_manage_insights",
 ]
 
 
@@ -56,18 +55,8 @@ class InstagramAdapter(InstagramManagement):
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         settings = get_settings()
-        self.app_id = (
-            app_id
-            or settings.instagram_app_id
-            or settings.facebook_app_id
-            or "ig_app_id_placeholder"
-        )
-        self.app_secret = (
-            app_secret
-            or settings.instagram_app_secret
-            or settings.facebook_app_secret
-            or "ig_app_secret_placeholder"
-        )
+        self.app_id = app_id or settings.instagram_app_id or "ig_app_id_placeholder"
+        self.app_secret = app_secret or settings.instagram_app_secret or "ig_app_secret_placeholder"
         self.redirect_base_url = settings.oauth_callback_url(self.platform)
         self._http_client = http_client
 
@@ -105,16 +94,29 @@ class InstagramAdapter(InstagramManagement):
         """
         Build OAuth authorization URL requesting Instagram professional publishing scopes.
         """
+        require_credentials(self, *self.required_credentials)
         redirect_uri = opts.get("redirect_uri") or self.redirect_base_url
         scopes = opts.get("scopes") or INSTAGRAM_SCOPES
+        if isinstance(scopes, str):
+            scopes = [scope.strip() for scope in scopes.split(",") if scope.strip()]
+        allowed_scopes = {*INSTAGRAM_SCOPES, "instagram_business_manage_comments"}
+        if not isinstance(scopes, (list, tuple)) or any(
+            not isinstance(scope, str) or scope not in allowed_scopes for scope in scopes
+        ):
+            raise HTTPException(
+                422, "Use supported instagram_business_* permissions for Instagram Login"
+            )
+        scopes = list(dict.fromkeys(["instagram_business_basic", *scopes]))
         if opts.get("manage_replies"):
-            scopes = list(dict.fromkeys([*scopes, "instagram_manage_comments"]))
+            scopes = list(dict.fromkeys([*scopes, "instagram_business_manage_comments"]))
 
         params = {
             "client_id": self.app_id,
             "redirect_uri": redirect_uri,
             "state": state,
             "response_type": "code",
+            "enable_fb_login": "0",
+            "force_authentication": "1",
             "scope": ",".join(scopes),
         }
         auth_url = f"{INSTAGRAM_OAUTH_DIALOG}?{urllib.parse.urlencode(params)}"
@@ -125,6 +127,45 @@ class InstagramAdapter(InstagramManagement):
             metadata={"redirect_uri": redirect_uri, "requested_scopes": scopes},
         )
 
+    @staticmethod
+    def _token_response(response: httpx.Response, operation: str) -> dict[str, Any]:
+        # Never send provider response bodies to the browser: they may contain credentials.
+        if response.status_code != 200:
+            error_status = (
+                429
+                if response.status_code == 429
+                else (503 if response.status_code >= 500 else 400)
+            )
+            raise HTTPException(
+                error_status, f"Instagram {operation} failed. Please restart authorization."
+            )
+        try:
+            data = response.json()
+            if isinstance(data, dict) and "data" in data:
+                entries = data["data"]
+                if "access_token" in data or not isinstance(entries, list) or len(entries) != 1:
+                    raise ValueError("Ambiguous token response")
+                data = entries[0]
+            if not isinstance(data, dict) or not isinstance(data.get("access_token"), str):
+                raise TypeError("Missing access token")
+            if not data["access_token"]:
+                raise ValueError("Empty access token")
+            return data
+        except (ValueError, TypeError, KeyError) as exc:
+            raise HTTPException(
+                400, f"Instagram {operation} returned an invalid token response"
+            ) from exc
+
+    @staticmethod
+    def _token_lifetime(data: dict[str, Any]) -> int:
+        try:
+            lifetime = int(data["expires_in"])
+            if lifetime <= 0:
+                raise ValueError("Invalid token lifetime")
+            return lifetime
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(400, "Instagram returned an invalid token expiry") from exc
+
     async def handle_callback(
         self,
         workspace_id: str,
@@ -132,187 +173,138 @@ class InstagramAdapter(InstagramManagement):
         state: str,
         **opts: Any,
     ) -> ConnectedAccount:
-        """
-        Exchange code for long-lived user token and discover connected Instagram Professional accounts.
-        """
-        code = params.get("code")
-        if not code:
+        """Exchange an Instagram Login code and load the authorized professional account."""
+        require_credentials(self, *self.required_credentials)
+        if params.get("error"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing authorization code from Instagram callback",
+                400, "Instagram authorization was denied. Please restart authorization."
             )
-
+        code = params.get("code")
+        if not isinstance(code, str) or not code:
+            raise HTTPException(400, "Missing authorization code from Instagram callback")
+        # Browser callbacks do not send fragments; tolerate clients copying Instagram's #_ suffix.
+        code = code.removesuffix("#_")
         redirect_uri = opts.get("redirect_uri") or self.redirect_base_url
-
         client = await self._get_client()
         try:
-            # 1. Exchange code for short-lived token
-            token_resp = await client.get(
-                f"{GRAPH_API_BASE}/oauth/access_token",
-                params={
+            token_resp = await client.post(
+                INSTAGRAM_TOKEN_URL,
+                data={
                     "client_id": self.app_id,
                     "client_secret": self.app_secret,
+                    "grant_type": "authorization_code",
                     "redirect_uri": redirect_uri,
                     "code": code,
                 },
             )
-            if token_resp.status_code != 200:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Instagram token exchange failed: {token_resp.text}",
-                )
-
-            short_token = token_resp.json().get("access_token")
-
-            # 2. Upgrade to 60-day long-lived token
+            short_data = self._token_response(token_resp, "token exchange")
             long_resp = await client.get(
-                f"{GRAPH_API_BASE}/oauth/access_token",
+                f"{INSTAGRAM_GRAPH_BASE}/access_token",
                 params={
-                    "grant_type": "fb_exchange_token",
-                    "client_id": self.app_id,
+                    "grant_type": "ig_exchange_token",
                     "client_secret": self.app_secret,
-                    "fb_exchange_token": short_token,
+                    "access_token": short_data["access_token"],
                 },
             )
-            if long_resp.status_code == 200:
-                user_access_token = long_resp.json().get("access_token", short_token)
-                expires_in = long_resp.json().get("expires_in", 5184000)
-            else:
-                user_access_token = short_token
-                expires_in = 7200
-
-            # 3. Discover linked Instagram Professional accounts
-            pages_resp = await client.get(
-                f"{GRAPH_API_BASE}/me/accounts",
+            long_data = self._token_response(long_resp, "long-lived token exchange")
+            user_access_token = long_data["access_token"]
+            expires_in = self._token_lifetime(long_data)
+            profile_resp = await client.get(
+                f"{GRAPH_API_BASE}/me",
                 params={
-                    "fields": "id,name,access_token,instagram_business_account{id,username,name,profile_picture_url,followers_count}",
+                    "fields": "user_id,username,name,account_type,profile_picture_url,followers_count",
                     "access_token": user_access_token,
                 },
             )
-            pages_data = await graph_items(client, pages_resp)
-
-            ig_accounts: list[dict[str, Any]] = []
-            ig_tokens: dict[str, str] = {}
-
-            for page in pages_data:
-                page_token = page.get("access_token")
-                ig_obj = page.get("instagram_business_account")
-                if ig_obj and ig_obj.get("id"):
-                    ig_id = str(ig_obj["id"])
-                    ig_pic = ig_obj.get("profile_picture_url")
-                    ig_accounts.append(
-                        {
-                            "id": ig_id,
-                            "username": ig_obj.get("username"),
-                            "name": ig_obj.get("name"),
-                            "page_id": page.get("id"),
-                            "followers_count": ig_obj.get("followers_count", 0),
-                            "profile_picture_url": ig_pic,
-                        }
-                    )
-                    # The Page access token acts as the authenticated token for that Instagram account
-                    if page_token:
-                        ig_tokens[ig_id] = encrypt_token(page_token) or ""
-
+            if profile_resp.status_code != 200:
+                raise HTTPException(
+                    400, "Unable to load the authorized Instagram professional account"
+                )
+            try:
+                profile = profile_resp.json()
+                if not isinstance(profile, dict):
+                    raise TypeError("Invalid profile")
+                ig_id = profile.get("user_id") or short_data.get("user_id") or profile.get("id")
+                username = profile.get("username")
+                if not ig_id or not isinstance(username, str) or not username:
+                    raise ValueError("Missing Instagram account identity")
+            except (ValueError, TypeError) as exc:
+                raise HTTPException(400, "Instagram returned an invalid account profile") from exc
+            account_type = str(profile.get("account_type", "BUSINESS")).upper()
+            if account_type not in {"BUSINESS", "CREATOR", "MEDIA_CREATOR"}:
+                raise HTTPException(400, "An Instagram Business or Creator account is required")
         finally:
             if self._http_client is None:
                 await client.aclose()
 
-        primary_ig = ig_accounts[0] if ig_accounts else {}
-        primary_username = primary_ig.get("username", "instagram_user")
-        primary_id = primary_ig.get("id", "pending_ig_id")
-        primary_pic = primary_ig.get("profile_picture_url")
-
+        ig_id = str(ig_id)
+        picture = profile.get("profile_picture_url")
+        ig_account = {
+            "id": ig_id,
+            "username": username,
+            "name": profile.get("name"),
+            "followers_count": profile.get("followers_count", 0),
+            "profile_picture_url": picture,
+        }
+        requested_scopes = opts.get("oauth_metadata", {}).get("requested_scopes", INSTAGRAM_SCOPES)
+        # Newer exchanges return the scopes actually approved by the user.
+        granted_scopes = short_data.get("permissions", requested_scopes)
+        if isinstance(granted_scopes, str):
+            granted_scopes = [scope.strip() for scope in granted_scopes.split(",") if scope.strip()]
+        if not isinstance(granted_scopes, list) or "instagram_business_basic" not in granted_scopes:
+            raise HTTPException(400, "Instagram basic access was not granted. Please reconnect.")
         return ConnectedAccount(
             workspace_id=workspace_id,
             platform=self.platform,
-            external_account_id=f"ig_{primary_id}",
-            display_name=f"@{primary_username} (Instagram)",
-            account_type="business",
+            external_account_id=f"ig_{ig_id}",
+            display_name=f"@{username} (Instagram)",
+            account_type="business" if account_type == "BUSINESS" else "creator",
             encrypted_access_token=encrypt_token(user_access_token),
             token_expires_at=datetime.now(UTC) + timedelta(seconds=expires_in),
-            granted_scopes=opts.get("oauth_metadata", {}).get("requested_scopes", INSTAGRAM_SCOPES),
+            granted_scopes=granted_scopes,
             status="active",
             account_metadata={
-                "primary_ig_id": primary_id,
-                "primary_username": primary_username,
-                "profile_picture_url": primary_pic,
-                "avatar_url": primary_pic,
-                "instagram_accounts": ig_accounts,
-                "ig_tokens": ig_tokens,
+                "oauth_flow": "instagram_login",
+                "primary_ig_id": ig_id,
+                "primary_username": username,
+                "profile_picture_url": picture,
+                "avatar_url": picture,
+                "instagram_accounts": [ig_account],
             },
         )
 
     async def refresh_tokens(self, account: ConnectedAccount) -> ConnectedAccount:
-        """
-        Refresh long-lived access token and re-sync Instagram business accounts.
-        """
+        """Refresh a long-lived Instagram User token before it expires."""
+        if (account.account_metadata or {}).get("oauth_flow") != "instagram_login":
+            raise HTTPException(400, "Reconnect Instagram using Instagram Business Login")
         raw_user_token = decrypt_token(account.encrypted_access_token)
         if not raw_user_token:
             raise ValueError("Missing decrypted Instagram access token")
-
         client = await self._get_client()
         try:
             resp = await client.get(
-                f"{GRAPH_API_BASE}/oauth/access_token",
-                params={
-                    "grant_type": "fb_exchange_token",
-                    "client_id": self.app_id,
-                    "client_secret": self.app_secret,
-                    "fb_exchange_token": raw_user_token,
-                },
+                f"{INSTAGRAM_GRAPH_BASE}/refresh_access_token",
+                params={"grant_type": "ig_refresh_token", "access_token": raw_user_token},
             )
-            resp.raise_for_status()
-            new_token = resp.json()["access_token"]
-            expires_in = resp.json()["expires_in"]
-
-            # Re-fetch linked Instagram accounts
-            pages_resp = await client.get(
-                f"{GRAPH_API_BASE}/me/accounts",
-                params={
-                    "fields": "id,name,access_token,instagram_business_account{id,username,name,followers_count}",
-                    "access_token": new_token,
-                },
-            )
-            pages_resp.raise_for_status()
-            pages_data = await graph_items(client, pages_resp)
-
-            ig_accounts: list[dict[str, Any]] = []
-            ig_tokens: dict[str, str] = {}
-            for page in pages_data:
-                page_token = page.get("access_token")
-                ig_obj = page.get("instagram_business_account")
-                if ig_obj and ig_obj.get("id"):
-                    ig_id = str(ig_obj["id"])
-                    ig_accounts.append(
-                        {
-                            "id": ig_id,
-                            "username": ig_obj.get("username"),
-                            "name": ig_obj.get("name"),
-                            "page_id": page.get("id"),
-                            "followers_count": ig_obj.get("followers_count", 0),
-                        }
-                    )
-                    if page_token:
-                        ig_tokens[ig_id] = encrypt_token(page_token) or ""
-
-            meta = dict(account.account_metadata)
-            meta["instagram_accounts"] = ig_accounts
-            meta["ig_tokens"] = ig_tokens
-
-            account.encrypted_access_token = encrypt_token(new_token)
+            data = self._token_response(resp, "token refresh")
+            expires_in = self._token_lifetime(data)
+            account.encrypted_access_token = encrypt_token(data["access_token"])
             account.token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
-            account.account_metadata = meta
+            # Legacy Page-token caches must never override a refreshed Instagram User token.
+            metadata = dict(account.account_metadata or {})
+            metadata.pop("ig_tokens", None)
+            account.account_metadata = metadata
             account.status = "active"
             return account
-
         finally:
             if self._http_client is None:
                 await client.aclose()
 
     async def revoke(self, account: ConnectedAccount) -> None:
         """
-        Revoke permissions via DELETE /me/permissions.
+        Revoke permissions via DELETE /me/permissions if supported.
+        Instagram User tokens (graph.instagram.com) do not support programmatic revocation
+        and return 400 Bad Request; treat 400/404 as already revoked or unsupported.
         """
         raw_user_token = decrypt_token(account.encrypted_access_token)
         if not raw_user_token:
@@ -324,7 +316,12 @@ class InstagramAdapter(InstagramManagement):
                 f"{GRAPH_API_BASE}/me/permissions",
                 params={"access_token": raw_user_token},
             )
-            resp.raise_for_status()
+            if resp.status_code not in (200, 400, 404):
+                resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code not in (400, 404):
+                logger.warning("Error revoking Instagram permissions for %s: %s", account.id, exc)
+                raise
         except Exception as exc:
             logger.warning("Error revoking Instagram permissions for %s: %s", account.id, exc)
             raise
@@ -354,6 +351,8 @@ class InstagramAdapter(InstagramManagement):
 
     def _get_ig_token(self, account: ConnectedAccount, ig_user_id: str) -> str | None:
         """Retrieve and decrypt the access token for a specific Instagram account."""
+        if account.account_metadata.get("oauth_flow") == "instagram_login":
+            return decrypt_token(account.encrypted_access_token)
         tokens_map = account.account_metadata.get("ig_tokens", {})
         enc_tok = tokens_map.get(str(ig_user_id))
         if enc_tok:
@@ -690,18 +689,22 @@ class InstagramAdapter(InstagramManagement):
         profile_views = 0
         reach = 0
 
-        if insights_resp.status_code != 200:
-            raise RuntimeError("Insights are unavailable; no zero snapshot was recorded")
         if insights_resp.status_code == 200:
             for item in insights_resp.json().get("data", []):
                 name = item.get("name")
                 val = item.get("values", [{}])[0].get("value", 0)
-                if name == "impressions":
+                if name in ("impressions", "views"):
                     impressions = int(val)
                 elif name == "profile_views":
                     profile_views = int(val)
                 elif name == "reach":
                     reach = int(val)
+        else:
+            logger.info(
+                "Instagram account insights unavailable for %s (status %s); saving profile counts",
+                ig_user_id,
+                insights_resp.status_code,
+            )
 
         return AccountMetrics(
             followers_count=followers,

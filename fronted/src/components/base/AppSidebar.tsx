@@ -52,7 +52,7 @@ const ROUTES = {
   dashboard: "/dashboard",
   content: "/dashboard/content",
   compose: "/dashboard/content",
-  schedule: "/dashboard/content/schedule",
+  schedule: "/dashboard/schedule",
   assistant: "/dashboard/assistant",
   repurpose: "/dashboard/assistant/repurpose",
   posts: "/dashboard/posts",

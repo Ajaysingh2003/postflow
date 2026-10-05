@@ -2,7 +2,12 @@
 "use client";
 import { useState } from "react";
 import type { LinkedInConnectionData } from "@/modules/workspace/server/procedures";
-export function accountName(account?: (LinkedInConnectionData & { display_name?: string }) | null) {
+export type EditorAccount = Partial<LinkedInConnectionData> & {
+  display_name?: string;
+  avatar_url?: string | null;
+  account_metadata?: Record<string, unknown>;
+};
+export function accountName(account?: EditorAccount | null) {
   if (!account) return "Connect Account";
   if (account.display_name) return account.display_name;
   return (
@@ -16,15 +21,15 @@ export default function AccountAvatar({
   account,
   large = false,
 }: { 
-  account?: (LinkedInConnectionData & { avatar_url?: string | null; account_metadata?: Record<string, any> }) | null;
+  account?: EditorAccount | null;
   large?: boolean;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
   const picUrl =
     account?.avatar_url ||
     account?.picture_url ||
-    account?.account_metadata?.avatar_url ||
-    account?.account_metadata?.profile_image_url ||
+    (typeof account?.account_metadata?.avatar_url === "string" ? account.account_metadata.avatar_url : undefined) ||
+    (typeof account?.account_metadata?.profile_image_url === "string" ? account.account_metadata.profile_image_url : undefined) ||
     (typeof account?.account_metadata?.picture === "string" ? account?.account_metadata?.picture : undefined);
 
   return (

@@ -6,6 +6,8 @@ import pytest
 
 from app.modules.channels.adapters.instagram import (
     GRAPH_API_BASE,
+    INSTAGRAM_GRAPH_BASE,
+    INSTAGRAM_TOKEN_URL,
     InstagramAdapter,
 )
 from app.modules.channels.base import PlatformAdapter
@@ -29,12 +31,13 @@ def mock_instagram_account():
         encrypted_access_token=encrypt_token("ig_user_token_abc"),
         token_expires_at=datetime.now(UTC) + timedelta(days=60),
         granted_scopes=[
-            "instagram_basic",
-            "instagram_content_publish",
-            "instagram_manage_insights",
+            "instagram_business_basic",
+            "instagram_business_content_publish",
+            "instagram_business_manage_insights",
         ],
         status="active",
         account_metadata={
+            "oauth_flow": "instagram_login",
             "primary_ig_id": "17841405822383",
             "primary_username": "acme_creative",
             "instagram_accounts": [
@@ -46,7 +49,7 @@ def mock_instagram_account():
                 }
             ],
             "ig_tokens": {
-                "17841405822383": encrypt_token("ig_page_access_token_999"),
+                "17841405822383": encrypt_token("ig_user_token_abc"),
             },
         },
     )
@@ -65,64 +68,86 @@ def test_instagram_adapter_protocol_conformance():
 
 @pytest.mark.anyio
 async def test_build_auth_url():
-    adapter = InstagramAdapter(app_id="ig_app_id_123")
+    adapter = InstagramAdapter(app_id="ig_app_id_123", app_secret="ig_secret")
     res = await adapter.build_auth_url(
         workspace_id="ws_1",
         state="ig_state_777",
         redirect_uri="https://postflow.ai/callback",
     )
-    assert "https://www.facebook.com/v23.0/dialog/oauth" in res.auth_url
+    assert res.auth_url.startswith("https://www.instagram.com/oauth/authorize?")
     assert "client_id=ig_app_id_123" in res.auth_url
     assert "state=ig_state_777" in res.auth_url
-    assert "instagram_content_publish" in res.auth_url
+    assert "instagram_business_content_publish" in res.auth_url
 
 
 @pytest.mark.anyio
-async def test_handle_callback_discover_instagram_accounts():
+async def test_handle_callback_discovers_authorized_instagram_account():
+    from urllib.parse import parse_qs
+
+    calls = []
+    redirect = "https://postflow.ai/api/v1/channels/instagram/callback"
+
     def handler(request: httpx.Request) -> httpx.Response:
-        url_str = str(request.url)
-        if "/oauth/access_token" in url_str:
+        calls.append(request)
+        assert request.url.host != "graph.facebook.com"
+        if str(request.url) == INSTAGRAM_TOKEN_URL:
+            assert request.method == "POST"
+            assert request.headers["content-type"].startswith("application/x-www-form-urlencoded")
+            assert parse_qs(request.content.decode()) == {
+                "client_id": ["ig_app_id"],
+                "client_secret": ["ig_secret"],
+                "grant_type": ["authorization_code"],
+                "redirect_uri": [redirect],
+                "code": ["oauth_code_ig"],
+            }
+            return httpx.Response(
+                200, json={"access_token": "short_ig_token", "user_id": "scoped_id"}
+            )
+        if request.url.path == "/access_token":
+            assert str(request.url).startswith(INSTAGRAM_GRAPH_BASE + "/access_token?")
+            assert dict(request.url.params) == {
+                "grant_type": "ig_exchange_token",
+                "client_secret": "ig_secret",
+                "access_token": "short_ig_token",
+            }
             return httpx.Response(
                 200, json={"access_token": "ig_long_token_333", "expires_in": 5184000}
             )
-        if f"{GRAPH_API_BASE}/me/accounts" in url_str:
+        if request.url.path.endswith("/me"):
+            assert request.url.params["access_token"] == "ig_long_token_333"
             return httpx.Response(
                 200,
                 json={
-                    "data": [
-                        {
-                            "id": "page_id_111",
-                            "name": "Acme Page",
-                            "access_token": "page_tok_111",
-                            "instagram_business_account": {
-                                "id": "17841405822383",
-                                "username": "acme_creative",
-                                "name": "Acme Creative Studio",
-                                "followers_count": 28400,
-                            },
-                        }
-                    ]
+                    "id": "scoped_id",
+                    "user_id": "17841405822383",
+                    "username": "acme_creative",
+                    "name": "Acme Creative Studio",
+                    "account_type": "MEDIA_CREATOR",
+                    "followers_count": 28400,
                 },
             )
-        return httpx.Response(404)
+        pytest.fail(f"Unexpected Instagram request: {request.url.path}")
 
-    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    adapter = InstagramAdapter(app_id="app_id", app_secret="app_secret", http_client=mock_client)
-
-    account = await adapter.handle_callback(
-        workspace_id="ws_ig",
-        params={"code": "oauth_code_ig"},
-        state="state_xyz",
-    )
-
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as mock_client:
+        adapter = InstagramAdapter(
+            app_id="ig_app_id", app_secret="ig_secret", http_client=mock_client
+        )
+        account = await adapter.handle_callback(
+            workspace_id="ws_ig",
+            params={"code": "oauth_code_ig#_"},
+            state="state_xyz",
+            redirect_uri=redirect,
+        )
+    assert len(calls) == 3
     assert account.platform == "instagram"
     assert account.external_account_id == "ig_17841405822383"
+    assert account.account_type == "creator"
     assert "@acme_creative" in account.display_name
     assert decrypt_token(account.encrypted_access_token) == "ig_long_token_333"
-
-    ig_accounts = account.account_metadata["instagram_accounts"]
-    assert len(ig_accounts) == 1
-    assert ig_accounts[0]["username"] == "acme_creative"
+    assert account.encrypted_access_token != "ig_long_token_333"
+    assert account.account_metadata["oauth_flow"] == "instagram_login"
+    assert "ig_tokens" not in account.account_metadata
+    assert account.account_metadata["instagram_accounts"][0]["username"] == "acme_creative"
 
 
 @pytest.mark.anyio
@@ -245,11 +270,11 @@ async def test_publish_single_image(mock_instagram_account):
     # Verify Step 1 parameters
     assert created_containers[0]["image_url"] == "https://cdn.postflow.ai/images/product.jpg"
     assert created_containers[0]["caption"] == "Our new creation is now live!"
-    assert created_containers[0]["access_token"] == "ig_page_access_token_999"
+    assert created_containers[0]["access_token"] == "ig_user_token_abc"
 
     # Verify Step 2 parameters
     assert published_containers[0]["creation_id"] == "container_id_999"
-    assert published_containers[0]["access_token"] == "ig_page_access_token_999"
+    assert published_containers[0]["access_token"] == "ig_user_token_abc"
 
 
 @pytest.mark.anyio

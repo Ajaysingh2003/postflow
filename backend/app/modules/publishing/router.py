@@ -2,13 +2,13 @@
 pre-flight validation, and audit attempts.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import (
@@ -17,12 +17,15 @@ from app.core.dependencies import (
     require_content_access,
     require_roles,
 )
+from app.core.security import as_utc
 from app.db.session import get_db
 from app.modules.channels.models import ConnectedAccount
 from app.modules.content.models import Post, PostVariant
 from app.modules.identity.models import User, Workspace
 from app.modules.publishing.models import PublishAttempt
 from app.modules.publishing.schemas import (
+    CalendarEntryResponse,
+    CalendarPageResponse,
     PublishAttemptResponse,
     SchedulePostRequest,
     ScheduleVariantRequest,
@@ -45,6 +48,45 @@ router = APIRouter(
     tags=["publishing"],
     dependencies=[Depends(require_content_access)],
 )
+
+
+@router.get("/calendar", response_model=CalendarPageResponse)
+def calendar_entries(
+    start: datetime,
+    end: datetime,
+    cursor: int = Query(default=0, ge=0),
+    limit: int = Query(default=200, ge=1, le=200),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> CalendarPageResponse:
+    """Page through this workspace's dated publications in a half-open UTC range."""
+    if start.tzinfo is None or end.tzinfo is None:
+        raise HTTPException(422, "Calendar dates must include a timezone")
+    start, end = as_utc(start), as_utc(end)
+    if end <= start or end - start > timedelta(days=63):
+        raise HTTPException(422, "Choose a calendar range of up to 63 days")
+    event_time = case(
+        (PostVariant.status == "published", func.coalesce(PostVariant.published_at, PostVariant.scheduled_time, PostVariant.updated_at)),
+        (PostVariant.status == "failed", func.coalesce(PostVariant.scheduled_time, PostVariant.updated_at)),
+        else_=PostVariant.scheduled_time,
+    )
+    rows = db.execute(
+        select(PostVariant, Post.title, event_time.label("event_time"))
+        .join(Post, Post.id == PostVariant.post_id)
+        .where(
+            Post.workspace_id == workspace.id,
+            PostVariant.status.in_(["scheduled", "publishing", "published", "failed"]),
+            event_time >= start,
+            event_time < end,
+        )
+        .order_by(event_time, PostVariant.id)
+        .offset(cursor)
+        .limit(limit + 1)
+    ).all()
+    return CalendarPageResponse(
+        items=[CalendarEntryResponse(post_title=title, time=as_utc(time), variant=variant) for variant, title, time in rows[:limit]],
+        next_cursor=cursor + limit if len(rows) > limit else None,
+    )
 
 
 def _get_workspace_variant(db: Session, workspace_id: str, variant_id: str) -> PostVariant:

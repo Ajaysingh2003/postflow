@@ -5,6 +5,19 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.modules.content.schemas import PostVariantResponse
+
+
+class CalendarEntryResponse(BaseModel):
+    post_title: str
+    time: datetime
+    variant: PostVariantResponse
+
+
+class CalendarPageResponse(BaseModel):
+    items: list[CalendarEntryResponse]
+    next_cursor: int | None = None
+
 
 class ScheduleVariantRequest(BaseModel):
     scheduled_time: datetime | None = Field(

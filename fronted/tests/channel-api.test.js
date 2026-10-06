@@ -24,6 +24,24 @@ let request;
 afterEach(() => request?.mockRestore());
 
 describe("social account API wiring", () => {
+  test("loads dated calendar entries with the requested interval and pagination", async () => {
+    request = spyOn(axios, "request").mockResolvedValue({ data: { items: [], next_cursor: null } });
+    const period = { start: "2026-10-05T00:00:00.000Z", end: "2026-10-12T00:00:00.000Z", cursor: 200 };
+    expect(await caller.calendar(period)).toEqual({ items: [], next_cursor: null });
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: "GET", url: "http://backend.test/v1/publishing/calendar", params: period }));
+  });
+  test("keeps destination identity, media and retry key when creating another version", async () => {
+    request = spyOn(axios, "request").mockResolvedValue({ data: { id: accountId } });
+    const input = { post_id: accountId, platform: "instagram", connected_account_id: accountId, payload: { caption: "Instagram version" }, media_asset_ids: [accountId], idempotency_key: `crosspost:${accountId}:${accountId}` };
+    await caller.addVariant(input);
+    const { post_id: ignored, ...data } = input;
+    expect(ignored).toBe(accountId);
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: "POST", url: `http://backend.test/v1/posts/${accountId}/variants`, data }));
+    await caller.schedule({ id: accountId, scheduled_time: "2026-10-05T09:30:00.000Z" });
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({ method: "POST", url: `http://backend.test/v1/publishing/variants/${accountId}/schedule`, data: { scheduled_time: "2026-10-05T09:30:00.000Z" } }));
+    await caller.cancel({ id: accountId });
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({ method: "POST", url: `http://backend.test/v1/publishing/variants/${accountId}/cancel` }));
+  });
   test("saves draft media and payload through the same variant endpoint", async () => {
     request = spyOn(axios, "request").mockResolvedValue({
       data: { id: accountId },

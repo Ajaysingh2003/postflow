@@ -18,6 +18,7 @@ import type {
   VariantMetrics,
   ValidationResult,
 } from "./types";
+import type { CalendarPage } from "@/modules/schedule/calendarModel";
 
 async function backend<T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
@@ -53,6 +54,9 @@ const resources = {
 } as const;
 
 export const studioRouter = createTRPCRouter({
+  calendar: authedProcedure
+    .input(z.object({ start: z.string().datetime(), end: z.string().datetime(), cursor: z.number().int().min(0).optional() }))
+    .query(({ input }) => backend<CalendarPage>("GET", "/publishing/calendar", undefined, input)),
   posts: authedProcedure
     .input(
       z.object({
@@ -206,6 +210,12 @@ export const studioRouter = createTRPCRouter({
         media_asset_ids: input.media_asset_ids,
       }),
     ),
+  addVariant: authedProcedure
+    .input(z.object({ post_id: id, platform: z.string(), connected_account_id: id, payload: fields, media_asset_ids: z.array(id), idempotency_key: z.string().min(1).max(128) }))
+    .mutation(({ input }) => {
+      const { post_id, ...data } = input;
+      return backend<Variant>("POST", `/posts/${post_id}/variants`, data);
+    }),
   publish: authedProcedure
     .input(z.object({ id }))
     .mutation(({ input }) =>

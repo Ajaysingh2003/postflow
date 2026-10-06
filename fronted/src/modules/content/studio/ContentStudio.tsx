@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import PublicationDialog from "./PublicationDialog";
 import {
   useEffect,
   useCallback,
@@ -8,6 +11,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  Suspense,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -18,7 +22,6 @@ import {
   Loader2,
   Plus,
   Search,
-  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
@@ -74,14 +77,11 @@ import {
 import MediaPicker, { MediaPreview } from "./MediaPicker";
 import PublishedDetails, { PublishedMetrics } from "./PublishedDetails";
 import { cn } from "@/lib/utils";
-import { editorMedia, socialEditorIssues } from "../component/editor/socialEditorModel";
+import { editorMedia } from "../component/editor/socialEditorModel";
 
 const emptySubscribe = () => () => {};
 const clientSnapshot = () => true;
 const serverSnapshot = () => false;
-function isFutureDate(date: Date) {
-  return !Number.isNaN(date.getTime()) && date.getTime() > Date.now();
-}
 const statuses = {
   Drafts: "draft,failed,rejected",
   Queue: "scheduled,publishing",
@@ -98,15 +98,27 @@ const PLATFORM_EDITORS: Record<string, typeof TextPostEditor> = {
 };
 
 export default function ContentStudio() {
+  return <Suspense fallback={<div role="status" className="p-8 text-sm text-muted-foreground">Opening editor…</div>}><ContentStudioWorkspace /></Suspense>;
+}
+
+function ContentStudioWorkspace() {
   const trpc = useTRPC();
   const workspace = useQuery(trpc.workspace.current.queryOptions());
   const accounts = useQuery(trpc.studio.accounts.queryOptions());
+  const searchParams = useSearchParams();
+  const requestedPost = searchParams.get("post");
+  const requestedVariant = searchParams.get("variant");
+  const startNew = searchParams.get("new") === "1";
+  const linkedPost = useQuery(trpc.studio.post.queryOptions(
+    { id: requestedPost && /^[0-9a-f-]{36}$/i.test(requestedPost) ? requestedPost : "00000000-0000-4000-8000-000000000000" },
+    { enabled: !!requestedPost && /^[0-9a-f-]{36}$/i.test(requestedPost) },
+  ));
   const hydrated = useSyncExternalStore(
     emptySubscribe,
     clientSnapshot,
     serverSnapshot,
   );
-  if (!hydrated || workspace.isPending || accounts.isPending)
+  if (!hydrated || workspace.isPending || accounts.isPending || (requestedPost && linkedPost.isPending && linkedPost.fetchStatus !== "idle"))
     return (
       <div
         className="flex items-center justify-center flex-col gap-4 h-full min-h-[350px] text-center text-muted-foreground p-8 text-xs"
@@ -116,17 +128,18 @@ export default function ContentStudio() {
         Opening your writing workspace…
       </div>
     );
-  if (workspace.error || accounts.error)
+  if (workspace.error || accounts.error || linkedPost.error)
     return (
       <div className="flex items-center justify-center flex-col gap-4 h-full min-h-[350px] text-center text-muted-foreground p-8 text-xs [&_h1]:font-serif [&_h1]:text-[30px] [&_h1]:tracking-tight [&_h1]:text-foreground [&_p]:max-w-[350px] [&_p]:leading-relaxed [&>a]:mt-1.5">
         <FilePenLine size={32} />
         <h1>Your workspace could not be loaded</h1>
-        <p>{workspace.error?.message ?? accounts.error?.message}</p>
+        <p>{workspace.error?.message ?? accounts.error?.message ?? linkedPost.error?.message}</p>
         <button
           className="inline-flex items-center justify-center gap-1.5 text-xs font-medium rounded-[7px] px-3.5 py-2.25 bg-muted hover:bg-muted/80 text-foreground border border-border cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           onClick={() => {
             void workspace.refetch();
             void accounts.refetch();
+            if (requestedPost) void linkedPost.refetch();
           }}
         >
           Try again
@@ -150,11 +163,16 @@ export default function ContentStudio() {
         </Link>
       </div>
     );
+  const linkedVariant = linkedPost.data?.variants.find((variant) => variant.id === requestedVariant);
+  if (requestedPost && (!linkedVariant || !accounts.data.some((account) => account.id === linkedVariant.connected_account_id)))
+    return <div role="alert" className="p-8 space-y-3 text-sm"><p>{linkedVariant ? "This post belongs to a disconnected account. Reconnect it in Channels to open its editor." : "This post version could not be found."}</p><Link href={linkedVariant ? "/dashboard/channels" : "/dashboard/content?new=1"} className="text-primary underline">{linkedVariant ? "Manage accounts" : "Start a new post"}</Link></div>;
   return (
     <WorkspaceStudio
-      key={workspace.data.id}
+      key={`${workspace.data.id}:${requestedVariant ?? ""}:${startNew}`}
       workspaceId={workspace.data.id}
       accounts={accounts.data}
+      linkedVariant={linkedVariant}
+      startNew={startNew}
     />
   );
 }
@@ -162,13 +180,22 @@ export default function ContentStudio() {
 function WorkspaceStudio({
   workspaceId,
   accounts,
+  linkedVariant,
+  startNew,
 }: {
   workspaceId: string;
   accounts: Account[];
+  linkedVariant?: Variant;
+  startNew: boolean;
 }) {
-  const [session, setSession] = useState(() =>
-    readWritingSession(workspaceId, accounts),
-  );
+  const [session, setSession] = useState(() => {
+    if (linkedVariant && accounts.some((item) => item.id === linkedVariant.connected_account_id))
+      return { activeAccountId: linkedVariant.connected_account_id!, drafts: { [linkedVariant.connected_account_id!]: newDraft(linkedVariant.platform, linkedVariant) } };
+    const stored = readWritingSession(workspaceId, accounts);
+    if (!startNew) return stored;
+    const account = accounts.find((item) => item.id === stored.activeAccountId)!;
+    return { activeAccountId: account.id, drafts: { [account.id]: newDraft(account.platform) } };
+  });
   const currentSession = useRef(session);
   const account =
     accounts.find((item) => item.id === session.activeAccountId) ??
@@ -265,7 +292,6 @@ function AccountStudio({
   const [publishDialog, setPublishDialog] = useState<
     "schedule" | "publish" | null
   >(null);
-  const [scheduledTime, setScheduledTime] = useState("");
   const [refine, setRefine] = useState<RefineContext>({ index: -1 });
   const [refineKey, setRefineKey] = useState(0);
   const [inlineRefine, setInlineRefine] = useState<{
@@ -338,9 +364,6 @@ function AccountStudio({
   const assets = Array.isArray(mediaQuery.data) ? mediaQuery.data : [];
   const create = useMutation(trpc.studio.create.mutationOptions());
   const edit = useMutation(trpc.studio.editDraft.mutationOptions());
-  const publish = useMutation(trpc.studio.publish.mutationOptions());
-  const schedule = useMutation(trpc.studio.schedule.mutationOptions());
-  const validate = useMutation(trpc.studio.validate.mutationOptions());
   const { mutateAsync: runAssistant } = useMutation(
     trpc.studio.runFeature.mutationOptions(),
   );
@@ -352,9 +375,6 @@ function AccountStudio({
   const busy =
     create.isPending ||
     edit.isPending ||
-    publish.isPending ||
-    schedule.isPending ||
-    validate.isPending ||
     cancel.isPending ||
     reconciling;
   const editable =
@@ -864,116 +884,11 @@ function AccountStudio({
   }
   async function preflight(mode: "schedule" | "publish") {
     if (account.status !== "active" || !editable || busy) return;
-    const formatIssues = socialEditorIssues(account.platform, writingPayload, editorMedia(writingPayload, writingMediaIds, assets), capabilities.data ?? {});
-    if (formatIssues.length) {
-      setIssues(formatIssues);
-      return;
-    }
     setIssues([]);
     const savedVariant = await save();
     if (!savedVariant) return;
-    try {
-      const result = await validate.mutateAsync({ id: savedVariant.id });
-      setIssues(result.issues.map((issue) => issue.message));
-      if (!result.is_valid) return;
-      setPublishDialog(mode);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Validation failed");
-    }
-  }
-  async function send() {
-    const variant = current.current.variant;
-    if (
-      !variant ||
-      busy ||
-      sending.current ||
-      dirty ||
-      account.status !== "active"
-    )
-      return;
-    sending.current = true;
-    setReconciling(true);
-    try {
-      if (publishDialog === "schedule") {
-        const date = new Date(scheduledTime);
-        if (Number.isNaN(date.getTime()) || !isFutureDate(date)) {
-          toast.error("Choose a future date and time");
-          return;
-        }
-        const result = await schedule.mutateAsync({
-          id: variant.id,
-          scheduled_time: date.toISOString(),
-        });
-        update(
-          {
-            ...current.current,
-            variant: {
-              ...variant,
-              status: String(result.status ?? "scheduled"),
-              scheduled_time: date.toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-          },
-          true,
-        );
-        setView("Queue");
-        toast.success("Added to your queue");
-      } else {
-        const result = await publish.mutateAsync({ id: variant.id });
-        update(
-          {
-            ...current.current,
-            variant: {
-              ...variant,
-              status: String(result.status ?? "publishing"),
-              last_error:
-                typeof result.last_error === "string"
-                  ? result.last_error
-                  : null,
-              updated_at: new Date().toISOString(),
-              external_post_id:
-                typeof result.external_post_id === "string"
-                  ? result.external_post_id
-                  : variant.external_post_id,
-            },
-          },
-          true,
-        );
-        setView(
-          result.status === "published"
-            ? "Posted"
-            : result.status === "failed" || result.status === "rejected"
-              ? "Drafts"
-              : "Queue",
-        );
-        if (result.status === "failed" || result.status === "rejected")
-          toast.error(
-            String(
-              result.last_error ||
-                "Publishing failed. Review the post before retrying.",
-            ),
-          );
-        else
-          toast.success(
-            result.status === "published"
-              ? "Post published"
-              : "Post submitted for publishing",
-          );
-      }
-      setPublishDialog(null);
-      setOffset(0);
-      await refresh();
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "This post could not be submitted",
-      );
-      await refresh();
-    } finally {
-      sending.current = false;
-      setReconciling(false);
-    }
+    // Destination validation happens after account selection and review.
+    setPublishDialog(mode);
   }
   const postVariants = (posts.data ?? [])
     .flatMap((post: Post) =>
@@ -1295,6 +1210,12 @@ function AccountStudio({
                 <PlatformEditor {...props} />
               );
             })()}
+            {editable && accounts.filter((item) => item.status === "active").length > 1 && (
+              <div className="mx-auto mt-5 flex max-w-[600px] items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
+                <div><p className="text-xs font-medium">Share to more accounts</p><p className="mt-0.5 text-[11px] text-muted-foreground">Keep this idea, adjust each version.</p></div>
+                <Button variant="outline" size="sm" disabled={busy || !draftText(writingPayload, account.platform).trim()} onClick={() => void preflight("publish")}>Choose accounts</Button>
+              </div>
+            )}
             {issues.length > 0 && (
               <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-[11px] leading-relaxed mt-6 [&_strong]:block [&_strong]:mb-1.75" role="alert">
                 <strong>Check before publishing</strong>
@@ -1374,75 +1295,22 @@ function AccountStudio({
         }
         onRefresh={() => void mediaQuery.refetch()}
       />
-      <Dialog
-        open={publishDialog !== null}
-        onOpenChange={(open) => !open && !busy && setPublishDialog(null)}
-      >
-        <DialogContent className="sm:max-w-lg p-6">
-          <DialogHeader>
-            <DialogTitle>
-              {publishDialog === "schedule"
-                ? "Schedule your post"
-                : "Ready to share?"}
-            </DialogTitle>
-            <DialogDescription>
-              {account.display_name} · {profileFor(account.platform).name}
-              {account.platform === "reddit" &&
-                ` · r/${String(draft.payload.subreddit)}`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center gap-0.5 border border-border rounded-lg p-0.5 my-3 bg-background shadow-xs [&>button]:flex-1 [&>button]:py-1.75 [&>button]:px-1 [&>button]:text-muted-foreground [&>button]:text-[11px] [&>button]:rounded-[5px] [&>button]:transition-colors [&>button]:cursor-pointer [&>button.is-selected]:text-foreground [&>button.is-selected]:bg-muted [&>button.is-selected]:font-semibold">
-            <button
-              className={publishDialog === "publish" ? "is-selected" : ""}
-              onClick={() => setPublishDialog("publish")}
-              disabled={busy}
-            >
-              Publish now
-            </button>
-            <button
-              className={publishDialog === "schedule" ? "is-selected" : ""}
-              onClick={() => setPublishDialog("schedule")}
-              disabled={busy}
-            >
-              Schedule
-            </button>
-          </div>
-          {publishDialog === "schedule" && (
-            <label className="flex flex-col gap-2 text-[11px] my-3.5 [&_input]:border [&_input]:border-border [&_input]:p-2.5 [&_input]:rounded-[7px] [&_input]:text-xs [&_input]:bg-background">
-              <span className="flex items-center gap-1.75">
-                Date and time (
-                {Intl.DateTimeFormat().resolvedOptions().timeZone})
-              </span>
-              <input
-                aria-label="Schedule date and time"
-                type="datetime-local"
-                value={scheduledTime}
-                onInput={(e) => setScheduledTime(e.currentTarget.value)}
-                onChange={(e) => setScheduledTime(e.target.value)}
-              />
-            </label>
-          )}
-          <p className="text-[11px] text-muted-foreground leading-relaxed my-3.5">
-            {account.platform === "x" && threadItems(draft.payload).length > 1
-              ? `${threadItems(draft.payload).length} posts will publish as a thread.`
-              : "Only this account’s post will be published."}
-          </p>
-          <button
-            className="inline-flex items-center justify-center gap-1.5 text-xs font-medium rounded-[7px] px-3.5 py-2.25 bg-[#239a7d] hover:bg-[#198268] text-white cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed w-full mt-2"
-            disabled={
-              busy || dirty || (publishDialog === "schedule" && !scheduledTime)
-            }
-            onClick={() => void send()}
-          >
-            {busy ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : (
-              <Send size={15} />
-            )}{" "}
-            {publishDialog === "schedule" ? "Schedule post" : "Publish now"}
-          </button>
-        </DialogContent>
-      </Dialog>
+      {publishDialog && draft.variant && <PublicationDialog
+        key={draft.variant.id}
+        source={draft.variant}
+        sourceAccount={account}
+        accounts={accounts}
+        assets={assets}
+        mode={publishDialog}
+        onBusy={(busy) => { sending.current = busy; setReconciling(busy); }}
+        onClose={() => setPublishDialog(null)}
+        onVariant={(variant) => {
+          update(newDraft(account.platform, variant), true);
+          setView(variant.status === "published" ? "Posted" : ["scheduled", "publishing"].includes(variant.status) ? "Queue" : "Drafts");
+          setOffset(0);
+          void refresh();
+        }}
+      />}
       <Dialog
         open={pendingNavigation !== null}
         onOpenChange={(open) => !open && !busy && setPendingNavigation(null)}

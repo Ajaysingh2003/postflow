@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_current_workspace, require_content_access
@@ -196,6 +197,21 @@ def add_variant(
 ):
     _post(db, workspace.id, post_id, lock=True)
     _account(db, workspace.id, payload.platform, payload.connected_account_id)
+
+    def replay():
+        existing = db.scalar(select(PostVariant).where(PostVariant.idempotency_key == payload.idempotency_key))
+        if existing and (
+            existing.post_id != post_id
+            or existing.platform != payload.platform
+            or existing.connected_account_id != payload.connected_account_id
+        ):
+            raise HTTPException(409, "This request key belongs to another variant")
+        return existing
+
+    if payload.idempotency_key:
+        existing = replay()
+        if existing:
+            return existing
     variant = PostVariant(
         post_id=post_id,
         connected_account_id=payload.connected_account_id,
@@ -206,7 +222,13 @@ def add_variant(
     )
     db.add(variant)
     _media(db, workspace.id, variant, payload.media_asset_ids)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if payload.idempotency_key and (existing := replay()):
+            return existing
+        raise
     db.refresh(variant)
     return variant
 

@@ -1,7 +1,14 @@
 "use client";
 
-import { useId, useState, type ComponentProps } from "react";
-import { textLength } from "../model";
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+} from "react";
+
 import {
   ArrowDown,
   ArrowUp,
@@ -11,10 +18,14 @@ import {
   ListPlus,
   MoreHorizontal,
   Plus,
+  Scissors,
   Sparkles,
   Trash2,
   Users,
+  X as CloseIcon,
 } from "lucide-react";
+import { toast } from "sonner";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,7 +58,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { getAccountAvatarUrl } from "@/modules/channels/component/AccountAvatar";
-import { profileFor, threadItems, updateThread } from "../model";
+import { MediaPreview } from "../MediaPicker";
+import {
+  getOrdinal,
+  getOverflowSplit,
+  profileFor,
+  splitPostText,
+  threadItems,
+  updateThread,
+  xLength,
+} from "../model";
 import { Author, Counter, GrowingText, refineCurrentPost } from "./shared";
 import type { EditorProps } from "./types";
 import XPoll from "./XPoll";
@@ -72,6 +92,87 @@ const disclosures = [
     help: "This post contains synthetically generated content.",
   },
 ];
+
+const textTypographyStyle: CSSProperties = {
+  fontFamily: "inherit",
+  fontSize: "15px",
+  lineHeight: "1.6",
+  letterSpacing: "-0.01em",
+  wordBreak: "break-word",
+  overflowWrap: "break-word",
+  whiteSpace: "pre-wrap",
+  padding: "0px",
+  margin: "0px",
+  border: "0px",
+  boxSizing: "border-box",
+};
+
+function XPostTextarea({
+  value,
+  limit,
+  placeholder,
+  ariaLabel,
+  onChange,
+  onKeyDown,
+}: {
+  value: string;
+  limit: number;
+  placeholder?: string;
+  ariaLabel?: string;
+  onChange: (value: string) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isOver = xLength(value) > limit;
+  const split = getOverflowSplit(value, limit);
+
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <div className="relative min-h-[72px] w-full">
+      {isOver && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none select-none absolute inset-0 w-full text-transparent"
+          style={{
+            ...textTypographyStyle,
+            overflow: "hidden",
+          }}
+        >
+          <span>{split.valid}</span>
+          <mark
+            className="bg-red-500/25 dark:bg-red-500/40 text-transparent rounded-xs font-normal"
+            style={{ padding: 0, margin: 0 }}
+          >
+            {split.overflow + (split.overflow.endsWith("\n") ? "\u200b" : "")}
+          </mark>
+        </div>
+      )}
+      <textarea
+        data-slot="textarea"
+        ref={textareaRef}
+        aria-label={ariaLabel}
+        placeholder={placeholder}
+        value={value}
+        rows={3}
+        spellCheck={false}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        className="relative block w-full bg-transparent text-foreground outline-none focus:outline-none focus:ring-0 shadow-none resize-none placeholder:text-muted-foreground/50"
+        style={{
+          ...textTypographyStyle,
+          overflow: "hidden",
+          height: "auto",
+        }}
+      />
+    </div>
+  );
+}
 
 function ToolButton({
   help,
@@ -106,6 +207,7 @@ export default function XEditor({
   onRefine,
   onMedia,
   media,
+  mediaAssets,
 }: EditorProps) {
   const items = threadItems(payload);
   const [disclosure, setDisclosure] = useState<number | null>(null);
@@ -120,248 +222,339 @@ export default function XEditor({
     onChange({ thread: next });
   }
 
+  function autoSplitPost(index: number) {
+    const currentItem = items[index];
+    const text = String(currentItem?.text ?? "");
+    if (!text || xLength(text) <= limit) return;
 
-  
+    const chunks = splitPostText(text, limit);
+    if (chunks.length <= 1) return;
 
+    const newItems = [...items];
+    const firstItem = { ...currentItem, text: chunks[0] };
+    const subsequentItems = chunks.slice(1).map((chunk) => ({ text: chunk }));
+
+    newItems.splice(index, 1, firstItem, ...subsequentItems);
+
+    onChange(newItems.length === 1 ? newItems[0] : { thread: newItems });
+    toast.success(`Split post into ${chunks.length} posts`);
+  }
 
   return (
     <TooltipProvider delay={300}>
       <div className="flex flex-col">
-        {items.map((item, index) => (
-          <article className="relative pb-6" key={index}>
-            {/* Seamless Thread Connector Line */}
-            {index < items.length - 1 && (
-              <span className="absolute left-[21px] top-[48px] bottom-0 w-0.5 bg-border/70 hidden sm:block" />
-            )}
+        {items.map((item, index) => {
+          const itemText = String(item.text ?? "");
+          const isOver = xLength(itemText) > limit;
+          const split = getOverflowSplit(itemText, limit);
 
-            <Author
-              account={account}
-              avatar={
-                <Avatar key={account.id} className="size-11 shrink-0">
-                  {avatar && (
-                    <AvatarImage
-                      src={avatar}
-                      alt={account.display_name}
-                      referrerPolicy="no-referrer"
-                    />
-                  )}
-                  <AvatarFallback className="text-xs font-semibold">
-                    {account.display_name
-                      .replace(/^@/, "")
-                      .slice(0, 2)
-                      .toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              }
-            />
-
-            <div className="pl-0 sm:pl-[55px] pt-1">
-              {readOnly || preview ? (
-                <div className="min-h-[72px] whitespace-pre-wrap [overflow-wrap:anywhere] py-1 text-base leading-relaxed tracking-[-0.01em]">
-                  {String(item.text ?? "") || (
-                    <span className="text-muted-foreground/50">
-                      Your post will appear here.
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <GrowingText
-                  aria-label={`X post ${index + 1}`}
-                  placeholder={profileFor("x").placeholder}
-                  value={String(item.text ?? "")}
-                  onChange={(e) =>
-                    onChange(
-                      updateThread(payload, index, { text: e.target.value }),
-                    )
-                  }
-                  onKeyDown={(e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                      e.preventDefault();
-                      onChange({ thread: [...items, { text: "" }] });
-                    }
-                    if ((e.metaKey || e.ctrlKey) && e.key === "i") {
-                      e.preventDefault();
-                      onRefine(
-                        e.currentTarget.value.substring(
-                          e.currentTarget.selectionStart,
-                          e.currentTarget.selectionEnd,
-                        ) || undefined,
-                        index,
-                        e.currentTarget.selectionStart,
-                        e.currentTarget.selectionEnd,
-                        e.currentTarget,
-                      );
-                    }
-                  }}
-                />
+          return (
+            <article className="relative pb-6" key={index}>
+              {/* Seamless Thread Connector Line */}
+              {index < items.length - 1 && (
+                <span className="absolute left-[21px] top-[48px] bottom-0 w-0.5 bg-border/70 hidden sm:block" />
               )}
 
-              {index === 0 && media && <div className="mt-2.5">{media}</div>}
+              <Author
+                account={account}
+                avatar={
+                  <Avatar key={account.id} className="size-11 shrink-0">
+                    {avatar && (
+                      <AvatarImage
+                        src={avatar}
+                        alt={account.display_name}
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    <AvatarFallback className="text-xs font-semibold">
+                      {account.display_name
+                        .replace(/^@/, "")
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                }
+              />
 
-              {item.poll != null && (
-                <div className="mt-2.5">
-                  <XPoll
-                    payload={item}
-                    readOnly={readOnly || preview}
-                    onChange={(value) => {
-                      const next = [...items];
-                      next[index] = value;
-                      onChange(next.length === 1 ? next[0] : { thread: next });
+              <div className="pl-0 sm:pl-[55px] pt-1">
+                {readOnly || preview ? (
+                  <div
+                    className="min-h-[72px] text-foreground"
+                    style={{
+                      ...textTypographyStyle,
+                      padding: "0px",
                     }}
-                  />
-                </div>
-              )}
-
-              {/* Disclosures Tagline */}
-              {(item.paid_partnership === true ||
-                item.made_with_ai === true) && (
-                <p className="mt-2 text-[11px] font-medium text-muted-foreground">
-                  {[
-                    item.paid_partnership && "Paid partnership",
-                    item.made_with_ai && "Made with AI",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              )}
-
-              {/* Action Toolbar */}
-              {!readOnly && !preview && (
-                <div className="mt-3 flex h-8 items-center justify-between gap-2 border-t border-border/40 pt-2">
-                  <div className="flex items-center gap-2">
-                    {items.length > 1 && (
-                      <span className="font-mono text-[11px] text-muted-foreground/70">
-                        #{index + 1}
+                  >
+                    {itemText ? (
+                      isOver ? (
+                        <>
+                          <span>{split.valid}</span>
+                          <mark
+                            className="bg-red-500/25 dark:bg-red-500/40 text-foreground rounded-xs font-normal"
+                            style={{ padding: 0, margin: 0 }}
+                          >
+                            {split.overflow}
+                          </mark>
+                        </>
+                      ) : (
+                        <span>{itemText}</span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground/50">
+                        Your post will appear here.
                       </span>
                     )}
-                    <Counter
-                      text={String(item.text ?? "")}
-                      platform="x"
-                      limit={limit}
+                  </div>
+                ) : (
+                  <XPostTextarea
+                    ariaLabel={`X post ${index + 1}`}
+                    placeholder={profileFor("x").placeholder}
+                    value={itemText}
+                    limit={limit}
+                    onChange={(val) =>
+                      onChange(
+                        updateThread(payload, index, { text: val }),
+                      )
+                    }
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        onChange({ thread: [...items, { text: "" }] });
+                      }
+                      if ((e.metaKey || e.ctrlKey) && e.key === "i") {
+                        e.preventDefault();
+                        onRefine(
+                          e.currentTarget.value.substring(
+                            e.currentTarget.selectionStart,
+                            e.currentTarget.selectionEnd,
+                          ) || undefined,
+                          index,
+                          e.currentTarget.selectionStart,
+                          e.currentTarget.selectionEnd,
+                          e.currentTarget,
+                        );
+                      }
+                    }}
+                  />
+                )}
+
+                {/* Media preview per post */}
+                {item.media_ids &&
+                Array.isArray(item.media_ids) &&
+                item.media_ids.length > 0 ? (
+                  <div className="mt-2.5">
+                    <MediaPreview
+                      assets={mediaAssets ?? []}
+                      ids={item.media_ids}
+                      readOnly={Boolean(readOnly || preview)}
+                      onRemove={(id) => {
+                        const nextMedia = (item.media_ids as string[]).filter(
+                          (v) => v !== id,
+                        );
+                        const nextItems = items.map((post, i) =>
+                          i === index ? { ...post, media_ids: nextMedia } : post,
+                        );
+                        onChange(
+                          nextItems.length === 1
+                            ? nextItems[0]
+                            : { thread: nextItems },
+                        );
+                      }}
                     />
                   </div>
+                ) : (
+                  index === 0 &&
+                  media &&
+                  !items.some(
+                    (it) =>
+                      it &&
+                      typeof it === "object" &&
+                      Array.isArray(it.media_ids) &&
+                      it.media_ids.length > 0,
+                  ) && <div className="mt-2.5">{media}</div>
+                )}
 
-                  <div className="flex items-center gap-0.5">
-                    <ToolButton
-                      help="Add a post"
-                      aria-label={`Add a post after ${index + 1}`}
-                      onClick={() => {
+                {item.poll != null && (
+                  <div className="mt-2.5">
+                    <XPoll
+                      payload={item}
+                      readOnly={readOnly || preview}
+                      onChange={(value) => {
                         const next = [...items];
-                        next.splice(index + 1, 0, { text: "" });
-                        onChange({ thread: next });
+                        next[index] = value;
+                        onChange(
+                          next.length === 1 ? next[0] : { thread: next },
+                        );
                       }}
-                    >
-                      <ListPlus />
-                    </ToolButton>
-                    <ToolButton
-                      help="Disclosures"
-                      aria-label={`Disclosures for post ${index + 1}`}
-                      onClick={() => setDisclosure(index)}
-                    >
-                      <Flag />
-                    </ToolButton>
-                    {index === 0 && capabilities.supports_media === true && (
-                      <ToolButton
-                        help="Attach media"
-                        aria-label="Attach media"
-                        onClick={onMedia}
-                      >
-                        <ImagePlus />
-                      </ToolButton>
-                    )}
-                    <ToolButton
-                      help="Refine · ⌘I"
-                      aria-label={`Refine post ${index + 1}`}
-                      onClick={(event) =>
-                        refineCurrentPost(event.currentTarget, onRefine, index)
-                      }
-                    >
-                      <Sparkles />
-                    </ToolButton>
+                    />
+                  </div>
+                )}
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="size-8 text-muted-foreground hover:text-foreground [&_svg]:size-4"
-                            aria-label={`More options for post ${index + 1}`}
-                          >
-                            <MoreHorizontal />
-                          </Button>
-                        }
+                {/* Disclosures Tagline */}
+                {(item.paid_partnership === true ||
+                  item.made_with_ai === true) && (
+                  <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+                    {[
+                      item.paid_partnership && "Paid partnership",
+                      item.made_with_ai && "Made with AI",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
+
+                {/* Action Toolbar */}
+                {!readOnly && !preview && (
+                  <div className="mt-3 flex h-8 items-center justify-between gap-2 border-t border-border/40 pt-2">
+                    <div className="flex items-center gap-2">
+                      {items.length > 1 && (
+                        <span className="font-mono text-[11px] text-muted-foreground/70">
+                          #{index + 1}
+                        </span>
+                      )}
+                      <Counter
+                        text={itemText}
+                        platform="x"
+                        limit={limit}
                       />
-                      <DropdownMenuContent align="end" className="w-56">
-                        <DropdownMenuItem onClick={() => setAudience(index)}>
-                          <Users className="size-4" />
-                          Who can reply
-                          <span className="ml-auto text-xs focus-within:bg-transparent text-muted-foreground">
-                            {
-                              audiences.find(
-                                (option) =>
-                                  option.value ===
-                                  (item.reply_settings || "everyone"),
-                              )?.label
-                            }
-                          </span>
-                        </DropdownMenuItem>
-                        {index > 0 && (
-                          <DropdownMenuItem onClick={() => reorder(index, -1)}>
-                            <ArrowUp className="size-4" />
-                            Move up
-                          </DropdownMenuItem>
-                        )}
-                        {index < items.length - 1 && (
-                          <DropdownMenuItem onClick={() => reorder(index, 1)}>
-                            <ArrowDown className="size-4" />
-                            Move down
-                          </DropdownMenuItem>
-                        )}
-                        {!item.poll &&
-                          index === 0 &&
-                          capabilities.supports_polls === true && (
-                            <DropdownMenuItem
-                              onClick={() =>
-                                onChange(
-                                  updateThread(payload, index, {
-                                    poll: {
-                                      options: ["", ""],
-                                      duration_minutes: 1440,
-                                    },
-                                  }),
-                                )
-                              }
+                    </div>
+
+                    <div className="flex items-center gap-0.5">
+                      <ToolButton
+                        help="Add a post"
+                        aria-label={`Add a post after ${index + 1}`}
+                        onClick={() => {
+                          const next = [...items];
+                          next.splice(index + 1, 0, { text: "" });
+                          onChange({ thread: next });
+                        }}
+                      >
+                        <ListPlus />
+                      </ToolButton>
+                      <ToolButton
+                        help="Disclosures"
+                        aria-label={`Disclosures for post ${index + 1}`}
+                        onClick={() => setDisclosure(index)}
+                      >
+                        <Flag />
+                      </ToolButton>
+                      {capabilities.supports_media === true && (
+                        <ToolButton
+                          help="Attach media"
+                          aria-label={`Attach media for post ${index + 1}`}
+                          onClick={() => onMedia(index)}
+                        >
+                          <ImagePlus />
+                        </ToolButton>
+                      )}
+                      <ToolButton
+                        help="Refine · ⌘I"
+                        aria-label={`Refine post ${index + 1}`}
+                        onClick={(event) =>
+                          refineCurrentPost(event.currentTarget, onRefine, index)
+                        }
+                      >
+                        <Sparkles />
+                      </ToolButton>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="size-8 text-muted-foreground hover:text-foreground [&_svg]:size-4"
+                              aria-label={`More options for post ${index + 1}`}
                             >
-                              <BarChart3 className="size-4" />
-                              Add a poll
+                              <MoreHorizontal />
+                            </Button>
+                          }
+                        />
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuItem onClick={() => setAudience(index)}>
+                            <Users className="size-4" />
+                            Who can reply
+                            <span className="ml-auto text-xs focus-within:bg-transparent text-muted-foreground">
+                              {
+                                audiences.find(
+                                  (option) =>
+                                    option.value ===
+                                    (item.reply_settings || "everyone"),
+                                )?.label
+                              }
+                            </span>
+                          </DropdownMenuItem>
+                          {index > 0 && (
+                            <DropdownMenuItem onClick={() => reorder(index, -1)}>
+                              <ArrowUp className="size-4" />
+                              Move up
                             </DropdownMenuItem>
                           )}
-                        {items.length > 1 && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onClick={() => {
-                                const next = items.filter((_, i) => i !== index);
-                                onChange(
-                                  next.length === 1 ? next[0] : { thread: next },
-                                );
-                              }}
-                            >
-                              <Trash2 className="size-4" />
-                              Remove post
+                          {index < items.length - 1 && (
+                            <DropdownMenuItem onClick={() => reorder(index, 1)}>
+                              <ArrowDown className="size-4" />
+                              Move down
                             </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                          )}
+                          {!item.poll &&
+                            index === 0 &&
+                            capabilities.supports_polls === true && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  onChange(
+                                    updateThread(payload, index, {
+                                      poll: {
+                                        options: ["", ""],
+                                        duration_minutes: 1440,
+                                      },
+                                    }),
+                                  )
+                                }
+                              >
+                                <BarChart3 className="size-4" />
+                                Add a poll
+                              </DropdownMenuItem>
+                            )}
+                          {items.length > 1 && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => {
+                                  const next = items.filter((_, i) => i !== index);
+                                  onChange(
+                                    next.length === 1 ? next[0] : { thread: next },
+                                  );
+                                }}
+                              >
+                                <Trash2 className="size-4" />
+                                Remove post
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </article>
-        ))}
+                )}
+
+                {/* Inline Split automatically button if this post overflows */}
+                {!readOnly && !preview && isOver && (
+                  <div className="mt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => autoSplitPost(index)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background px-3.5 py-1 text-xs font-medium text-foreground shadow-xs hover:bg-muted transition-colors cursor-pointer"
+                    >
+                      <Scissors className="size-3.5 text-muted-foreground" />
+                      <span>Split automatically</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
 
         {/* Add To Thread Button */}
         {!readOnly && !preview && (

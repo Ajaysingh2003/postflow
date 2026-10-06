@@ -99,6 +99,99 @@ export function xLength(value: string): number {
   return count;
 }
 
+export function getOrdinal(n: number): string {
+  if (n === 1) return "1st";
+  if (n === 2) return "2nd";
+  if (n === 3) return "3rd";
+  return `${n}th`;
+}
+
+export function getOverflowSplit(
+  text: string,
+  limit: number,
+): { valid: string; overflow: string } {
+  if (xLength(text) <= limit) {
+    return { valid: text, overflow: "" };
+  }
+  let low = 0;
+  let high = text.length;
+  let splitIndex = 0;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (xLength(text.slice(0, mid)) <= limit) {
+      splitIndex = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return {
+    valid: text.slice(0, splitIndex),
+    overflow: text.slice(splitIndex),
+  };
+}
+
+export function splitPostText(fullText: string, limit: number = 280): string[] {
+  const chunks: string[] = [];
+  let remaining = fullText.trim();
+
+  while (remaining.length > 0) {
+    if (xLength(remaining) <= limit) {
+      chunks.push(remaining);
+      break;
+    }
+
+    let low = 1;
+    let high = remaining.length;
+    let maxFit = 1;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      if (xLength(remaining.slice(0, mid)) <= limit) {
+        maxFit = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    const candidate = remaining.slice(0, maxFit);
+
+    // 1. Try double newline (paragraph)
+    const breakIdx = candidate.lastIndexOf("\n\n");
+    if (breakIdx > 0 && breakIdx >= Math.floor(maxFit * 0.3)) {
+      chunks.push(remaining.slice(0, breakIdx).trim());
+      remaining = remaining.slice(breakIdx).trim();
+      continue;
+    }
+
+    // 2. Try sentence ending
+    const sentenceMatch = [...candidate.matchAll(/([.!?]\s+|\n)/g)];
+    if (sentenceMatch.length > 0) {
+      const lastMatch = sentenceMatch[sentenceMatch.length - 1];
+      const matchIdx = (lastMatch.index ?? 0) + lastMatch[0].length;
+      if (matchIdx >= Math.floor(maxFit * 0.3)) {
+        chunks.push(remaining.slice(0, matchIdx).trim());
+        remaining = remaining.slice(matchIdx).trim();
+        continue;
+      }
+    }
+
+    // 3. Try word boundary
+    const spaceIdx = candidate.lastIndexOf(" ");
+    if (spaceIdx > 0 && spaceIdx >= Math.floor(maxFit * 0.3)) {
+      chunks.push(remaining.slice(0, spaceIdx).trim());
+      remaining = remaining.slice(spaceIdx).trim();
+      continue;
+    }
+
+    // 4. Hard slice
+    chunks.push(remaining.slice(0, maxFit).trim());
+    remaining = remaining.slice(maxFit).trim();
+  }
+
+  return chunks.filter(Boolean);
+}
+
 export function textLength(
   value: string,
   platform: string,

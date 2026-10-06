@@ -16,7 +16,7 @@ export type EditorProps = {
     end?: number,
     anchor?: HTMLElement,
   ) => void;
-  onMedia: () => void;
+  onMedia: (index?: number) => void;
   media: ReactNode;
   mediaIds?: string[];
   mediaAssets?: Payload[];

@@ -21,7 +21,9 @@ import {
   FilePenLine,
   Loader2,
   Plus,
+  Scissors,
   Search,
+  X as CloseIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
@@ -48,9 +50,12 @@ import {
   canEditDraft,
   draftText,
   fingerprint,
+  getOrdinal,
   newDraft,
   profileFor,
+  splitPostText,
   threadItems,
+  xLength,
   type WritingDraft,
 } from "./model";
 import XEditor from "./editors/XEditor";
@@ -386,6 +391,7 @@ function AccountStudio({
   const [postsOpen, setPostsOpen] = useState(false);
   const [preview, setPreview] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [mediaTargetIndex, setMediaTargetIndex] = useState<number | null>(null);
   const [publishDialog, setPublishDialog] = useState<
     "schedule" | "publish" | null
   >(null);
@@ -491,6 +497,34 @@ function AccountStudio({
   const displayPayload = editable
     ? writingPayload
     : (latestVariant?.payload ?? writingPayload);
+
+  const threadList = threadItems(writingPayload);
+  const xLimit = Number(capabilities.data?.max_text_length ?? 280);
+  const overflowXIndex =
+    account.platform === "x"
+      ? threadList.findIndex(
+          (item) => xLength(String(item.text ?? "")) > xLimit,
+        )
+      : -1;
+  const [dismissedLimitBanner, setDismissedLimitBanner] = useState(false);
+
+  function autoSplitXPost(index: number) {
+    const currentItem = threadList[index];
+    const text = String(currentItem?.text ?? "");
+    if (!text || xLength(text) <= xLimit) return;
+
+    const chunks = splitPostText(text, xLimit);
+    if (chunks.length <= 1) return;
+
+    const newItems = [...threadList];
+    const firstItem = { ...currentItem, text: chunks[0] };
+    const subsequentItems = chunks.slice(1).map((chunk) => ({ text: chunk }));
+
+    newItems.splice(index, 1, firstItem, ...subsequentItems);
+    change(newItems.length === 1 ? newItems[0] : { thread: newItems });
+    setDismissedLimitBanner(false);
+    toast.success(`Split post into ${chunks.length} posts`);
+  }
 
   const update = useCallback(
     (next: WritingDraft, syncVariant = false) => {
@@ -733,8 +767,29 @@ function AccountStudio({
 
   function change(payload: Payload) {
     if (editable && !busy) {
-      update({ ...current.current, payload, mediaIds: writingMediaIds });
+      let nextMediaIds = writingMediaIds;
+      if (Array.isArray(payload.thread)) {
+        const threadMediaIds = Array.from(
+          new Set(
+            payload.thread.flatMap((it) =>
+              it && typeof it === "object" && Array.isArray((it as any).media_ids)
+                ? ((it as any).media_ids as string[])
+                : [],
+            ),
+          ),
+        );
+        if (
+          threadMediaIds.length > 0 ||
+          payload.thread.some(
+            (it) => it && typeof it === "object" && "media_ids" in (it as any),
+          )
+        ) {
+          nextMediaIds = threadMediaIds;
+        }
+      }
+      update({ ...current.current, payload, mediaIds: nextMediaIds });
       setIssues([]);
+      setDismissedLimitBanner(false);
     }
   }
   async function refresh() {
@@ -1426,7 +1481,10 @@ function AccountStudio({
                 readOnly: !editable || busy,
                 preview,
                 onRefine: startRefine,
-                onMedia: () => setMediaOpen(true),
+                onMedia: (index?: number) => {
+                  setMediaTargetIndex(index ?? 0);
+                  setMediaOpen(true);
+                },
                 media: (
                   <MediaPreview
                     assets={assets}
@@ -1540,6 +1598,46 @@ function AccountStudio({
             onGenerate={generateRefinement}
           />
         )}
+        {/* Floating X Premium & Auto-split banner */}
+        {!preview &&
+          editable &&
+          account.platform === "x" &&
+          overflowXIndex !== -1 &&
+          !dismissedLimitBanner && (
+            <div className="absolute bottom-20 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-zinc-700/60 bg-zinc-900/95 px-4 py-2 text-xs font-medium text-white shadow-2xl backdrop-blur-md dark:bg-zinc-800/95 max-w-[calc(100%-2rem)]">
+  <span className="truncate text-zinc-200">
+    {getOrdinal(overflowXIndex + 1)} post is too long, you can increase the limit by upgrading to X Premium
+  </span>
+
+  <div className="flex shrink-0 items-center gap-1.5">
+    <a
+      href="https://x.com/i/premium_sign_up"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="rounded-md border border-zinc-700/50 bg-zinc-800 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-zinc-700"
+    >
+      View
+    </a>
+    <button
+      type="button"
+      onClick={() => autoSplitXPost(overflowXIndex)}
+      className="flex cursor-pointer items-center gap-1.5 rounded-md border border-zinc-700/50 bg-zinc-800 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-zinc-700"
+    >
+      <Scissors className="size-3.5" />
+      <span>Auto-split</span>
+    </button>
+  </div>
+
+  <button
+    type="button"
+    onClick={() => setDismissedLimitBanner(true)}
+    className="shrink-0 cursor-pointer rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-700/60 hover:text-white"
+    aria-label="Dismiss banner"
+  >
+    <CloseIcon className="size-3.5" />
+  </button>
+</div>
+          )}
         <FloatingPostActions
           busy={busy}
           saving={create.isPending || edit.isPending}
@@ -1571,14 +1669,63 @@ function AccountStudio({
       </section>
       <MediaPicker
         open={mediaOpen && editable && !busy}
-        onClose={() => setMediaOpen(false)}
+        onClose={() => {
+          setMediaOpen(false);
+          setMediaTargetIndex(null);
+        }}
         assets={assets}
-        ids={writingMediaIds}
+        ids={
+          mediaTargetIndex !== null &&
+          writingPayload.thread &&
+          Array.isArray(writingPayload.thread)
+            ? (((writingPayload.thread[mediaTargetIndex] as any)?.media_ids ??
+                (mediaTargetIndex === 0 &&
+                !writingPayload.thread.some(
+                  (it: any, i: number) => i > 0 && it?.media_ids?.length,
+                )
+                  ? writingMediaIds
+                  : [])) as string[])
+            : writingMediaIds
+        }
         capabilities={capabilities.data ?? {}}
         platform={account.platform}
-        onChange={(mediaIds) =>
-          update({ ...current.current, payload: writingPayload, mediaIds })
-        }
+        onChange={(chosenMediaIds) => {
+          const currentPayload = writingPayload;
+          if (
+            currentPayload.thread &&
+            Array.isArray(currentPayload.thread) &&
+            mediaTargetIndex !== null
+          ) {
+            const items = [...currentPayload.thread];
+            const targetIdx = mediaTargetIndex ?? 0;
+            const currentItem =
+              typeof items[targetIdx] === "string"
+                ? { text: items[targetIdx] }
+                : { ...(items[targetIdx] as any) };
+            items[targetIdx] = { ...currentItem, media_ids: chosenMediaIds };
+
+            const allMediaIds = Array.from(
+              new Set(
+                items.flatMap((it) =>
+                  typeof it === "object" && Array.isArray((it as any).media_ids)
+                    ? (it as any).media_ids
+                    : [],
+                ),
+              ),
+            );
+            update({
+              ...current.current,
+              payload: { ...currentPayload, thread: items },
+              mediaIds: allMediaIds.length ? allMediaIds : chosenMediaIds,
+            });
+          } else {
+            update({
+              ...current.current,
+              payload: writingPayload,
+              mediaIds: chosenMediaIds,
+            });
+          }
+        }}
         onRefresh={() => void mediaQuery.refetch()}
       />
       {publishDialog && draft.variant && (

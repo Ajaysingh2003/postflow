@@ -51,7 +51,7 @@ describe("calendar times and layout", () => {
     expect(calendarTime(event.time)).toBe("1:30 PM");
     expect(html).toContain(`<time dateTime="${event.time}"`);
     expect(html).toContain("1:30 PM");
-    expect(html).toContain("More options");
+    expect(html).toContain("Edit post");
     const range = calendarRange(new Date(2026, 9, 5), "month");
     const month = renderToStaticMarkup(<MonthCalendar date={new Date(2026, 9, 5)} days={range.days} entries={[event]} accounts={[account]} onSelect={noop} onDay={noop} />);
     expect(month).toContain("An update for everyone");

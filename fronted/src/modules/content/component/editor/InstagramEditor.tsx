@@ -61,7 +61,7 @@ export default function InstagramEditor({ account, payload, onChange, capabiliti
         </Tabs>
       )}
       <SocialPostCard account={account} subtitle={<><span>{locked ? selected.label : "Draft"}</span><span aria-hidden>·</span><span>Instagram</span></>} headerAction={
-        !locked && attachments.count > 0 ? <Button variant="ghost" size="sm" className="rounded-lg text-xs text-muted-foreground" aria-label="Edit Instagram attachments" onClick={onMedia}>{attachments.count} {attachments.count === 1 ? "attachment" : "attachments"}<ChevronDown size={13} /></Button> : undefined
+        !locked && attachments.count > 0 ? <Button variant="ghost" size="sm" className="rounded-lg text-xs text-muted-foreground" aria-label="Edit Instagram attachments" onClick={() => onMedia()}>{attachments.count} {attachments.count === 1 ? "attachment" : "attachments"}<ChevronDown size={13} /></Button> : undefined
       }>
         {attachments.count > 0 ? (
           <div className="border-y border-border/60 px-4 pt-1" aria-label="Instagram media">{media}</div>
@@ -70,7 +70,7 @@ export default function InstagramEditor({ account, payload, onChange, capabiliti
             <selected.Icon className="size-7 text-muted-foreground/60" strokeWidth={1.4} />
             <p className="text-sm font-medium">{format === "REELS" ? "Add your video" : format === "CAROUSEL" ? "Add your carousel" : "Add your photo"}</p>
             <p className="max-w-[250px] text-xs leading-relaxed text-muted-foreground">{format === "REELS" ? "One video with a caption." : format === "CAROUSEL" ? `Choose 2–${Number(capabilities.max_media_count ?? 10)} photos or videos. Attachment order is slide order.` : "Your image will appear here."}</p>
-            {!locked && capabilities.supports_media === true && <Button variant="outline" size="sm" className="mt-1 rounded-lg text-xs" onClick={onMedia}><ImagePlus size={15} />{format === "REELS" ? "Choose video" : "Choose media"}</Button>}
+            {!locked && capabilities.supports_media === true && <Button variant="outline" size="sm" className="mt-1 rounded-lg text-xs" onClick={() => onMedia()}><ImagePlus size={15} />{format === "REELS" ? "Choose video" : "Choose media"}</Button>}
           </div>
         )}
         {locked && attachments.count > 0 && <div aria-hidden className="flex items-center gap-4 px-5 pb-3 text-muted-foreground"><Heart size={21} /><MessageCircle size={21} /><Send size={20} /><Bookmark size={20} className="ml-auto" /></div>}

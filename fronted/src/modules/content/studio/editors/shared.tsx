@@ -120,17 +120,25 @@ export function Counter({
   counting?: unknown;
 }) {
   const count = textLength(text, platform, counting);
+  const isOver = count > limit;
+  const diff = limit - count;
   return (
     <span
       title={`${count} of ${limit} characters`}
       className={cn(
-        "flex items-center gap-[7px] text-[10px] tabular-nums",
-        count > limit ? "text-destructive font-medium" : "text-muted-foreground",
+        "flex items-center gap-[7px] text-[11px] tabular-nums",
+        isOver ? "text-destructive font-semibold" : "text-muted-foreground",
       )}
     >
       <span>
-        {count.toLocaleString()}{" "}
-        <span className="opacity-50">/ {limit.toLocaleString()}</span>
+        {isOver ? (
+          <span className="font-semibold text-destructive">{diff}</span>
+        ) : (
+          <>
+            {count.toLocaleString()}{" "}
+            <span className="opacity-50">/ {limit.toLocaleString()}</span>
+          </>
+        )}
       </span>
       <svg width="19" height="19" viewBox="0 0 20 20" aria-hidden="true" className="opacity-75">
         <circle

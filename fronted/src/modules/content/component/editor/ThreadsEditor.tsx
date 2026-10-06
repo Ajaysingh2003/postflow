@@ -8,6 +8,7 @@ import type { EditorProps } from "../../studio/editors/types";
 import { threadItems } from "../../studio/model";
 import { EditorNotice, SocialEditorToolbar, SocialPostCard, SocialPostText } from "./SocialEditor";
 import { editorMedia, socialEditorIssues } from "./socialEditorModel";
+import { MediaPreview } from "../../studio/MediaPicker";
 
 export default function ThreadsEditor({ account, payload, onChange, capabilities, preview, readOnly, onRefine, onMedia, media, mediaIds, mediaAssets }: EditorProps) {
   const locked = preview || readOnly;
@@ -48,8 +49,43 @@ export default function ThreadsEditor({ account, payload, onChange, capabilities
               </DropdownMenu>
             ) : undefined}>
               <SocialPostText text={text} label={`Threads post ${index + 1}`} placeholder="What’s new?" locked={locked} index={index} onRefine={onRefine} onChange={(value) => setItems(items.map((post, i) => i === index ? { ...post, text: value } : post))} className="min-h-[120px]" />
-              {index === 0 && media && <div className="px-5">{media}</div>}
-              {!locked && <SocialEditorToolbar text={text} platform="threads" limit={Number(capabilities.max_text_length ?? 500)} capabilities={index === 0 ? capabilities : { ...capabilities, supports_media: false }} onRefine={onRefine} onMedia={onMedia} index={index} />}
+              {(() => {
+                const itemMedia = Array.isArray(item.media_ids) ? (item.media_ids as string[]) : [];
+                return itemMedia.length > 0 ? (
+                  <div className="px-5">
+                    <MediaPreview
+                      assets={mediaAssets ?? []}
+                      ids={itemMedia}
+                      readOnly={locked}
+                      onRemove={(id) => {
+                        const nextMedia = itemMedia.filter((v: string) => v !== id);
+                        setItems(
+                          items.map((post, i) =>
+                            i === index ? { ...post, media_ids: nextMedia } : post,
+                          ),
+                        );
+                      }}
+                    />
+                  </div>
+                ) : (
+                  index === 0 &&
+                  media &&
+                  !items.some((it) => it && typeof it === "object" && Array.isArray(it.media_ids) && (it.media_ids as unknown[]).length > 0) && (
+                    <div className="px-5">{media}</div>
+                  )
+                );
+              })()}
+              {!locked && (
+                <SocialEditorToolbar
+                  text={text}
+                  platform="threads"
+                  limit={Number(capabilities.max_text_length ?? 500)}
+                  capabilities={capabilities}
+                  onRefine={onRefine}
+                  onMedia={() => onMedia(index)}
+                  index={index}
+                />
+              )}
               {locked && <div aria-hidden className="flex items-center gap-4 border-t border-border/60 px-5 py-3 text-muted-foreground"><Heart size={19} /><MessageCircle size={19} /><Repeat2 size={19} /><Send size={18} /></div>}
             </SocialPostCard>
           </div>

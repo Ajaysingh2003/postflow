@@ -131,7 +131,7 @@ export default function TextPostEditor({
         <div className="flex items-center justify-between border-t border-border pt-3.5 text-muted-foreground [&>div]:flex [&>div]:gap-4 [&_button]:hover:text-foreground [&_button]:cursor-pointer [&_button]:transition-colors">
           <div>
             {capabilities.supports_media === true && (
-              <button aria-label="Attach media" onClick={onMedia}>
+              <button aria-label="Attach media" onClick={() => onMedia()}>
                 <ImagePlus size={17} />
               </button>
             )}

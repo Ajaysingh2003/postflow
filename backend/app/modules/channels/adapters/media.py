@@ -94,9 +94,28 @@ async def upload_x(self, account, variant, assets):
             await save_state(variant, x_processing_media=None)
         if variant.payload.get("thread"):
             items = list(variant.payload["thread"])
-            first = items[0]
-            items[0] = {**({"text": first} if isinstance(first, str) else first), "media_ids": ids}
-            variant.payload = {**variant.payload, "thread": items}
+            has_per_item = any(
+                isinstance(it, dict) and bool(it.get("media_ids") or it.get("media_asset_ids"))
+                for it in items
+            )
+            if has_per_item:
+                asset_to_x = {
+                    str(getattr(a, "id", i)): x_id
+                    for i, (a, x_id) in enumerate(zip(assets, ids))
+                }
+                updated = []
+                for it in items:
+                    it_dict = {"text": it} if isinstance(it, str) else dict(it)
+                    item_aids = it_dict.get("media_ids") or it_dict.get("media_asset_ids") or []
+                    item_x = [asset_to_x[str(aid)] for aid in item_aids if str(aid) in asset_to_x]
+                    if item_x:
+                        it_dict["media_ids"] = item_x
+                    updated.append(it_dict)
+                variant.payload = {**variant.payload, "thread": updated}
+            else:
+                first = items[0]
+                items[0] = {**({"text": first} if isinstance(first, str) else first), "media_ids": ids}
+                variant.payload = {**variant.payload, "thread": items}
         else:
             variant.payload = {**variant.payload, "media_ids": ids}
     finally:

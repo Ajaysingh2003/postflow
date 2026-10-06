@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type ComponentProps } from "react";
+import { textLength } from "../model";
 import {
   ArrowDown,
   ArrowUp,
@@ -118,6 +119,10 @@ export default function XEditor({
     [next[index], next[index + delta]] = [next[index + delta], next[index]];
     onChange({ thread: next });
   }
+
+
+  
+
 
   return (
     <TooltipProvider delay={300}>
@@ -291,7 +296,7 @@ export default function XEditor({
                         <DropdownMenuItem onClick={() => setAudience(index)}>
                           <Users className="size-4" />
                           Who can reply
-                          <span className="ml-auto text-xs text-muted-foreground">
+                          <span className="ml-auto text-xs focus-within:bg-transparent text-muted-foreground">
                             {
                               audiences.find(
                                 (option) =>

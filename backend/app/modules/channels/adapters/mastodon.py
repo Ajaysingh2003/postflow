@@ -654,7 +654,9 @@ class MastodonAdapter(MastodonManagement):
                 f"Failed to delete Mastodon status (HTTP {resp.status_code}): {resp.text}"
             )
 
-    async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
+    async def fetch_metrics(
+        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+    ) -> Metrics:
         """
         Fetch status metrics (favourites, reblogs, replies).
         """

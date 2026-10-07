@@ -9,6 +9,7 @@ from app.modules.channels.adapters.linkedin import (
     LINKEDIN_REST_BASE,
     LINKEDIN_TOKEN_URL,
     LINKEDIN_USERINFO_URL,
+    LINKEDIN_V2_BASE,
     LinkedInAdapter,
 )
 from app.modules.channels.base import PlatformAdapter
@@ -265,16 +266,26 @@ async def test_delete_post(mock_linkedin_account):
 @pytest.mark.anyio
 async def test_fetch_metrics(mock_linkedin_account):
     def handler(request: httpx.Request) -> httpx.Response:
-        encoded_urn = urllib.parse.quote("urn:li:share:987654321", safe="")
-        assert f"{LINKEDIN_REST_BASE}/socialActions/{encoded_urn}" in str(request.url)
+        assert f"{LINKEDIN_REST_BASE}/organizationalEntityShareStatistics" in str(request.url)
+        assert request.url.params["q"] == "organizationalEntity"
+        assert request.url.params["organizationalEntity"] == "urn:li:organization:998877"
+        assert request.url.params["shares"] == "List(urn:li:share:987654321)"
         return httpx.Response(
             200,
             json={
-                "likesSummary": {"totalLikes": 142},
-                "commentsSummary": {"totalComments": 28},
-                "sharesSummary": {"totalShares": 19},
-                "impressionCount": 4200,
-                "clickCount": 115,
+                "elements": [
+                    {
+                        "share": "urn:li:share:987654321",
+                        "totalShareStatistics": {
+                            "likeCount": 142,
+                            "commentCount": 28,
+                            "shareCount": 19,
+                            "impressionCount": 4200,
+                            "uniqueImpressionsCount": 3800,
+                            "clickCount": 115,
+                        },
+                    }
+                ]
             },
         )
 
@@ -287,43 +298,162 @@ async def test_fetch_metrics(mock_linkedin_account):
     assert metrics.comments == 28
     assert metrics.shares_reposts == 19
     assert metrics.clicks == 115
-    assert metrics.engagements == 142 + 28 + 19
+    assert metrics.engagements == 142 + 28 + 19 + 115
+    assert metrics.extras["metrics_status"] == "available"
+    assert metrics.extras["metrics_source"] == "organizationalEntityShareStatistics"
 
 
 @pytest.mark.anyio
-async def test_fetch_account_metrics_organization(mock_linkedin_account):
-    """Verify whole-account follower and view analytics from the original LinkedIn API source."""
+async def test_fetch_organization_metrics_empty_result_and_12_month_window(mock_linkedin_account):
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert f"{LINKEDIN_REST_BASE}/organizationalEntityShareStatistics" in str(request.url)
+        return httpx.Response(200, json={"elements": []})
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = LinkedInAdapter(http_client=mock_client)
+
+    recent = await adapter.fetch_metrics(
+        mock_linkedin_account,
+        "urn:li:share:987654321",
+        context={"published_at": datetime.now(UTC) - timedelta(days=7)},
+    )
+    assert recent.impressions == 0
+    assert recent.engagements == 0
+    assert recent.extras["metrics_status"] == "available"
+    assert "impressions" in recent.extras["available_metrics"]
+
+    old = await adapter.fetch_metrics(
+        mock_linkedin_account,
+        "urn:li:share:987654321",
+        context={"published_at": datetime.now(UTC) - timedelta(days=400)},
+    )
+    assert old.extras["metrics_status"] == "unavailable"
+    assert "12-month" in old.extras["metrics_notice"]
+
+
+@pytest.mark.anyio
+async def test_fetch_member_post_metrics_with_approved_scope(mock_linkedin_account):
+    mock_linkedin_account.account_metadata.pop("target_org_urn")
+    mock_linkedin_account.granted_scopes = ["openid", "profile", "r_member_postAnalytics"]
+
+    values = {
+        "IMPRESSION": 5000,
+        "MEMBERS_REACHED": 4200,
+        "RESHARE": 15,
+        "REACTION": 65,
+        "COMMENT": 7,
+        "LINK_CLICKS": 32,
+    }
 
     def handler(request: httpx.Request) -> httpx.Response:
-        encoded_org = urllib.parse.quote("urn:li:organization:998877", safe="")
-        assert f"{LINKEDIN_REST_BASE}/organizationalEntityFollowerStatistics" in str(request.url)
-        assert f"organizationalEntity={encoded_org}" in str(request.url)
+        assert f"{LINKEDIN_REST_BASE}/memberCreatorPostAnalytics" in str(request.url)
+        assert request.url.params["q"] == "entity"
+        assert request.url.params["entity"] == "(share:urn:li:share:987654321)"
+        query_type = request.url.params["queryType"]
+        return httpx.Response(200, json={"elements": [{"count": values[query_type]}]})
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = LinkedInAdapter(http_client=mock_client)
+
+    metrics = await adapter.fetch_metrics(
+        mock_linkedin_account,
+        "urn:li:share:987654321",
+        context={"payload": {"target_urn": "urn:li:person:person_12345"}},
+    )
+
+    assert metrics.impressions == 5000
+    assert metrics.reach == 4200
+    assert metrics.likes == 65
+    assert metrics.comments == 7
+    assert metrics.shares_reposts == 15
+    assert metrics.clicks == 32
+    assert metrics.engagements == 119
+    assert metrics.extras["metrics_status"] == "available"
+    assert metrics.extras["metrics_source"] == "memberCreatorPostAnalytics"
+
+
+@pytest.mark.anyio
+async def test_fetch_member_post_metrics_falls_back_to_partial_social_actions(mock_linkedin_account):
+    mock_linkedin_account.account_metadata.pop("target_org_urn")
+    mock_linkedin_account.granted_scopes = ["openid", "profile", "w_member_social"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert f"{LINKEDIN_REST_BASE}/socialActions/" in str(request.url)
         return httpx.Response(
             200,
             json={
-                "elements": [
-                    {
-                        "followerCountsByAssociationType": [
-                            {
-                                "followerCounts": {
-                                    "organicFollowerCount": 18400,
-                                    "paidFollowerCount": 1200,
-                                }
-                            }
-                        ],
-                        "viewsSummary": {
-                            "totalViews": 94000,
-                        },
-                    }
-                ]
+                "likesSummary": {"totalLikes": 12},
+                "commentsSummary": {"totalFirstLevelComments": 3},
             },
         )
 
     mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     adapter = LinkedInAdapter(http_client=mock_client)
 
+    metrics = await adapter.fetch_metrics(mock_linkedin_account, "urn:li:share:987654321")
+
+    assert metrics.impressions == 0
+    assert metrics.engagements == 15
+    assert metrics.extras["metrics_status"] == "partial"
+    assert metrics.extras["available_metrics"] == ["likes", "comments", "engagements"]
+    assert "r_member_postAnalytics" in metrics.extras["metrics_notice"]
+
+
+@pytest.mark.anyio
+async def test_fetch_account_metrics_organization(mock_linkedin_account):
+    """Organization follower totals come from LinkedIn's networkSizes endpoint."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        encoded_org = urllib.parse.quote("urn:li:organization:998877", safe=":")
+        assert f"{LINKEDIN_V2_BASE}/networkSizes/{encoded_org}" in str(request.url)
+        assert request.url.params["edgeType"] == "CompanyFollowedByMember"
+        return httpx.Response(200, json={"firstDegreeSize": 19600})
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = LinkedInAdapter(http_client=mock_client)
+
     account_metrics = await adapter.fetch_account_metrics(mock_linkedin_account)
-    assert account_metrics.followers_count == 19600  # 18400 organic + 1200 paid
-    assert account_metrics.impressions == 94000
-    assert account_metrics.extras["organic_followers"] == 18400
-    assert account_metrics.extras["paid_followers"] == 1200
+    assert account_metrics.followers_count == 19600
+    assert account_metrics.impressions == 0
+    assert account_metrics.extras["metrics_status"] == "partial"
+    assert account_metrics.extras["available_metrics"] == ["followers_count"]
+
+
+@pytest.mark.anyio
+async def test_fetch_metrics_handles_403_gracefully(mock_linkedin_account):
+    """Restricted analytics stay explicitly unavailable instead of looking like zeros."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403,
+            json={
+                "status": 403,
+                "serviceErrorCode": 100,
+                "code": "ACCESS_DENIED",
+                "message": "Not enough permissions to access: partnerApiSocialActions.GET.20260901",
+            },
+        )
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = LinkedInAdapter(http_client=mock_client)
+
+    metrics = await adapter.fetch_metrics(mock_linkedin_account, "urn:li:share:987654321")
+    assert metrics.impressions == 0
+    assert metrics.engagements == 0
+    assert metrics.extras["metrics_status"] == "unavailable"
+    assert metrics.extras["available_metrics"] == []
+    assert "rw_organization_admin" in metrics.extras["metrics_notice"]
+
+
+@pytest.mark.anyio
+async def test_fetch_account_metrics_handles_403_gracefully(mock_linkedin_account):
+    """Verify that denied Page follower access is explicitly marked unavailable."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, text="Forbidden")
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = LinkedInAdapter(http_client=mock_client)
+
+    account_metrics = await adapter.fetch_account_metrics(mock_linkedin_account)
+    assert account_metrics.impressions == 0
+    assert account_metrics.extras["status_code"] == 403
+    assert account_metrics.extras["metrics_status"] == "unavailable"

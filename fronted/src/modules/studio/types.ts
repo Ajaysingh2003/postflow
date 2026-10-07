@@ -108,6 +108,94 @@ export interface VariantMetrics {
   extras: Payload;
 }
 
+export interface MetricSnapshotSummary {
+  fetched_at: string;
+  followers_count: number;
+  profile_views: number;
+  impressions: number;
+  reach: number;
+  engagements: number;
+  likes: number;
+  comments: number;
+  shares_reposts: number;
+  clicks: number;
+  extras: Payload;
+}
+
+export interface AccountAnalytics {
+  account_id: string;
+  platform: string;
+  display_name: string;
+  account_type: string;
+  followers_count: number;
+  profile_views: number;
+  impressions: number;
+  reach: number;
+  last_synced_at: string | null;
+  historical_snapshots: MetricSnapshotSummary[];
+  metrics_status?: "available" | "partial" | "unavailable";
+  metrics_notice?: string | null;
+  extras?: Payload | null;
+}
+
+export interface PlatformMetricsSummary {
+  platform: string;
+  impressions: number;
+  reach: number;
+  engagements: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  clicks: number;
+  posts_count: number;
+}
+
+export interface WorkspaceOverview {
+  total_impressions: number;
+  total_reach: number;
+  total_engagements: number;
+  total_likes: number;
+  total_comments: number;
+  total_shares: number;
+  total_clicks: number;
+  total_posts_published: number;
+  by_platform: Record<string, PlatformMetricsSummary>;
+  timeframe_days: number;
+  start_date: string | null;
+  end_date: string | null;
+  metrics_status?: "available" | "partial" | "unavailable";
+  metrics_notice?: string | null;
+  available_metrics?: string[] | null;
+}
+
+export interface PostFeedItemAnalytics {
+  variant_id: string;
+  post_id: string;
+  platform: string;
+  connected_account_id: string | null;
+  account_display_name: string | null;
+  text: string;
+  media_urls: string[];
+  published_at: string | null;
+  created_at: string;
+  status: string;
+  external_post_id: string | null;
+  impressions: number;
+  reach: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  clicks: number;
+  bookmarks: number;
+  engagements: number;
+  engagement_rate: number;
+  extras: Payload;
+  metrics_status?: "available" | "partial" | "unavailable";
+  metrics_notice?: string | null;
+  available_metrics?: string[] | null;
+  metrics_fetched_at: string | null;
+}
+
 export interface Feature {
   id: string;
   name: string;

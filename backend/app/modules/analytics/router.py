@@ -1,4 +1,4 @@
-"""FastAPI router for analytics overview, account metrics, post analytics, and plan limit queries."""
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -9,12 +9,14 @@ from app.modules.analytics.schemas import (
     AccountAnalyticsResponse,
     PlanLimitsResponse,
     PostAnalyticsResponse,
+    PostFeedItemAnalytics,
     VariantAnalyticsResponse,
     WorkspaceOverviewResponse,
 )
 from app.modules.analytics.service import (
     get_account_analytics,
     get_post_analytics,
+    get_posts_analytics_feed,
     get_variant_analytics,
     get_workspace_overview,
     trigger_workspace_metrics_sync,
@@ -29,14 +31,40 @@ router = APIRouter(
 )
 
 
+def parse_flexible_datetime(dt_str: str | None) -> datetime | None:
+    """Parse ISO datetime or date string safely, handling unencoded + as space."""
+    if not dt_str:
+        return None
+    cleaned = dt_str.strip().replace(" ", "+")
+    try:
+        dt = datetime.fromisoformat(cleaned)
+        return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+    except (ValueError, TypeError, AttributeError):
+        try:
+            d = date.fromisoformat(cleaned)
+            return datetime(d.year, d.month, d.day, tzinfo=UTC)
+        except (ValueError, TypeError, AttributeError):
+            return None
+
+
 @router.get("/overview", response_model=WorkspaceOverviewResponse)
 def get_overview_endpoint(
     days: int = Query(default=30, ge=1, le=365, description="Timeframe in days"),
+    account_id: str | None = Query(default=None),
+    start_date: str | None = Query(default=None, description="Start date for custom range filter"),
+    end_date: str | None = Query(default=None, description="End date for custom range filter"),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ) -> WorkspaceOverviewResponse:
     """Aggregate total performance metrics across all social channels for this workspace."""
-    return get_workspace_overview(db, workspace.id, days=days)
+    return get_workspace_overview(
+        db,
+        workspace.id,
+        days=days,
+        start_date=parse_flexible_datetime(start_date),
+        end_date=parse_flexible_datetime(end_date),
+        account_id=account_id,
+    )
 
 
 @router.get("/accounts", response_model=list[AccountAnalyticsResponse])
@@ -82,6 +110,28 @@ def get_post_analytics_endpoint(
 ) -> PostAnalyticsResponse:
     """Retrieve aggregated metrics across all channel variants for a post."""
     return get_post_analytics(db, workspace.id, post_id)
+
+
+@router.get("/feed", response_model=list[PostFeedItemAnalytics])
+def get_analytics_feed_endpoint(
+    account_id: str | None = Query(default=None),
+    start_date: str | None = Query(default=None, description="Start date for custom range filter"),
+    end_date: str | None = Query(default=None, description="End date for custom range filter"),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> list[PostFeedItemAnalytics]:
+    """Retrieve published posts feed with individual performance metrics and engagement rates."""
+    return get_posts_analytics_feed(
+        db,
+        workspace.id,
+        account_id=account_id,
+        start_date=parse_flexible_datetime(start_date),
+        end_date=parse_flexible_datetime(end_date),
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/sync-now")

@@ -60,6 +60,7 @@ export default function TopDashboardBar() {
   const { isComposerOpen, setIsComposerOpen, studioNavigation } = useComposer();
   const contentStudio = [
     "/dashboard/content",
+    "/dashboard/analytics",
     "/dashboard/content/compose",
     "/dashboard/content/generator",
   ].includes(pathname);
@@ -85,19 +86,22 @@ export default function TopDashboardBar() {
               />
             ) : (
               <span className="text-xs text-muted-foreground">
-                Writing account…
+                {pathname.includes("analytics")
+                  ? "Loading account…"
+                  : "Writing account…"}
               </span>
             )}
-            <button
-              type="button"
-              onClick={studioNavigation?.onPosts}
-              disabled={!studioNavigation}
-              aria-label="Your posts"
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/[0.06]"
-            >
-              <FileText className="size-3.5" />
-              <span className="hidden sm:inline">Your posts</span>
-            </button>
+            {studioNavigation?.onPosts && (
+              <button
+                type="button"
+                onClick={studioNavigation.onPosts}
+                aria-label="Your posts"
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/[0.06]"
+              >
+                <FileText className="size-3.5" />
+                <span className="hidden sm:inline">Your posts</span>
+              </button>
+            )}
           </div>
         ) : (
           <nav

@@ -155,7 +155,12 @@ class PlatformAdapter(Protocol):
         """Delete an existing post on the platform."""
         ...
 
-    async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
+    async def fetch_metrics(
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> Metrics:
         """Fetch post-level performance metrics from the official platform API."""
         ...
 

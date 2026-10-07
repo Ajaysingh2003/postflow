@@ -574,7 +574,9 @@ class InstagramAdapter(InstagramManagement):
             "Instagram does not support deleting published media through this API; delete it in Instagram",
         )
 
-    async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
+    async def fetch_metrics(
+        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+    ) -> Metrics:
         """
         Fetch Instagram media likes, comments, shares, saves, impressions, and reach.
         """

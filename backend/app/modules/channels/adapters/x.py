@@ -520,7 +520,9 @@ class XAdapter(XManagement):
             logger.warning("Failed to delete X tweet %s: %s", external_post_id, resp.text)
             raise RuntimeError(f"Failed to delete tweet (HTTP {resp.status_code}): {resp.text}")
 
-    async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
+    async def fetch_metrics(
+        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+    ) -> Metrics:
         """
         Fetch post-level metrics for a tweet using GET /2/tweets/:id.
         """
@@ -546,30 +548,87 @@ class XAdapter(XManagement):
             raise RuntimeError(f"Metrics API error: HTTP {resp.status_code}")
 
         data = resp.json().get("data", {})
-        pub = data.get("public_metrics", {})
-        org = data.get("organic_metrics", {})
+        pub = data.get("public_metrics") or {}
+        private = data.get("non_public_metrics") or {}
+        organic = data.get("organic_metrics") or {}
 
-        impressions = org.get("impression_count") or pub.get("impression_count", 0)
-        likes = pub.get("like_count", 0)
-        retweets = pub.get("retweet_count", 0)
-        quotes = pub.get("quote_count", 0)
-        replies = pub.get("reply_count", 0)
-        clicks = org.get("url_link_clicks", 0)
+        available_metrics: list[str] = []
+        if "impression_count" in pub:
+            impressions = int(pub["impression_count"] or 0)
+            available_metrics.append("impressions")
+        elif "impression_count" in private:
+            impressions = int(private["impression_count"] or 0)
+            available_metrics.append("impressions")
+        elif "impression_count" in organic:
+            impressions = int(organic["impression_count"] or 0)
+            available_metrics.append("impressions")
+        else:
+            impressions = 0
 
-        total_engagements = likes + retweets + quotes + replies + clicks
+        likes = int(pub.get("like_count", 0) or 0)
+        retweets = int(pub.get("retweet_count", 0) or 0)
+        quotes = int(pub.get("quote_count", 0) or 0)
+        replies = int(pub.get("reply_count", 0) or 0)
+        clicks_present = "url_link_clicks" in private or "url_link_clicks" in organic
+        clicks = int(
+            private.get("url_link_clicks", organic.get("url_link_clicks", 0)) or 0
+        )
+        profile_clicks = int(
+            private.get("user_profile_clicks", organic.get("user_profile_clicks", 0)) or 0
+        )
+        if likes or "like_count" in pub:
+            available_metrics.append("likes")
+        if replies or "reply_count" in pub:
+            available_metrics.append("comments")
+        if retweets or "retweet_count" in pub or quotes or "quote_count" in pub:
+            available_metrics.append("shares")
+        if clicks_present:
+            available_metrics.append("clicks")
+        if "bookmark_count" in pub:
+            available_metrics.append("bookmarks")
+
+        if "engagements" in private:
+            total_engagements = int(private["engagements"] or 0)
+            available_metrics.append("engagements")
+        else:
+            total_engagements = likes + retweets + quotes + replies + clicks + profile_clicks
+
+        exact_engagements_available = "engagements" in private
+        required_public_metrics = {"impressions", "likes", "comments", "shares"}
+        public_metrics_available = required_public_metrics.issubset(available_metrics)
+        metrics_status = (
+            "available"
+            if exact_engagements_available and public_metrics_available
+            else "partial"
+        )
+        if not exact_engagements_available:
+            metrics_notice = (
+                "X did not return its total engagements counter. The displayed total is derived from "
+                "the interaction counters available for this post. Private and organic metrics are "
+                "limited to the author's posts from the last 30 days."
+            )
+        elif not public_metrics_available:
+            metrics_notice = "X returned only part of the requested post metrics."
+        else:
+            metrics_notice = None
 
         return Metrics(
             impressions=impressions,
-            reach=impressions,
+            # X's impressions are views, not unique people reached.
+            reach=0,
             engagements=total_engagements,
             likes=likes,
             comments=replies,
             shares_reposts=retweets + quotes,
             clicks=clicks,
             extras={
-                "bookmark_count": pub.get("bookmark_count", 0),
+                "metrics_status": metrics_status,
+                "metrics_notice": metrics_notice,
+                "available_metrics": available_metrics,
+                "metrics_source": "X API v2 /2/tweets/{id}",
+                "bookmark_count": int(pub.get("bookmark_count", 0) or 0),
                 "quote_count": quotes,
-                "user_profile_clicks": org.get("user_profile_clicks", 0),
+                "user_profile_clicks": profile_clicks,
             },
         )
 
@@ -603,5 +662,11 @@ class XAdapter(XManagement):
             followers_count=pub.get("followers_count", 0),
             following_count=pub.get("following_count", 0),
             posts_count=pub.get("tweet_count", 0),
-            extras={"listed_count": pub.get("listed_count", 0)},
+            extras={
+                "metrics_status": "available",
+                "metrics_notice": None,
+                "available_metrics": ["followers_count", "following_count", "posts_count"],
+                "metrics_source": "X API v2 /2/users/me",
+                "listed_count": pub.get("listed_count", 0),
+            },
         )

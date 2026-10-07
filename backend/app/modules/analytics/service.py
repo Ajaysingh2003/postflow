@@ -13,6 +13,7 @@ from app.modules.analytics.schemas import (
     MetricSnapshotSummary,
     PlatformMetricsSummary,
     PostAnalyticsResponse,
+    PostFeedItemAnalytics,
     VariantAnalyticsResponse,
     WorkspaceOverviewResponse,
 )
@@ -22,44 +23,134 @@ from app.modules.content.models import Post, PostVariant
 
 logger = logging.getLogger("analytics.service")
 
+CORE_METRICS = [
+    "impressions",
+    "reach",
+    "engagements",
+    "likes",
+    "comments",
+    "shares",
+    "clicks",
+    "bookmarks",
+]
+
+
+def _metric_coverage(
+    platform: str, extras: dict, *, has_snapshot: bool, snapshot: MetricSnapshot | None = None
+) -> tuple[str, str | None, list[str]]:
+    """Return explicit coverage metadata without treating missing data as zero."""
+    if not has_snapshot:
+        return "unavailable", "No metrics have been synced for this item yet.", []
+
+    status = extras.get("metrics_status")
+    notice = extras.get("metrics_notice")
+    available = extras.get("available_metrics")
+
+    # Older LinkedIn snapshots came from socialActions, which only exposes
+    # reaction/comment counts. Preserve those counts, but never invent views.
+    if platform == "linkedin" and not status:
+        if extras.get("restricted"):
+            return "unavailable", extras.get("notice") or "LinkedIn restricted these metrics.", []
+        if snapshot and snapshot.snapshot_type == "variant":
+            return (
+                "partial",
+                "Stored LinkedIn metrics predate the corrected API. Reactions and comments are available; sync again for post views and other metrics.",
+                ["likes", "comments", "engagements"],
+            )
+        return (
+            "unavailable",
+            "Stored LinkedIn metrics predate the corrected API. Sync again to replace them.",
+            [],
+        )
+
+    # Older X snapshots did not record field presence. Keep positive view/click
+    # counts and public interaction counters, but don't infer that missing zeroes
+    # are true values or that impressions equal unique reach.
+    if platform == "x" and not status:
+        if snapshot and snapshot.snapshot_type == "variant":
+            available = ["likes", "comments", "shares"]
+            if snapshot.impressions > 0:
+                available.append("impressions")
+            if snapshot.clicks > 0:
+                available.append("clicks")
+            if (snapshot.extras or {}).get("bookmark_count", 0) > 0:
+                available.append("bookmarks")
+            return (
+                "partial",
+                "Stored X metrics predate coverage tracking. Some historical values may be missing; X private and organic metrics are available only for recent posts.",
+                available,
+            )
+        return (
+            "partial",
+            "Stored X metrics predate coverage tracking. Sync again for the latest detail.",
+            ["followers_count"],
+        )
+
+    if status not in {"available", "partial", "unavailable"}:
+        status = "available"
+    if not isinstance(available, list):
+        available = CORE_METRICS if status == "available" else []
+    return status, notice, [str(metric) for metric in available]
+
+
+def _latest_snapshots_by_variant(
+    db: Session, variant_ids: list[str]
+) -> dict[str, MetricSnapshot]:
+    if not variant_ids:
+        return {}
+    latest: dict[str, MetricSnapshot] = {}
+    snapshots = db.scalars(
+        select(MetricSnapshot)
+        .where(
+            MetricSnapshot.snapshot_type == "variant",
+            MetricSnapshot.variant_id.in_(variant_ids),
+        )
+        .order_by(MetricSnapshot.fetched_at.desc(), MetricSnapshot.id.desc())
+    )
+    for snapshot in snapshots:
+        if snapshot.variant_id and snapshot.variant_id not in latest:
+            latest[snapshot.variant_id] = snapshot
+    return latest
+
 
 def get_workspace_overview(
-    db: Session, workspace_id: str, days: int = 30
+    db: Session,
+    workspace_id: str,
+    days: int = 30,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    account_id: str | None = None,
 ) -> WorkspaceOverviewResponse:
     """Aggregate total performance metrics across all channels for the workspace."""
-    cutoff = datetime.now(UTC) - timedelta(days=days)
+    if start_date:
+        start_cutoff = start_date if start_date.tzinfo else start_date.replace(tzinfo=UTC)
+    else:
+        start_cutoff = datetime.now(UTC) - timedelta(days=days)
 
-    # 1. Query variant-level metrics in timeframe
-    snapshots = list(
-        db.scalars(
-            select(MetricSnapshot)
-            .where(
-                MetricSnapshot.workspace_id == workspace_id,
-                MetricSnapshot.snapshot_type == "variant",
-                MetricSnapshot.fetched_at >= cutoff,
-            )
-            .order_by(MetricSnapshot.fetched_at.desc())
+    if end_date:
+        end_cutoff = end_date if end_date.tzinfo else end_date.replace(tzinfo=UTC)
+    else:
+        end_cutoff = datetime.now(UTC)
+
+    # The selected date range means posts published during the range. Their
+    # latest lifetime snapshots remain valid even when fetched outside it.
+    post_time = func.coalesce(
+        PostVariant.published_at, PostVariant.updated_at, PostVariant.created_at
+    )
+    variants_query = (
+        select(PostVariant)
+        .join(Post, PostVariant.post_id == Post.id)
+        .where(
+            Post.workspace_id == workspace_id,
+            PostVariant.status == "published",
+            post_time >= start_cutoff,
+            post_time <= end_cutoff,
         )
     )
-
-    # De-duplicate to only latest snapshot per variant
-    latest_by_variant: dict[str, MetricSnapshot] = {}
-    for s in snapshots:
-        if s.variant_id and s.variant_id not in latest_by_variant:
-            latest_by_variant[s.variant_id] = s
-
-    # 2. Query published posts in timeframe
-    variants = list(
-        db.scalars(
-            select(PostVariant)
-            .join(Post, PostVariant.post_id == Post.id)
-            .where(
-                Post.workspace_id == workspace_id,
-                PostVariant.status == "published",
-                func.coalesce(PostVariant.published_at, PostVariant.created_at) >= cutoff,
-            )
-        )
-    )
+    if account_id:
+        variants_query = variants_query.where(PostVariant.connected_account_id == account_id)
+    variants = list(db.scalars(variants_query))
+    latest_by_variant = _latest_snapshots_by_variant(db, [variant.id for variant in variants])
 
     total_published = len(variants)
     posts_by_platform: dict[str, int] = {}
@@ -78,9 +169,30 @@ def get_workspace_overview(
     total_clicks = 0
 
     by_platform: dict[str, PlatformMetricsSummary] = {}
+    metrics_available_for_all = set(CORE_METRICS) if variants else set()
+    notices: list[str] = []
+    any_metrics = False
+    all_metrics_available = bool(variants)
 
-    for var_id, snap in latest_by_variant.items():
-        platform = variant_platform_map.get(var_id, "unknown")
+    for var_id, platform in variant_platform_map.items():
+        snap = latest_by_variant.get(var_id)
+        if not snap:
+            all_metrics_available = False
+            metrics_available_for_all.clear()
+            continue
+        metric_status, notice, fields = _metric_coverage(
+            platform, snap.extras or {}, has_snapshot=True, snapshot=snap
+        )
+        if notice and notice not in notices:
+            notices.append(notice)
+        if metric_status == "unavailable":
+            all_metrics_available = False
+            metrics_available_for_all.clear()
+            continue
+        any_metrics = True
+        if metric_status != "available":
+            all_metrics_available = False
+        metrics_available_for_all.intersection_update(fields)
         total_imp += snap.impressions
         total_reach += snap.reach
         total_eng += snap.engagements
@@ -109,6 +221,15 @@ def get_workspace_overview(
         if plat not in by_platform:
             by_platform[plat] = PlatformMetricsSummary(platform=plat, posts_count=p_count)
 
+    if not variants or not any_metrics:
+        metrics_status = "unavailable"
+        if variants and not notices:
+            notices.append("No platform metrics have been synced for posts in this date range.")
+    elif all_metrics_available:
+        metrics_status = "available"
+    else:
+        metrics_status = "partial"
+
     return WorkspaceOverviewResponse(
         total_impressions=total_imp,
         total_reach=total_reach,
@@ -119,7 +240,16 @@ def get_workspace_overview(
         total_clicks=total_clicks,
         total_posts_published=total_published,
         by_platform=by_platform,
-        timeframe_days=days,
+        timeframe_days=(
+            max(1, (end_cutoff - start_cutoff).days)
+            if start_date or end_date
+            else days
+        ),
+        start_date=start_cutoff,
+        end_date=end_cutoff,
+        metrics_status=metrics_status,
+        metrics_notice=" ".join(notices) or None,
+        available_metrics=sorted(metrics_available_for_all),
     )
 
 
@@ -149,6 +279,12 @@ def get_account_analytics(
         )
 
         latest = snapshots[0] if snapshots else None
+        metric_status, metric_notice, _ = _metric_coverage(
+            acc.platform,
+            latest.extras or {} if latest else {},
+            has_snapshot=latest is not None,
+            snapshot=latest,
+        )
         results.append(
             AccountAnalyticsResponse(
                 account_id=acc.id,
@@ -160,6 +296,9 @@ def get_account_analytics(
                 impressions=latest.impressions if latest else 0,
                 reach=latest.reach if latest else 0,
                 last_synced_at=acc.last_synced_at or (latest.fetched_at if latest else None),
+                metrics_status=metric_status,
+                metrics_notice=metric_notice,
+                extras=latest.extras if latest else {},
                 historical_snapshots=[
                     MetricSnapshotSummary(
                         fetched_at=s.fetched_at,
@@ -253,6 +392,118 @@ def get_post_analytics(db: Session, workspace_id: str, post_id: str) -> PostAnal
     )
 
 
+def get_posts_analytics_feed(
+    db: Session,
+    workspace_id: str,
+    account_id: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[PostFeedItemAnalytics]:
+    """Retrieve published posts with their metrics and engagement rates."""
+    post_time = func.coalesce(
+        PostVariant.published_at, PostVariant.updated_at, PostVariant.created_at
+    )
+    query = (
+        select(PostVariant, Post, ConnectedAccount)
+        .join(Post, PostVariant.post_id == Post.id)
+        .outerjoin(ConnectedAccount, PostVariant.connected_account_id == ConnectedAccount.id)
+        .where(
+            Post.workspace_id == workspace_id,
+            PostVariant.status == "published",
+        )
+    )
+    if account_id:
+        query = query.where(PostVariant.connected_account_id == account_id)
+
+    if start_date:
+        start_tz = start_date if start_date.tzinfo else start_date.replace(tzinfo=UTC)
+        query = query.where(post_time >= start_tz)
+    if end_date:
+        end_tz = end_date if end_date.tzinfo else end_date.replace(tzinfo=UTC)
+        query = query.where(post_time <= end_tz)
+
+    query = (
+        query.order_by(post_time.desc(), PostVariant.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = list(db.execute(query).all())
+    latest_by_variant = _latest_snapshots_by_variant(
+        db, [variant.id for variant, _post, _account in rows]
+    )
+
+    results: list[PostFeedItemAnalytics] = []
+    for variant, post, account in rows:
+        latest_snap = latest_by_variant.get(variant.id)
+
+        payload = variant.payload or {}
+        text = (
+            payload.get("text")
+            or payload.get("caption")
+            or payload.get("body")
+            or post.base_text
+            or ""
+        )
+        media_urls = payload.get("media_urls") or []
+        if isinstance(media_urls, str):
+            media_urls = [media_urls]
+
+        imp = latest_snap.impressions if latest_snap else 0
+        reach = latest_snap.reach if latest_snap else 0
+        likes = latest_snap.likes if latest_snap else 0
+        comments = latest_snap.comments if latest_snap else 0
+        shares = latest_snap.shares_reposts if latest_snap else 0
+        clicks = latest_snap.clicks if latest_snap else 0
+        eng = (
+            latest_snap.engagements
+            if latest_snap
+            else (likes + comments + shares + clicks)
+        )
+        extras = latest_snap.extras if latest_snap else {}
+        metrics_status, metrics_notice, available_metrics = _metric_coverage(
+            variant.platform,
+            extras or {},
+            has_snapshot=latest_snap is not None,
+            snapshot=latest_snap,
+        )
+        bookmarks = int(extras.get("bookmark_count") or extras.get("saved") or 0)
+        eng_rate = round((eng / imp * 100), 1) if imp > 0 else 0.0
+
+        results.append(
+            PostFeedItemAnalytics(
+                variant_id=variant.id,
+                post_id=post.id,
+                platform=variant.platform,
+                connected_account_id=variant.connected_account_id,
+                account_display_name=account.display_name if account else None,
+                text=str(text),
+                media_urls=[str(u) for u in media_urls if u],
+                published_at=variant.published_at or variant.updated_at or variant.created_at,
+                created_at=variant.created_at,
+                status=variant.status,
+                external_post_id=variant.external_post_id,
+                impressions=imp,
+                reach=reach,
+                likes=likes,
+                comments=comments,
+                shares=shares,
+                clicks=clicks,
+                bookmarks=bookmarks,
+                engagements=eng,
+                engagement_rate=eng_rate,
+                extras=extras,
+                metrics_status=metrics_status,
+                metrics_notice=metrics_notice,
+                available_metrics=available_metrics,
+                metrics_fetched_at=latest_snap.fetched_at if latest_snap else None,
+            )
+        )
+
+    return results
+
+
 async def trigger_workspace_metrics_sync(db: Session, workspace_id: str) -> dict[str, int]:
     """Manually trigger immediate metrics synchronization for workspace accounts and variants."""
     now = datetime.now(UTC)
@@ -321,7 +572,15 @@ async def trigger_workspace_metrics_sync(db: Session, workspace_id: str) -> dict
         if not adapter:
             continue
         try:
-            p_metrics = await adapter.fetch_metrics(acc, var.external_post_id)
+            p_metrics = await adapter.fetch_metrics(
+                acc,
+                var.external_post_id,
+                context={
+                    "payload": var.payload or {},
+                    "published_at": var.published_at,
+                    "variant_id": var.id,
+                },
+            )
             v_snap = MetricSnapshot(
                 workspace_id=workspace_id,
                 connected_account_id=acc.id,

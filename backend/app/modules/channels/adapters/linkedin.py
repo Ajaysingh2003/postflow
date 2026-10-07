@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 LINKEDIN_USERINFO_URL = "https://api.linkedin.com/v2/userinfo"
+LINKEDIN_V2_BASE = "https://api.linkedin.com/v2"
 LINKEDIN_REST_BASE = "https://api.linkedin.com/rest"
 
 # Supported LinkedIn REST API version
@@ -567,97 +568,354 @@ class LinkedInAdapter(LinkedInManagement):
                 f"Failed to delete LinkedIn post (HTTP {resp.status_code}): {resp.text}"
             )
 
-    async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
-        """
-        Fetch post-level performance metrics.
-        """
+    async def fetch_metrics(
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> Metrics:
+        """Fetch LinkedIn post statistics from the correct member or organization API."""
         raw_access = decrypt_token(account.encrypted_access_token)
         if not raw_access:
             raise ValueError("Missing decrypted access token")
 
-        encoded_urn = urllib.parse.quote(external_post_id, safe="")
+        payload = (context or {}).get("payload") or {}
+        author_urn = (
+            payload.get("target_urn")
+            or payload.get("author_urn")
+            or account.account_metadata.get("target_org_urn")
+        )
+        org_urn = (
+            author_urn
+            if isinstance(author_urn, str) and author_urn.startswith("urn:li:organization:")
+            else None
+        )
         client = await self._get_client()
         try:
-            resp = await client.get(
+            if org_urn:
+                params = {"q": "organizationalEntity", "organizationalEntity": org_urn}
+                if external_post_id.startswith("urn:li:share:"):
+                    params["shares"] = f"List({external_post_id})"
+                elif external_post_id.startswith("urn:li:ugcPost:"):
+                    params["ugcPosts[0]"] = external_post_id
+                else:
+                    return self._unavailable_metrics(
+                        "LinkedIn returned an unsupported post identifier for analytics."
+                    )
+
+                response = await client.get(
+                    f"{LINKEDIN_REST_BASE}/organizationalEntityShareStatistics",
+                    headers=self._headers(raw_access),
+                    params=params,
+                )
+                if response.status_code == 200:
+                    elements = response.json().get("elements", [])
+                    row = next(
+                        (
+                            item
+                            for item in elements
+                            if item.get("share") == external_post_id
+                            or item.get("ugcPost") == external_post_id
+                        ),
+                        {},
+                    )
+                    if not row:
+                        published_at = (context or {}).get("published_at")
+                        if isinstance(published_at, str):
+                            try:
+                                published_at = datetime.fromisoformat(
+                                    published_at.replace("Z", "+00:00")
+                                )
+                            except ValueError:
+                                published_at = None
+                        if isinstance(published_at, datetime):
+                            if published_at.tzinfo is None:
+                                published_at = published_at.replace(tzinfo=UTC)
+                            if published_at < datetime.now(UTC) - timedelta(days=365):
+                                return self._unavailable_metrics(
+                                    "LinkedIn organization post analytics are available for a rolling 12-month window; this post is older."
+                                )
+                            return Metrics(
+                                extras={
+                                    "metrics_status": "available",
+                                    "available_metrics": [
+                                        "impressions",
+                                        "reach",
+                                        "engagements",
+                                        "likes",
+                                        "comments",
+                                        "shares",
+                                        "clicks",
+                                    ],
+                                    "metrics_source": "organizationalEntityShareStatistics",
+                                    "org_urn": org_urn,
+                                }
+                            )
+                        return self._unavailable_metrics(
+                            "LinkedIn returned no analytics record and the post date is unavailable, so its zero counts cannot be confirmed."
+                        )
+                    stats = row.get("totalShareStatistics", {})
+                    likes = int(stats.get("likeCount", 0) or 0)
+                    comments = int(stats.get("commentCount", 0) or 0)
+                    shares = int(stats.get("shareCount", 0) or 0)
+                    impressions = int(stats.get("impressionCount", 0) or 0)
+                    clicks = int(stats.get("clickCount", 0) or 0)
+                    available_metrics = [
+                        field
+                        for field, source_field in (
+                            ("impressions", "impressionCount"),
+                            ("reach", "uniqueImpressionsCount"),
+                            ("likes", "likeCount"),
+                            ("comments", "commentCount"),
+                            ("shares", "shareCount"),
+                            ("clicks", "clickCount"),
+                        )
+                        if source_field in stats
+                    ]
+                    if {"likes", "comments", "shares", "clicks"}.issubset(available_metrics):
+                        available_metrics.append("engagements")
+                    is_complete = {
+                        "impressions", "reach", "likes", "comments", "shares", "clicks", "engagements"
+                    }.issubset(available_metrics)
+                    if not available_metrics:
+                        return self._unavailable_metrics(
+                            "LinkedIn returned an empty analytics record for this Page post."
+                        )
+                    return Metrics(
+                        impressions=impressions,
+                        reach=int(stats.get("uniqueImpressionsCount", 0) or 0),
+                        engagements=likes + comments + shares + clicks,
+                        likes=likes,
+                        comments=comments,
+                        shares_reposts=shares,
+                        clicks=clicks,
+                        extras={
+                            "metrics_status": "available" if is_complete else "partial",
+                            "metrics_notice": None if is_complete else "LinkedIn returned only part of its Page post analytics.",
+                            "available_metrics": available_metrics,
+                            "metrics_source": "organizationalEntityShareStatistics",
+                            "org_urn": org_urn,
+                            "reported_engagement_rate": stats.get("engagement"),
+                        },
+                    )
+                if response.status_code not in {403, 404}:
+                    raise RuntimeError(
+                        f"LinkedIn organization analytics failed: HTTP {response.status_code}"
+                    )
+                logger.info("LinkedIn organization analytics unavailable: HTTP %s", response.status_code)
+
+            else:
+                scopes = set(account.granted_scopes or [])
+                if "r_member_postAnalytics" in scopes:
+                    entity_type = (
+                        "share"
+                        if external_post_id.startswith("urn:li:share:")
+                        else "ugc"
+                        if external_post_id.startswith("urn:li:ugcPost:")
+                        else None
+                    )
+                    if entity_type:
+                        entity = f"({entity_type}:{external_post_id})"
+                        values: dict[str, int] = {}
+                        metric_queries = {
+                            "impressions": "IMPRESSION",
+                            "reach": "MEMBERS_REACHED",
+                            "shares": "RESHARE",
+                            "likes": "REACTION",
+                            "comments": "COMMENT",
+                            "clicks": "LINK_CLICKS",
+                        }
+                        restricted = False
+                        for field, query_type in metric_queries.items():
+                            response = await client.get(
+                                f"{LINKEDIN_REST_BASE}/memberCreatorPostAnalytics",
+                                headers=self._headers(raw_access),
+                                params={
+                                    "q": "entity",
+                                    "entity": entity,
+                                    "queryType": query_type,
+                                    "aggregation": "TOTAL",
+                                },
+                            )
+                            if response.status_code == 403:
+                                restricted = True
+                                break
+                            if response.status_code != 200:
+                                raise RuntimeError(
+                                    f"LinkedIn member analytics failed: HTTP {response.status_code}"
+                                )
+                            elements = response.json().get("elements", [])
+                            if elements and "count" in elements[0]:
+                                values[field] = int(elements[0]["count"] or 0)
+
+                        if not restricted:
+                            likes = values.get("likes", 0)
+                            comments = values.get("comments", 0)
+                            shares = values.get("shares", 0)
+                            available_metrics = list(values)
+                            if {"likes", "comments", "shares", "clicks"}.issubset(values):
+                                available_metrics.append("engagements")
+                            is_complete = {
+                                "impressions", "reach", "likes", "comments", "shares", "clicks", "engagements"
+                            }.issubset(available_metrics)
+                            if not available_metrics:
+                                return self._unavailable_metrics(
+                                    "LinkedIn has not returned analytics for this member post yet."
+                                )
+                            notice = None if is_complete else (
+                                "LinkedIn returned only part of its member post analytics."
+                            )
+                            return Metrics(
+                                impressions=values.get("impressions", 0),
+                                reach=values.get("reach", 0),
+                                engagements=likes + comments + shares + values.get("clicks", 0),
+                                likes=likes,
+                                comments=comments,
+                                shares_reposts=shares,
+                                clicks=values.get("clicks", 0),
+                                extras={
+                                    "metrics_status": "available" if is_complete else "partial",
+                                    "metrics_notice": notice,
+                                    "available_metrics": available_metrics,
+                                    "metrics_source": "memberCreatorPostAnalytics",
+                                },
+                            )
+
+            # socialActions is still useful as a limited fallback: it exposes
+            # reactions/comments, but never impressions or click statistics.
+            encoded_urn = urllib.parse.quote(external_post_id, safe="")
+            response = await client.get(
                 f"{LINKEDIN_REST_BASE}/socialActions/{encoded_urn}",
                 headers=self._headers(raw_access),
+            )
+            if response.status_code in {401, 429} or response.status_code >= 500:
+                raise RuntimeError(f"LinkedIn social actions failed: HTTP {response.status_code}")
+            if response.status_code != 200:
+                return self._unavailable_metrics(
+                    self._analytics_permission_notice(org_urn=bool(org_urn))
+                )
+
+            data = response.json()
+            likes_summary = data.get("likesSummary") or {}
+            comments_summary = data.get("commentsSummary") or {}
+            has_likes = "totalLikes" in likes_summary
+            comments_key = (
+                "totalFirstLevelComments"
+                if "totalFirstLevelComments" in comments_summary
+                else "totalComments"
+            )
+            has_comments = comments_key in comments_summary
+            likes = int(likes_summary.get("totalLikes", 0) or 0)
+            comments = int(comments_summary.get(comments_key, 0) or 0)
+            available_metrics = [
+                metric for metric, present in (("likes", has_likes), ("comments", has_comments)) if present
+            ]
+            if not available_metrics:
+                return self._unavailable_metrics(self._analytics_permission_notice(org_urn=bool(org_urn)))
+            return Metrics(
+                engagements=likes + comments,
+                likes=likes,
+                comments=comments,
+                extras={
+                    "metrics_status": "partial",
+                    "metrics_notice": self._analytics_permission_notice(org_urn=bool(org_urn)),
+                    "available_metrics": [*available_metrics, "engagements"],
+                    "metrics_source": "socialActions",
+                },
             )
         finally:
             if self._http_client is None:
                 await client.aclose()
 
-        if resp.status_code != 200:
-            logger.warning(
-                "Failed to fetch LinkedIn metrics for %s: %s", external_post_id, resp.text
+    @staticmethod
+    def _analytics_permission_notice(*, org_urn: bool) -> str:
+        if org_urn:
+            return (
+                "LinkedIn returned reactions and comments only. Post impressions, reach and clicks "
+                "require Community Management API access with rw_organization_admin and an "
+                "administrator role on the Page."
             )
-            raise RuntimeError(f"Metrics API error: HTTP {resp.status_code}")
+        return (
+            "LinkedIn returned reactions and comments only. Member post analytics require the "
+            "r_member_postAnalytics permission from an approved Community Management API app."
+        )
 
-        data = resp.json()
-        likes = data.get("likesSummary", {}).get("totalLikes", 0)
-        comments = data.get("commentsSummary", {}).get("totalComments", 0)
-        shares = data.get("sharesSummary", {}).get("totalShares", 0)
-        impressions = data.get("impressionCount", 0)
-
+    @staticmethod
+    def _unavailable_metrics(notice: str) -> Metrics:
         return Metrics(
-            impressions=impressions,
-            reach=impressions,
-            engagements=likes + comments + shares,
-            likes=likes,
-            comments=comments,
-            shares_reposts=shares,
-            clicks=data.get("clickCount", 0),
-            extras=data,
+            extras={
+                "metrics_status": "unavailable",
+                "metrics_notice": notice,
+                "available_metrics": [],
+                "metrics_source": "linkedin",
+            }
         )
 
     async def fetch_account_metrics(self, account: ConnectedAccount) -> AccountMetrics:
-        """
-        Fetch whole-account follower and engagement analytics from the original LinkedIn API.
-        If the account is or targets an organization, queries organizationalEntityFollowerStatistics.
-        """
-        raw_access = decrypt_token(account.encrypted_access_token)
-        if not raw_access:
-            raise ValueError("Missing decrypted access token")
-
+        """Fetch an organization follower total through LinkedIn's networkSizes API."""
         org_urn = account.account_metadata.get("target_org_urn")
         if not org_urn and account.external_account_id.startswith("urn:li:organization:"):
             org_urn = account.external_account_id
 
         if not org_urn:
-            # Personal profiles return member follower summary if accessible
             return AccountMetrics(
-                followers_count=account.account_metadata.get("followers_count", 0),
-                extras={"account_type": "personal_profile"},
+                extras={
+                    "metrics_status": "unavailable",
+                    "metrics_notice": (
+                        "LinkedIn does not expose personal-profile follower totals through the "
+                        "current member profile API."
+                    ),
+                    "available_metrics": [],
+                }
             )
 
-        encoded_org = urllib.parse.quote(org_urn, safe="")
+        raw_access = decrypt_token(account.encrypted_access_token)
+        if not raw_access:
+            raise ValueError("Missing decrypted access token")
+
+        encoded_org = urllib.parse.quote(org_urn, safe=":")
         client = await self._get_client()
         try:
-            resp = await client.get(
-                f"{LINKEDIN_REST_BASE}/organizationalEntityFollowerStatistics?q=organizationalEntity&organizationalEntity={encoded_org}",
+            response = await client.get(
+                f"{LINKEDIN_V2_BASE}/networkSizes/{encoded_org}",
                 headers=self._headers(raw_access),
+                params={"edgeType": "CompanyFollowedByMember"},
             )
         finally:
             if self._http_client is None:
                 await client.aclose()
 
-        if resp.status_code != 200:
-            logger.warning(
-                "Failed to fetch LinkedIn organization stats for %s: %s", org_urn, resp.text
+        if response.status_code != 200:
+            logger.warning("Could not fetch LinkedIn follower total for %s: HTTP %s", org_urn, response.status_code)
+            return AccountMetrics(
+                extras={
+                    "metrics_status": "unavailable",
+                    "metrics_notice": (
+                        "LinkedIn did not allow the Page follower lookup. Check the app's approved "
+                        "organization permissions and the member's access to this Page."
+                    ),
+                    "available_metrics": [],
+                    "status_code": response.status_code,
+                }
             )
-            raise RuntimeError("Account metrics request failed or is unsupported")
 
-        stats = resp.json().get("elements", [{}])[0]
-        follower_counts = stats.get("followerCountsByAssociationType", [{}])[0]
-        organic_followers = follower_counts.get("followerCounts", {}).get("organicFollowerCount", 0)
-        paid_followers = follower_counts.get("followerCounts", {}).get("paidFollowerCount", 0)
-        total_followers = organic_followers + paid_followers
-
+        response_data = response.json()
+        if "firstDegreeSize" not in response_data:
+            return AccountMetrics(
+                extras={
+                    "metrics_status": "unavailable",
+                    "metrics_notice": "LinkedIn did not return a follower total for this Page.",
+                    "available_metrics": [],
+                }
+            )
+        followers_count = int(response_data.get("firstDegreeSize", 0) or 0)
         return AccountMetrics(
-            followers_count=total_followers,
-            impressions=stats.get("viewsSummary", {}).get("totalViews", 0),
+            followers_count=followers_count,
             extras={
-                "organic_followers": organic_followers,
-                "paid_followers": paid_followers,
+                "metrics_status": "partial",
+                "metrics_notice": "LinkedIn provides Page follower totals here; account views are unavailable.",
+                "available_metrics": ["followers_count"],
+                "metrics_source": "networkSizes",
                 "org_urn": org_urn,
             },
         )

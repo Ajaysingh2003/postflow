@@ -355,7 +355,9 @@ class BlueskyAdapter(BlueskyOAuth, BlueskyManagement):
                 f"Failed to delete Bluesky post (HTTP {resp.status_code}): {resp.text}"
             )
 
-    async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
+    async def fetch_metrics(
+        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+    ) -> Metrics:
         """
         Fetch post thread view for like, repost, reply, and quote counts.
         """

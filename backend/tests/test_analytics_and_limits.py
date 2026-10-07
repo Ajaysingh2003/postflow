@@ -94,7 +94,12 @@ class AnalyticsMockAdapter:
     async def delete_post(self, account: ConnectedAccount, external_post_id: str) -> None:
         pass
 
-    async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
+    async def fetch_metrics(
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> Metrics:
         return Metrics(impressions=600, reach=450, engagements=55, likes=40, comments=10, clicks=5)
 
     async def fetch_account_metrics(self, account: ConnectedAccount) -> AccountMetrics:
@@ -398,6 +403,120 @@ def test_sync_metrics_endpoint(analytics_adapter, test_setup):
     data = resp.json()
     assert data["accounts_synced"] == 1
     assert data["variants_synced"] == 1
+
+
+def test_analytics_feed_and_overview_date_filtering(analytics_adapter, test_setup):
+    """Verify that start_date and end_date correctly filter feed posts and workspace overview."""
+    client = test_setup["client"]
+    headers = test_setup["headers"]
+    ws_id = test_setup["workspace_id"]
+    user_id = test_setup["user_id"]
+
+    now = datetime.now(UTC)
+    recent_date = now - timedelta(days=5)
+    older_date = now - timedelta(days=45)
+
+    with SessionLocal() as db:
+        acc = ConnectedAccount(
+            workspace_id=ws_id,
+            platform="mock_analytics",
+            external_account_id=f"acc_{uuid4().hex[:6]}",
+            display_name="Date Filter Profile",
+            status="active",
+        )
+        db.add(acc)
+        db.flush()
+
+        # Recent post
+        p_recent = Post(workspace_id=ws_id, author_id=user_id, status="published")
+        db.add(p_recent)
+        db.flush()
+        v_recent = PostVariant(
+            post_id=p_recent.id,
+            connected_account_id=acc.id,
+            platform="mock_analytics",
+            status="published",
+            published_at=recent_date,
+            updated_at=recent_date,
+            payload={"text": "Recent post from 5 days ago"},
+            idempotency_key=str(uuid4()),
+        )
+        db.add(v_recent)
+        db.flush()
+        db.add(
+            MetricSnapshot(
+                workspace_id=ws_id,
+                connected_account_id=acc.id,
+                variant_id=v_recent.id,
+                snapshot_type="variant",
+                # Snapshot retrieval time is independent of the post's selected date range.
+                fetched_at=recent_date - timedelta(days=60),
+                impressions=500,
+                likes=50,
+            )
+        )
+
+        # Older post
+        p_old = Post(workspace_id=ws_id, author_id=user_id, status="published")
+        db.add(p_old)
+        db.flush()
+        v_old = PostVariant(
+            post_id=p_old.id,
+            connected_account_id=acc.id,
+            platform="mock_analytics",
+            status="published",
+            published_at=older_date,
+            updated_at=older_date,
+            payload={"text": "Old post from 45 days ago"},
+            idempotency_key=str(uuid4()),
+        )
+        db.add(v_old)
+        db.flush()
+        db.add(
+            MetricSnapshot(
+                workspace_id=ws_id,
+                connected_account_id=acc.id,
+                variant_id=v_old.id,
+                snapshot_type="variant",
+                # A fresh snapshot for an old post must not bring it into the selected range.
+                fetched_at=now,
+                impressions=1000,
+                likes=100,
+            )
+        )
+        db.commit()
+
+    # 1. Query feed without filter: returns both
+    resp_all = client.get(f"/api/v1/analytics/feed?account_id={acc.id}", headers=headers)
+    assert resp_all.status_code == 200
+    items_all = resp_all.json()
+    assert len(items_all) == 2
+
+    # 2. Query feed with date filter covering last 10 days only
+    start_filter = (now - timedelta(days=10)).isoformat()
+    end_filter = now.isoformat()
+    resp_filtered = client.get(
+        f"/api/v1/analytics/feed?account_id={acc.id}&start_date={start_filter}&end_date={end_filter}",
+        headers=headers,
+    )
+    assert resp_filtered.status_code == 200
+    items_filtered = resp_filtered.json()
+    assert len(items_filtered) == 1
+    assert items_filtered[0]["text"] == "Recent post from 5 days ago"
+    assert items_filtered[0]["impressions"] == 500
+
+    # 3. Query overview with custom date filter
+    resp_ov = client.get(
+        f"/api/v1/analytics/overview?account_id={acc.id}&start_date={start_filter}&end_date={end_filter}",
+        headers=headers,
+    )
+    assert resp_ov.status_code == 200
+    ov_data = resp_ov.json()
+    assert ov_data["start_date"] is not None
+    assert ov_data["end_date"] is not None
+    assert ov_data["total_posts_published"] == 1
+    assert ov_data["total_impressions"] == 500
+    assert ov_data["total_likes"] == 50
 
 
 # ==============================================================================

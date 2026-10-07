@@ -25,7 +25,7 @@ type StudioNavigation = {
   account: Account;
   accounts: Account[];
   onSelect: (id: string) => void;
-  onPosts: () => void;
+  onPosts?: () => void;
 };
 
 export type Platform = "linkedin" | "x";

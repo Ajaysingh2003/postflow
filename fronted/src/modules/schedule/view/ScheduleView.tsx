@@ -171,6 +171,47 @@ function postExtras(payload: unknown) {
   };
 }
 
+
+
+
+
+
+
+const CARD_HEIGHT = (HOUR_HEIGHT * 100) / 60 - 6;
+const CLUSTER_MINUTES = 100; // posts closer than this share one stack
+
+// Groups posts whose cards would overlap into a single stack.
+function clusterDay(entries: CalendarEntry[]) {
+  const items = entries
+    .map((entry) => {
+      const d = utcDate(entry.time);
+      return { entry, at: d.getTime(), minute: d.getHours() * 60 + d.getMinutes() };
+    })
+    .sort((a, b) => a.at - b.at);
+  const clusters: { minute: number; entries: CalendarEntry[] }[] = [];
+  for (const item of items) {
+    const last = clusters[clusters.length - 1];
+    if (last && item.minute - last.minute < CLUSTER_MINUTES)
+      last.entries.push(item.entry);
+    else clusters.push({ minute: item.minute, entries: [item.entry] });
+  }
+  return clusters;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function useMediaQuery(query: string) {
   const subscribeQuery = useCallback(
     (callback: () => void) => {
@@ -1079,6 +1120,124 @@ function CalendarChip({
   );
 }
 
+
+
+
+function CalendarRow({
+  entry,
+  account,
+  roomy,
+  onSelect,
+}: {
+  entry: CalendarEntry;
+  account?: Account;
+  roomy: boolean;
+  onSelect: SelectEntry;
+}) {
+  const { variant } = entry;
+  const text = draftText(variant.payload, variant.platform) || entry.post_title;
+  const time = calendarTime(entry.time);
+  const status = statusNames[variant.status] ?? variant.status;
+  const name = account?.display_name ?? "Disconnected account";
+  return (
+    <button
+      type="button"
+      data-calendar-card
+      onClick={() => onSelect(entry)}
+      aria-label={`${status} ${profileFor(variant.platform).name} post by ${name} at ${time}: ${text.slice(0, 80)}`}
+      className={cn(
+        "flex h-full w-full min-w-0 items-center gap-2 overflow-hidden rounded-xl border border-border/60 bg-background/90 px-2 text-left shadow-xs outline-none backdrop-blur-sm transition-all duration-200 hover:-translate-y-px hover:border-foreground/20 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring/60",
+        variant.status === "failed" && "border-rose-500/30",
+      )}
+    >
+      <span className="relative shrink-0">
+        <AccountAvatar
+          account={account}
+          className="size-6 rounded-md text-[9px] [&_img]:rounded-md"
+        />
+        <span className="absolute -bottom-1 -right-1 grid place-items-center rounded-[5px] bg-background p-px ring-1 ring-border/60">
+          <PlatformMark
+            platform={variant.platform}
+            className="!size-3 !text-[9px]"
+          />
+        </span>
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground">
+          <span
+            role="img"
+            aria-label={status}
+            title={status}
+            className={cn(
+              "size-1.5 shrink-0 rounded-full",
+              statusDot[variant.status],
+              variant.status === "publishing" && "animate-pulse",
+            )}
+          />
+          <time
+            dateTime={utcDate(entry.time).toISOString()}
+            title={utcDate(entry.time).toLocaleString()}
+          >
+            {time}
+          </time>
+        </span>
+        <span
+          className={cn(
+            "break-words text-xs leading-snug text-foreground/90",
+            roomy ? "line-clamp-2" : "truncate",
+          )}
+        >
+          {text}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+const STACK_MAX = 3;
+
+function CalendarStack({
+  day,
+  entries,
+  accounts,
+  onSelect,
+}: {
+  day: Date;
+  entries: CalendarEntry[];
+  accounts: Account[];
+  onSelect: SelectEntry;
+}) {
+  const overflow = entries.length > STACK_MAX;
+  const shown = overflow ? entries.slice(0, STACK_MAX - 1) : entries;
+  return (
+    <div className="flex h-full flex-col gap-1">
+      {shown.map((entry) => (
+        <div key={entry.variant.id} className="min-h-0 flex-1">
+          <CalendarRow
+            entry={entry}
+            roomy={shown.length < 3}
+            account={accounts.find(
+              (account) => account.id === entry.variant.connected_account_id,
+            )}
+            onSelect={onSelect}
+          />
+        </div>
+      ))}
+      {overflow && (
+        <div className="shrink-0 rounded-lg border border-dashed border-border/60 bg-background/70">
+          <DayOverflow
+            day={day}
+            entries={entries}
+            extra={entries.length - shown.length}
+            accounts={accounts}
+            onSelect={onSelect}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Month grid                                                                */
 /* -------------------------------------------------------------------------- */
@@ -1446,32 +1605,61 @@ export function TimeCalendar({
                       </Link>
                     );
                   })()}
-                {layoutDay(
-                  entries.filter(
-                    (entry) => dateKey(utcDate(entry.time)) === key,
-                  ),
-                ).map(({ entry, minute, lane, lanes }) => (
-                  <div
-                    key={entry.variant.id}
-                    className="absolute z-10 px-1"
-                    style={{
-                      top: (minute / 60) * HOUR_HEIGHT + 3,
-                      left: `${(lane / lanes) * 100}%`,
-                      width: `${100 / lanes}%`,
-                      height: (HOUR_HEIGHT * 100) / 60 - 6,
-                    }}
-                  >
-                    <CalendarCard
-                      entry={entry}
-                      dense={days.length > 1 && lanes > 1}
-                      account={accounts.find(
-                        (account) =>
-                          account.id === entry.variant.connected_account_id,
-                      )}
-                      onSelect={onSelect}
-                    />
-                  </div>
-                ))}
+               {(() => {
+  const dayEntries = entries.filter(
+    (entry) => dateKey(utcDate(entry.time)) === key,
+  );
+  const accountOf = (entry: CalendarEntry) =>
+    accounts.find((a) => a.id === entry.variant.connected_account_id);
+
+  // Day view is wide, so side-by-side lanes still look good there.
+  if (days.length === 1)
+    return layoutDay(dayEntries).map(({ entry, minute, lane, lanes }) => (
+      <div
+        key={entry.variant.id}
+        className="absolute z-10 px-1"
+        style={{
+          top: (minute / 60) * HOUR_HEIGHT + 3,
+          left: `${(lane / lanes) * 100}%`,
+          width: `${100 / lanes}%`,
+          height: CARD_HEIGHT,
+        }}
+      >
+        <CalendarCard
+          entry={entry}
+          account={accountOf(entry)}
+          onSelect={onSelect}
+        />
+      </div>
+    ));
+
+  // Week view: one full card, or a tidy vertical stack when posts overlap.
+  return clusterDay(dayEntries).map((cluster) => (
+    <div
+      key={cluster.entries[0].variant.id}
+      className="absolute inset-x-0 z-10 px-1"
+      style={{
+        top: (cluster.minute / 60) * HOUR_HEIGHT + 3,
+        height: CARD_HEIGHT,
+      }}
+    >
+      {cluster.entries.length === 1 ? (
+        <CalendarCard
+          entry={cluster.entries[0]}
+          account={accountOf(cluster.entries[0])}
+          onSelect={onSelect}
+        />
+      ) : (
+        <CalendarStack
+          day={day}
+          entries={cluster.entries}
+          accounts={accounts}
+          onSelect={onSelect}
+        />
+      )}
+    </div>
+  ));
+})()}
                 {today && (
                   <div
                     className="pointer-events-none absolute inset-x-0 z-20"

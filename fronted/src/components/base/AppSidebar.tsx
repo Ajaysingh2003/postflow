@@ -97,11 +97,11 @@ const createNavigation: NavItem[] = [
     href: ROUTES.schedule,
     icon: Calendar,
   },
-  {
-    label: "AI Assistant",
-    href: ROUTES.assistant,
-    icon: Sparkles,
-  },
+  // {
+  //   label: "AI Assistant",
+  //   href: ROUTES.assistant,
+  //   icon: Sparkles,
+  // },
 ];
 
 const manageNavigation: NavItem[] = [

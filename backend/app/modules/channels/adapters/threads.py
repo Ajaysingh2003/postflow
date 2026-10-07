@@ -1,6 +1,7 @@
 """Threads official OAuth and container publishing API."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -305,7 +306,7 @@ class ThreadsAdapter(ThreadsManagement):
             if self._http_client is None:
                 await client.aclose()
 
-    async def fetch_metrics(self, account, external_post_id):
+    async def fetch_metrics(self, account, external_post_id, context: dict[str, Any] | None = None):
         client = await self._get_client()
         try:
             response = await client.get(

@@ -298,6 +298,7 @@ async def test_fetch_metrics(mock_account):
                         "retweet_count": 14,
                         "url_link_clicks": 38,
                     },
+                    "non_public_metrics": {"engagements": 156, "url_link_clicks": 38},
                 }
             },
         )
@@ -311,7 +312,9 @@ async def test_fetch_metrics(mock_account):
     assert metrics.comments == 6
     assert metrics.shares_reposts == 17  # 14 retweets + 3 quotes
     assert metrics.clicks == 38
+    assert metrics.engagements == 156
     assert metrics.extras["bookmark_count"] == 12
+    assert metrics.extras["metrics_status"] == "available"
 
 
 @pytest.mark.anyio

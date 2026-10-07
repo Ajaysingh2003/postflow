@@ -918,7 +918,7 @@ async def test_metrics_fetch_has_no_100_variant_or_50_account_cap(owners, monkey
     from app.modules.content.models import Post, PostVariant
 
     class Adapter:
-        async def fetch_metrics(self, account, identifier):
+        async def fetch_metrics(self, account, identifier, context=None):
             return Metrics(likes=1)
 
         async def fetch_account_metrics(self, account):
@@ -1240,7 +1240,7 @@ def test_reconciliation_is_workspace_scoped_and_audited(client, owners, monkeypa
 
     adapter = XAdapter()
 
-    async def metrics(account, identifier):
+    async def metrics(account, identifier, context=None):
         assert identifier == "verified-remote-post"
         return Metrics(likes=1)
 

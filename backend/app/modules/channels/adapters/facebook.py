@@ -549,7 +549,9 @@ class FacebookAdapter(FacebookManagement):
                 f"Failed to delete Facebook post (HTTP {resp.status_code}): {resp.text}"
             )
 
-    async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
+    async def fetch_metrics(
+        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+    ) -> Metrics:
         """
         Fetch post reactions, comments, shares, and post insights.
         """

@@ -17,6 +17,9 @@ import type {
   SubredditProfile,
   VariantMetrics,
   ValidationResult,
+  AccountAnalytics,
+  WorkspaceOverview,
+  PostFeedItemAnalytics,
 } from "./types";
 import type { CalendarPage } from "@/modules/schedule/calendarModel";
 
@@ -110,6 +113,68 @@ export const studioRouter = createTRPCRouter({
     .input(z.object({ id }))
     .query(({ input }) =>
       backend<VariantMetrics>("GET", `/analytics/variants/${input.id}`),
+    ),
+  analyticsOverview: authedProcedure
+    .input(
+      z
+        .object({
+          days: z.number().int().min(1).max(365).optional(),
+          account_id: id.optional(),
+          start_date: z.string().optional(),
+          end_date: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(({ input }) =>
+      backend<WorkspaceOverview>(
+        "GET",
+        "/analytics/overview",
+        undefined,
+        {
+          days: input?.days ?? 30,
+          account_id: input?.account_id,
+          start_date: input?.start_date,
+          end_date: input?.end_date,
+        },
+      ),
+    ),
+  accountAnalytics: authedProcedure
+    .input(
+      z.object({
+        id,
+      }),
+    )
+    .query(({ input }) =>
+      backend<AccountAnalytics>("GET", `/analytics/accounts/${input.id}`),
+    ),
+  allAccountsAnalytics: authedProcedure.query(() =>
+    backend<AccountAnalytics[]>("GET", "/analytics/accounts"),
+  ),
+  analyticsFeed: authedProcedure
+    .input(
+      z
+        .object({
+          account_id: id.optional(),
+          start_date: z.string().optional(),
+          end_date: z.string().optional(),
+          limit: z.number().int().min(1).max(100).default(50),
+          offset: z.number().int().min(0).default(0),
+        })
+        .optional(),
+    )
+    .query(({ input }) =>
+      backend<PostFeedItemAnalytics[]>(
+        "GET",
+        "/analytics/feed",
+        undefined,
+        {
+          account_id: input?.account_id,
+          start_date: input?.start_date,
+          end_date: input?.end_date,
+          limit: input?.limit ?? 50,
+          offset: input?.offset ?? 0,
+        },
+      ),
     ),
   syncMetrics: authedProcedure.mutation(() =>
     backend<Payload>("POST", "/analytics/sync-now", {}),

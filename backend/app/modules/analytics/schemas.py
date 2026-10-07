@@ -29,6 +29,11 @@ class WorkspaceOverviewResponse(BaseModel):
     total_posts_published: int = 0
     by_platform: dict[str, PlatformMetricsSummary] = Field(default_factory=dict)
     timeframe_days: int = 30
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    metrics_status: str = "unavailable"
+    metrics_notice: str | None = None
+    available_metrics: list[str] = Field(default_factory=list)
 
 
 class MetricSnapshotSummary(BaseModel):
@@ -58,6 +63,9 @@ class AccountAnalyticsResponse(BaseModel):
     reach: int = 0
     last_synced_at: datetime | None = None
     historical_snapshots: list[MetricSnapshotSummary] = Field(default_factory=list)
+    metrics_status: str = "unavailable"
+    metrics_notice: str | None = None
+    extras: dict[str, Any] = Field(default_factory=dict)
 
 
 class VariantAnalyticsResponse(BaseModel):
@@ -86,6 +94,34 @@ class PostAnalyticsResponse(BaseModel):
     total_likes: int = 0
     total_comments: int = 0
     variants: list[VariantAnalyticsResponse] = Field(default_factory=list)
+
+
+class PostFeedItemAnalytics(BaseModel):
+    variant_id: str
+    post_id: str
+    platform: str
+    connected_account_id: str | None = None
+    account_display_name: str | None = None
+    text: str
+    media_urls: list[str] = Field(default_factory=list)
+    published_at: datetime | None = None
+    created_at: datetime
+    status: str
+    external_post_id: str | None = None
+    impressions: int = 0
+    reach: int = 0
+    likes: int = 0
+    comments: int = 0
+    shares: int = 0
+    clicks: int = 0
+    bookmarks: int = 0
+    engagements: int = 0
+    engagement_rate: float = 0.0
+    extras: dict[str, Any] = Field(default_factory=dict)
+    metrics_status: str = "unavailable"
+    metrics_notice: str | None = None
+    available_metrics: list[str] = Field(default_factory=list)
+    metrics_fetched_at: datetime | None = None
 
 
 class LimitUsageDetail(BaseModel):

@@ -160,7 +160,12 @@ class ControllableMockAdapter:
     async def delete_post(self, account: ConnectedAccount, external_post_id: str) -> None:
         pass
 
-    async def fetch_metrics(self, account: ConnectedAccount, external_post_id: str) -> Metrics:
+    async def fetch_metrics(
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> Metrics:
         return Metrics(impressions=250, reach=200, likes=15, comments=3)
 
     async def fetch_account_metrics(self, account: ConnectedAccount) -> AccountMetrics:

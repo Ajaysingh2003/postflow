@@ -496,7 +496,13 @@ async def reconcile_publication(
     from app.modules.channels.registry import channel_registry
 
     await channel_registry.require(variant.platform).fetch_metrics(
-        account, payload.external_post_id
+        account,
+        payload.external_post_id,
+        context={
+            "payload": variant.payload or {},
+            "published_at": variant.published_at,
+            "variant_id": variant.id,
+        },
     )
     from app.core.security import utcnow
 

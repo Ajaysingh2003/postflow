@@ -151,7 +151,15 @@ async def fetch_metrics_job_async(db: Session) -> int:
             continue
 
         try:
-            metrics = await adapter.fetch_metrics(account, variant.external_post_id)
+            metrics = await adapter.fetch_metrics(
+                account,
+                variant.external_post_id,
+                context={
+                    "payload": variant.payload or {},
+                    "published_at": variant.published_at,
+                    "variant_id": variant.id,
+                },
+            )
             snapshot = MetricSnapshot(
                 workspace_id=variant.post.workspace_id,
                 connected_account_id=account.id,

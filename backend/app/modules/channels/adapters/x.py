@@ -10,7 +10,7 @@ from fastapi import HTTPException, status
 from app.core.config import get_settings
 from app.modules.channels.adapters.management import XManagement
 from app.modules.channels.adapters.media import save_state
-from app.modules.channels.adapters.text import x_length
+from app.modules.channels.adapters.text import contains_post_link, x_length
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -76,7 +76,7 @@ class XAdapter(XManagement):
             supports_polls=True,
             supports_alt_text=False,
             max_alt_text_length=1000,
-            supports_links=True,
+            supports_links=False,  # Postflow publishing policy; X itself supports links.
             supports_tags=True,
             visibility_options=["public"],
             requires_target=False,
@@ -218,9 +218,7 @@ class XAdapter(XManagement):
             resp = await client.get(
                 f"{X_API_BASE}/users/me",
                 headers={"Authorization": f"Bearer {access_token}"},
-                params={
-                    "user.fields": "id,name,username,profile_image_url,description"
-                },
+                params={"user.fields": "id,name,username,profile_image_url,description"},
             )
         finally:
             if self._http_client is None:
@@ -318,6 +316,23 @@ class XAdapter(XManagement):
         """X does not use sub-targets (posts go directly to the authenticated handle)."""
         return []
 
+    def link_issues(self, payload: dict[str, Any]) -> list[Issue]:
+        items = payload.get("thread")
+        if not isinstance(items, list):
+            items = [payload]
+        issues = []
+        for index, item in enumerate(items):
+            text = item.get("text", "") if isinstance(item, dict) else item
+            if isinstance(text, str) and contains_post_link(text):
+                issues.append(
+                    Issue(
+                        field=f"thread.{index}.text" if "thread" in payload else "text",
+                        message="Postflow doesn't publish links to X. Remove links from this version before publishing or scheduling.",
+                        code="links_disabled",
+                    )
+                )
+        return issues
+
     async def validate(self, variant: Any) -> list[Issue]:
         """
         Validate post text and media constraints against X limits.
@@ -332,7 +347,12 @@ class XAdapter(XManagement):
         if "thread" in payload:
             from app.modules.channels.adapters.threading import validate_thread
 
-            return await validate_thread(self, variant)
+            thread_issues = await validate_thread(self, variant)
+            # Keep the post index in link errors so a thread can be corrected precisely.
+            return [i for i in thread_issues if i.code != "links_disabled"] + self.link_issues(
+                payload
+            )
+        issues.extend(self.link_issues(payload))
         text = payload.get("text", "")
         if not text and not payload.get("media_ids"):
             issues.append(
@@ -406,19 +426,24 @@ class XAdapter(XManagement):
         return get_settings().x_monthly_spend_limit_micros
 
     def publishing_cost(self, variant):
+        # Link-containing versions are rejected before any provider request.
+        if self.link_issues(variant.payload):
+            return 0
         items = variant.payload.get("thread") or [variant.payload]
-        return sum(
-            200000
-            if "http://" in (i if isinstance(i, str) else i.get("text", ""))
-            or "https://" in (i if isinstance(i, str) else i.get("text", ""))
-            else 15000
-            for i in items
-        )
+        return 15000 * len(items)
 
     async def publish(self, account: ConnectedAccount, variant: Any) -> PublishResult:
         """
         Publish a post or thread item to X using POST /2/tweets.
         """
+        payload = getattr(variant, "payload", {})
+        link_issues = self.link_issues(payload)
+        if link_issues:
+            return PublishResult(
+                success=False,
+                error_message=link_issues[0].message,
+                is_retryable=False,
+            )
         raw_access = decrypt_token(account.encrypted_access_token)
         if not raw_access:
             return PublishResult(
@@ -427,7 +452,6 @@ class XAdapter(XManagement):
                 is_retryable=False,
             )
 
-        payload = getattr(variant, "payload", {})
         if payload.get("thread"):
             ids = list((getattr(variant, "publish_state", None) or {}).get("thread_ids", []))
             for item in payload["thread"][len(ids) :]:

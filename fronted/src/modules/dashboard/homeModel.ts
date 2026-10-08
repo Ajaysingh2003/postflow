@@ -1,3 +1,5 @@
+import type { PlanUsage } from "@/modules/billing/usageModel";
+
 export interface HomeAccount {
   id: string;
   platform: string;
@@ -25,6 +27,7 @@ export interface HomeSummary {
   fetched_at: string;
   can_edit: boolean;
   can_manage_channels: boolean;
+  usage: PlanUsage;
   counts: Record<string, number>;
   accounts: HomeAccount[];
   drafts: HomePost[];
@@ -35,6 +38,7 @@ export interface HomeSummary {
 
 export const HOME_QUERY_OPTIONS = {
   staleTime: 30_000,
+  refetchInterval: 60_000,
   refetchOnWindowFocus: true,
   refetchOnMount: true,
   retry: false,

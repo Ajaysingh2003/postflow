@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, case, func, or_, select
 
+from app.modules.billing.entitlements import get_plan_limits_summary
 from app.modules.channels.models import ConnectedAccount
 from app.modules.content.models import Post, PostVariant
 from app.modules.content.schemas import HomeAccount, HomePost, HomeSummary
@@ -105,6 +106,7 @@ def home_summary(db, workspace, can_edit, now=None, can_manage_channels=False):
         fetched_at=now,
         can_edit=can_edit,
         can_manage_channels=can_manage_channels,
+        usage=get_plan_limits_summary(db, workspace.id, now),
         counts=dict(
             zip(
                 ("drafts", "scheduled", "published_week", "published", "failed"),

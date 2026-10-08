@@ -32,8 +32,8 @@ function PricingSection() {
           </h2>
 
           <p className="mt-4 font-subheading text-sm sm:text-base text-neutral-600 max-w-xl leading-relaxed tracking-normal">
-            Start with a 3-day free trial on any plan, stream instantly, and scale up as your audience expands.
-            All tiers include global edge CDN distribution and automated HLS packaging.
+            Plan your content, publish across channels, and shape your voice with AI.
+            Paid plans include a 3-day trial and monthly usage allowances.
           </p>
         </div>
 

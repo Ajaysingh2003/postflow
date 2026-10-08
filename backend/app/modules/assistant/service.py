@@ -1,5 +1,6 @@
 """Structured generation, profile-owned validation and persistent usage reservations."""
 
+import asyncio
 import html
 import json
 import logging
@@ -150,8 +151,9 @@ async def execute_feature(
         }
         prompt = feature.prompt_template.format(**kwargs)
         if writing_instructions or output_language:
-            prompt += "\nCreator writing preferences (preserve platform rules and output schema): " + json.dumps(
-                {"instructions": writing_instructions, "language": output_language}
+            prompt += (
+                "\nCreator writing preferences (preserve platform rules and output schema): "
+                + json.dumps({"instructions": writing_instructions, "language": output_language})
             )
         selected = inputs.get("target_platforms", [])
         if selected:
@@ -221,7 +223,7 @@ async def execute_feature(
             db.commit()
             db.refresh(record)
         return output, issues, record
-    except Exception as exc:
+    except (Exception, asyncio.CancelledError) as exc:
         if getattr(exc, "tokens_used", 0):
             record.tokens_used = exc.tokens_used
             record.cost_micros = calculate_cost_micros(record.tokens_used)

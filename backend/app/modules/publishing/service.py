@@ -217,8 +217,8 @@ async def schedule_variant(
     if target_time.tzinfo is None:
         target_time = target_time.replace(tzinfo=UTC)
 
-    if post and variant.status != "scheduled":
-        check_scheduled_posts_limit(db, post.workspace_id)
+    if post:
+        check_scheduled_posts_limit(db, post.workspace_id, post.id, target_time)
     changed = db.execute(
         update(PostVariant)
         .where(
@@ -430,7 +430,7 @@ async def publish_variant_job(
     from app.modules.billing.entitlements import check_scheduled_posts_limit
 
     if variant.status != "scheduled":
-        check_scheduled_posts_limit(db, post.workspace_id)
+        check_scheduled_posts_limit(db, post.workspace_id, post.id)
     cost = getattr(adapter, "publishing_cost", None)
     if cost:
         from app.modules.billing.usage import reserve_provider_cost

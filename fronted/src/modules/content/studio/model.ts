@@ -20,7 +20,7 @@ export const EDITOR_PROFILES: Record<
   x: {
     name: "X",
     placeholder: "What’s happening?",
-    help: "A sharp opening. One idea per post. Room for a conversation.",
+    help: "One idea per post. Share it as standalone text; links are disabled for X.",
     textKey: "text",
   },
   linkedin: {

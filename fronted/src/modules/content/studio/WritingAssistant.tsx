@@ -12,6 +12,8 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useAiAllowance, useRefreshUsage } from "@/modules/billing/useAiAllowance";
+import { AiUsageNotice } from "@/modules/billing/component/AiUsageNotice";
 import { useTRPC } from "@/trpc/client";
 import type {
   Account,
@@ -140,6 +142,8 @@ export default function WritingAssistant({
   subreddit?: SubredditProfile;
 }) {
   const trpc = useTRPC();
+  const allowance = useAiAllowance(workspaceId);
+  const refreshUsage = useRefreshUsage();
   const features = useQuery(trpc.studio.features.queryOptions());
   const voices = useQuery(
     trpc.studio.resource.queryOptions({ kind: "voices" }),
@@ -160,7 +164,7 @@ export default function WritingAssistant({
     context: RefineContext;
     issues: { message: string; severity: string }[];
   } | null>(null);
-  const run = useMutation(trpc.studio.runFeature.mutationOptions());
+  const run = useMutation(trpc.studio.runFeature.mutationOptions({onSettled: () => {void refreshUsage();}}));
   const platformFeatures = (features.data ?? []).filter(
     (feature) =>
       feature.platforms.includes(account.platform) ||
@@ -199,7 +203,7 @@ export default function WritingAssistant({
     setValues(defaults);
   }
   async function submit() {
-    if (!selected) return;
+    if (!selected || allowance.blocked || run.isPending) return;
     const input: Payload = {};
     for (const [name, property] of Object.entries(
       selected.input_schema.properties ?? {},
@@ -298,6 +302,7 @@ export default function WritingAssistant({
           <span className="size-[5px] rounded-full bg-foreground shrink-0" />
           {account.display_name}
         </div>
+        <AiUsageNotice usage={allowance.data} loading={allowance.isPending} error={!!allowance.error} onRetry={() => void allowance.refetch()} />
         {settings ? (
           <section className="flex flex-col gap-4 [&_label]:flex [&_label]:flex-col [&_label]:gap-1.75 [&_label]:text-[10px] [&_label]:text-muted-foreground [&_input]:w-full [&_input]:border [&_input]:border-border [&_input]:rounded-[7px] [&_input]:p-2.5 [&_input]:text-[11px] [&_input]:bg-background [&_input]:text-foreground [&_input]:leading-relaxed [&_input]:outline-none focus-within:[&_input]:ring-1 focus-within:[&_input]:ring-ring [&_textarea]:w-full [&_textarea]:border [&_textarea]:border-border [&_textarea]:rounded-[7px] [&_textarea]:p-2.5 [&_textarea]:text-[11px] [&_textarea]:bg-background [&_textarea]:text-foreground [&_textarea]:leading-relaxed [&_textarea]:outline-none [&_textarea]:resize-y focus-within:[&_textarea]:ring-1 focus-within:[&_textarea]:ring-ring [&_select]:w-full [&_select]:border [&_select]:border-border [&_select]:rounded-[7px] [&_select]:p-2.5 [&_select]:text-[11px] [&_select]:bg-background [&_select]:text-foreground [&_select]:leading-relaxed [&_select]:outline-none focus-within:[&_select]:ring-1 focus-within:[&_select]:ring-ring">
             <button className="inline-flex items-center gap-1.5 text-muted-foreground text-[10px] mb-6 hover:text-foreground cursor-pointer transition-colors" onClick={() => setSettings(false)}>
@@ -474,8 +479,8 @@ export default function WritingAssistant({
                 },
               )}
               <button
-                className="inline-flex items-center justify-center gap-1.5 text-xs font-medium rounded-[7px] px-3.5 py-2.25 bg-[#239a7d] hover:bg-[#198268] text-white cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-                disabled={run.isPending || account.status === "disabled"}
+                className="primary-btn mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={run.isPending || allowance.blocked || account.status === "disabled"}
               >
                 {run.isPending ? (
                   <>
@@ -537,7 +542,7 @@ export default function WritingAssistant({
                   ) &&
                   !result.issues.some((issue) => issue.severity === "error") ? (
                   <button
-                    className="inline-flex items-center justify-center gap-1.5 text-xs font-medium rounded-[7px] px-3.5 py-2.25 bg-[#239a7d] hover:bg-[#198268] text-white cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed mt-5"
+                    className="primary-btn mt-5 disabled:opacity-40 disabled:cursor-not-allowed"
                     onClick={() => apply(result.output)}
                   >
                     Use in editor

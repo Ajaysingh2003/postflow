@@ -7,7 +7,8 @@ Tracks and limits:
 - Workspace seats
 """
 
-from datetime import UTC, datetime
+from calendar import monthrange
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -110,7 +111,10 @@ def sync_entitlements(
     db: Session, workspace_id: str, plan_code: str, quantity: int | None = None
 ) -> None:
     plan = db.scalar(select(Plan).where(Plan.code == plan_code, Plan.active.is_(True)))
-    values = plan.limits if plan else PLAN_DEFAULTS.get(plan_code, PLAN_DEFAULTS["free"])
+    values = {
+        **PLAN_DEFAULTS.get(plan_code, PLAN_DEFAULTS["free"]),
+        **(plan.limits if plan else {}),
+    }
     db.execute(
         delete(EntitlementGrant).where(
             EntitlementGrant.workspace_id == workspace_id, EntitlementGrant.source == "plan"
@@ -139,19 +143,88 @@ def entitlement_limit(db: Session, workspace_id: str, capability: str) -> int | 
         )
         .order_by((EntitlementGrant.source != "plan").desc(), EntitlementGrant.created_at.desc())
     )
-    if grant:
+    if grant and (
+        grant.source != "plan" or has_paid_access(current_subscription(db, workspace_id))
+    ):
         return grant.limit_value
     code = effective_plan(db, workspace_id)
     plan = db.scalar(select(Plan).where(Plan.code == code, Plan.active.is_(True)))
-    return (plan.limits if plan else PLAN_DEFAULTS[code]).get(capability)
+    return {**PLAN_DEFAULTS.get(code, PLAN_DEFAULTS["free"]), **(plan.limits if plan else {})}.get(
+        capability
+    )
+
+
+def usage_window(subscription, now=None):
+    """Monthly windows anchored to the original billing day, including yearly plans."""
+    now = as_utc(now or datetime.now(UTC))
+    anchor = (
+        as_utc(subscription.current_period_start)
+        if has_paid_access(subscription, now) and subscription.current_period_start
+        else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    )
+    if anchor > now:
+        anchor = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    def anniversary(offset):
+        absolute = anchor.year * 12 + anchor.month - 1 + offset
+        year, month = divmod(absolute, 12)
+        month += 1
+        return anchor.replace(
+            year=year, month=month, day=min(anchor.day, monthrange(year, month)[1])
+        )
+
+    offset = (now.year - anchor.year) * 12 + now.month - anchor.month
+    if anniversary(offset) > now:
+        offset -= 1
+    return anniversary(offset), anniversary(offset + 1)
 
 
 def usage_cycle_start(db: Session, workspace_id: str, now: datetime | None = None) -> datetime:
-    subscription = current_subscription(db, workspace_id)
-    if subscription and subscription.current_period_start:
-        return subscription.current_period_start
-    now = now or datetime.now(UTC)
-    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return usage_window(current_subscription(db, workspace_id), now)[0]
+
+
+def _post_usage_query(workspace_id, start, end):
+    from app.modules.content.models import Post, PostVariant
+
+    # Each parent post consumes one slot across all its destinations.
+    return (
+        select(Post.id)
+        .join(PostVariant, PostVariant.post_id == Post.id)
+        .where(
+            Post.workspace_id == workspace_id,
+            PostVariant.status.in_(["scheduled", "publishing", "published"]),
+            func.coalesce(
+                PostVariant.scheduled_time, PostVariant.published_at, PostVariant.created_at
+            )
+            >= start,
+            func.coalesce(
+                PostVariant.scheduled_time, PostVariant.published_at, PostVariant.created_at
+            )
+            < end,
+        )
+        .distinct()
+    )
+
+
+def _ai_usage_query(workspace_id, start, end, now):
+    from app.modules.assistant.models import AssistantRun
+
+    # Failed/cancelled attempts remain auditable without consuming credits. In-flight
+    # reservations block concurrent overspend; crashed requests expire after 30 minutes.
+    return (
+        select(func.count())
+        .select_from(AssistantRun)
+        .where(
+            AssistantRun.workspace_id == workspace_id,
+            AssistantRun.created_at >= start,
+            AssistantRun.created_at < end,
+            (AssistantRun.status == "succeeded")
+            | (
+                (AssistantRun.status == "running")
+                & (AssistantRun.created_at >= now - timedelta(minutes=30))
+            ),
+        )
+    )
 
 
 def check_connected_accounts_limit(db: Session, workspace_id: str) -> None:
@@ -169,7 +242,7 @@ def check_connected_accounts_limit(db: Session, workspace_id: str) -> None:
             .select_from(ConnectedAccount)
             .where(
                 ConnectedAccount.workspace_id == workspace_id,
-                ConnectedAccount.status == "active",
+                ConnectedAccount.status.in_(["active", "needs_reauth"]),
             )
         )
         or 0
@@ -183,63 +256,37 @@ def check_connected_accounts_limit(db: Session, workspace_id: str) -> None:
         )
 
 
-def check_scheduled_posts_limit(db: Session, workspace_id: str) -> None:
-    """Enforce workspace monthly scheduled posts quota."""
+def check_scheduled_posts_limit(
+    db: Session, workspace_id: str, post_id=None, scheduled_time=None
+) -> None:
+    """One slot per post, per monthly publication window."""
     lock_workspace(db, workspace_id)
-    from app.modules.content.models import Post, PostVariant
-
     limit = entitlement_limit(db, workspace_id, "scheduled_posts")
     if limit is None:
         return
-
-    cycle_start = usage_cycle_start(db, workspace_id)
-    count = (
-        db.scalar(
-            select(func.count())
-            .select_from(PostVariant)
-            .join(Post, PostVariant.post_id == Post.id)
-            .where(
-                Post.workspace_id == workspace_id,
-                PostVariant.status.in_(["scheduled", "publishing", "published"]),
-                (PostVariant.scheduled_time >= cycle_start)
-                | (PostVariant.published_at >= cycle_start)
-                | (
-                    (PostVariant.scheduled_time.is_(None)) & (PostVariant.created_at >= cycle_start)
-                ),
-            )
-        )
-        or 0
-    )
-
+    start, end = usage_window(current_subscription(db, workspace_id), scheduled_time)
+    query = _post_usage_query(workspace_id, start, end)
+    ids = query.subquery()
+    if post_id and db.scalar(select(ids.c.id).where(ids.c.id == post_id)):
+        return
+    count = db.scalar(select(func.count()).select_from(ids)) or 0
     if count >= limit:
         plan = effective_plan(db, workspace_id)
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Workspace has reached the monthly limit of {limit} scheduled posts for the '{plan}' plan. Please upgrade to schedule more posts.",
+            403,
+            f"Workspace has reached the monthly limit of {limit} scheduled posts for the '{plan}' plan. Please upgrade to schedule more posts.",
         )
 
 
 def check_assistant_usage_limit(db: Session, workspace_id: str) -> None:
     """Enforce workspace monthly AI assistant runs quota."""
     lock_workspace(db, workspace_id)
-    from app.modules.assistant.models import AssistantRun
-
     limit = entitlement_limit(db, workspace_id, "ai_credits")
     if limit is None:
         return
-
-    cycle_start = usage_cycle_start(db, workspace_id)
-    count = (
-        db.scalar(
-            select(func.count())
-            .select_from(AssistantRun)
-            .where(
-                AssistantRun.workspace_id == workspace_id,
-                AssistantRun.created_at >= cycle_start,
-            )
-        )
-        or 0
-    )
+    now = datetime.now(UTC)
+    start, end = usage_window(current_subscription(db, workspace_id), now)
+    count = db.scalar(_ai_usage_query(workspace_id, start, end, now)) or 0
 
     if count >= limit:
         plan = effective_plan(db, workspace_id)
@@ -249,76 +296,60 @@ def check_assistant_usage_limit(db: Session, workspace_id: str) -> None:
         )
 
 
-def get_plan_limits_summary(db: Session, workspace_id: str) -> dict[str, Any]:
-    """Retrieve current usage vs plan quota summary for a workspace."""
-    from app.modules.assistant.models import AssistantRun
+def get_plan_limits_summary(db: Session, workspace_id: str, now=None) -> dict[str, Any]:
+    """Bounded queries shared by Home, Billing and composer usage displays."""
     from app.modules.channels.models import ConnectedAccount
-    from app.modules.content.models import Post, PostVariant
 
-    plan = effective_plan(db, workspace_id)
-    cycle_start = usage_cycle_start(db, workspace_id)
-
-    conn_limit = entitlement_limit(db, workspace_id, "connected_accounts")
-    conn_used = (
+    now = as_utc(now or datetime.now(UTC))
+    subscription = current_subscription(db, workspace_id)
+    paid = has_paid_access(subscription, now)
+    code = subscription.plan_code if paid else "free"
+    plan = db.scalar(select(Plan).where(Plan.code == code, Plan.active.is_(True)))
+    if not plan and code not in PLAN_DEFAULTS:
+        code = "free"
+    limits = {**PLAN_DEFAULTS.get(code, PLAN_DEFAULTS["free"]), **(plan.limits if plan else {})}
+    grants = db.scalars(
+        select(EntitlementGrant).where(
+            EntitlementGrant.workspace_id == workspace_id,
+            (EntitlementGrant.expires_at.is_(None)) | (EntitlementGrant.expires_at > now),
+        )
+    )
+    for grant in grants:
+        if grant.source != "plan" or paid:
+            limits[grant.capability] = grant.limit_value
+    start, end = usage_window(subscription, now)
+    accounts = (
         db.scalar(
             select(func.count())
             .select_from(ConnectedAccount)
             .where(
                 ConnectedAccount.workspace_id == workspace_id,
-                ConnectedAccount.status == "active",
+                ConnectedAccount.status.in_(["active", "needs_reauth"]),
             )
         )
         or 0
     )
-
-    posts_limit = entitlement_limit(db, workspace_id, "scheduled_posts")
-    posts_used = (
+    posts = (
         db.scalar(
-            select(func.count())
-            .select_from(PostVariant)
-            .join(Post, PostVariant.post_id == Post.id)
-            .where(
-                Post.workspace_id == workspace_id,
-                PostVariant.status.in_(["scheduled", "publishing", "published"]),
-                (PostVariant.scheduled_time >= cycle_start)
-                | (PostVariant.published_at >= cycle_start)
-                | (
-                    (PostVariant.scheduled_time.is_(None)) & (PostVariant.created_at >= cycle_start)
-                ),
-            )
+            select(func.count()).select_from(_post_usage_query(workspace_id, start, end).subquery())
         )
         or 0
     )
+    ai = db.scalar(_ai_usage_query(workspace_id, start, end, now)) or 0
 
-    ai_limit = entitlement_limit(db, workspace_id, "ai_credits")
-    ai_used = (
-        db.scalar(
-            select(func.count())
-            .select_from(AssistantRun)
-            .where(
-                AssistantRun.workspace_id == workspace_id,
-                AssistantRun.created_at >= cycle_start,
-            )
-        )
-        or 0
-    )
+    def detail(capability, used):
+        limit = limits.get(capability)
+        return {
+            "used": used,
+            "limit": limit,
+            "remaining": None if limit is None else max(0, limit - used),
+        }
 
     return {
-        "plan_code": plan,
-        "cycle_start": cycle_start,
-        "connected_accounts": {
-            "used": conn_used,
-            "limit": conn_limit,
-            "remaining": None if conn_limit is None else max(0, conn_limit - conn_used),
-        },
-        "scheduled_posts": {
-            "used": posts_used,
-            "limit": posts_limit,
-            "remaining": None if posts_limit is None else max(0, posts_limit - posts_used),
-        },
-        "ai_credits": {
-            "used": ai_used,
-            "limit": ai_limit,
-            "remaining": None if ai_limit is None else max(0, ai_limit - ai_used),
-        },
+        "plan_code": code,
+        "cycle_start": start,
+        "cycle_end": end,
+        "connected_accounts": detail("connected_accounts", accounts),
+        "scheduled_posts": detail("scheduled_posts", posts),
+        "ai_credits": detail("ai_credits", ai),
     }

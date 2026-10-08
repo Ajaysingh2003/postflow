@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.modules.analytics.schemas import PlanLimitsResponse
+
 
 class CheckoutRequest(BaseModel):
     plan_code: str
@@ -27,3 +29,9 @@ class SubscriptionResponse(BaseModel):
     grace_until: datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class BillingUsageResponse(BaseModel):
+    usage: PlanLimitsResponse
+    subscription: SubscriptionResponse | None
+    can_manage_billing: bool

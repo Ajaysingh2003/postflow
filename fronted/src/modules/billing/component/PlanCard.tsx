@@ -3,7 +3,8 @@ import { cn } from "@/lib/utils";
 import { FeatureItem, PlanConfig } from "@/modules/types";
 import React, { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight, CircleChevronRightIcon } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { useTRPC } from "@/trpc/client";
 import { useMutation } from "@tanstack/react-query";
@@ -104,17 +105,18 @@ function PlanCardHeader({
   popular: boolean;
 }) {
   const trpc = useTRPC();
+  const router = useRouter();
   const mutate = useMutation(
     trpc.billing.Createcheckout.mutationOptions({
       onSuccess(data) {
         if (data?.url) {
-          window.location.href = data.url;
+          window.location.assign(data.url);
         }
       },
       onError(error) {
         if (error.data?.code === "UNAUTHORIZED" || error.message?.includes("Authentication required")) {
           toast.error("Please sign in to start your 3-day free trial.");
-          window.location.href = "/login?redirect=" + encodeURIComponent(window.location.pathname);
+          router.push("/login?redirect=" + encodeURIComponent(window.location.pathname));
           return;
         }
         toast.error(

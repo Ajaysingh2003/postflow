@@ -1,19 +1,29 @@
 import json
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.dependencies import get_current_user, get_current_workspace, require_billing_access
+from app.core.dependencies import (
+    get_current_user,
+    get_current_workspace,
+    membership_for,
+    require_billing_access,
+)
 from app.core.security import utcnow
 from app.db.session import get_db
 from app.modules.billing import service
-from app.modules.billing.entitlements import PLAN_DEFAULTS, sync_entitlements
-from app.modules.billing.models import BillingCustomer, BillingWebhookEvent, Subscription
+from app.modules.billing.entitlements import (
+    PLAN_DEFAULTS,
+    get_plan_limits_summary,
+    sync_entitlements,
+)
+from app.modules.billing.models import BillingCustomer, BillingWebhookEvent, Plan, Subscription
 from app.modules.billing.schemas import (
+    BillingUsageResponse,
     CheckoutRequest,
     CheckoutResponse,
     PortalResponse,
@@ -34,8 +44,8 @@ def parse_datetime(value: object) -> datetime | None:
 
 
 @router.get("/billing/plans")
-def get_plans() -> dict:
-    return {
+def get_plans(db: Session = Depends(get_db)) -> dict:
+    plans = {
         "starter": {
             "id": "starter",
             "name": "Starter",
@@ -43,9 +53,24 @@ def get_plans() -> dict:
             "popular": False,
             "trial_days": 3,
             "billing_cycles": {
-                "monthly": {"amount": 29, "price_id": "starter_monthly", "currency": "USD", "interval": "month"},
-                "quarterly": {"amount": 24, "price_id": "starter_quarterly", "currency": "USD", "interval": "quarter"},
-                "annually": {"amount": 19, "price_id": "starter_annually", "currency": "USD", "interval": "year"},
+                "monthly": {
+                    "amount": 29,
+                    "price_id": "starter_monthly",
+                    "currency": "USD",
+                    "interval": "month",
+                },
+                "quarterly": {
+                    "amount": 24,
+                    "price_id": "starter_quarterly",
+                    "currency": "USD",
+                    "interval": "quarter",
+                },
+                "annually": {
+                    "amount": 19,
+                    "price_id": "starter_annually",
+                    "currency": "USD",
+                    "interval": "year",
+                },
             },
         },
         "pro": {
@@ -55,24 +80,80 @@ def get_plans() -> dict:
             "popular": True,
             "trial_days": 3,
             "billing_cycles": {
-                "monthly": {"amount": 59, "price_id": "pro_monthly", "currency": "USD", "interval": "month"},
-                "quarterly": {"amount": 49, "price_id": "pro_quarterly", "currency": "USD", "interval": "quarter"},
-                "annually": {"amount": 39, "price_id": "pro_annually", "currency": "USD", "interval": "year"},
+                "monthly": {
+                    "amount": 59,
+                    "price_id": "pro_monthly",
+                    "currency": "USD",
+                    "interval": "month",
+                },
+                "quarterly": {
+                    "amount": 49,
+                    "price_id": "pro_quarterly",
+                    "currency": "USD",
+                    "interval": "quarter",
+                },
+                "annually": {
+                    "amount": 39,
+                    "price_id": "pro_annually",
+                    "currency": "USD",
+                    "interval": "year",
+                },
             },
         },
         "business": {
             "id": "business",
             "name": "Business",
-            "description": "For agencies managing multiple clients & unlimited pipelines.",
+            "description": "For agencies managing client workspaces and larger publishing schedules.",
             "popular": False,
             "trial_days": 3,
             "billing_cycles": {
-                "monthly": {"amount": 129, "price_id": "business_monthly", "currency": "USD", "interval": "month"},
-                "quarterly": {"amount": 109, "price_id": "business_quarterly", "currency": "USD", "interval": "quarter"},
-                "annually": {"amount": 89, "price_id": "business_annually", "currency": "USD", "interval": "year"},
+                "monthly": {
+                    "amount": 129,
+                    "price_id": "business_monthly",
+                    "currency": "USD",
+                    "interval": "month",
+                },
+                "quarterly": {
+                    "amount": 109,
+                    "price_id": "business_quarterly",
+                    "currency": "USD",
+                    "interval": "quarter",
+                },
+                "annually": {
+                    "amount": 89,
+                    "price_id": "business_annually",
+                    "currency": "USD",
+                    "interval": "year",
+                },
             },
         },
     }
+
+    configured = {plan.code: plan for plan in db.scalars(select(Plan).where(Plan.active.is_(True)))}
+    for code, details in plans.items():
+        details["limits"] = {**PLAN_DEFAULTS[code], **(configured[code].limits if code in configured else {})}
+    return plans
+
+
+@router.get("/billing/usage", response_model=BillingUsageResponse)
+def billing_usage(
+    response: Response,
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> BillingUsageResponse:
+    membership = membership_for(db, workspace.id, user.id)
+    response.headers["Cache-Control"] = "private, no-store"
+    subscription = db.scalar(
+        select(Subscription)
+        .where(Subscription.workspace_id == workspace.id)
+        .order_by(Subscription.updated_at.desc())
+    )
+    return BillingUsageResponse(
+        usage=get_plan_limits_summary(db, workspace.id),
+        subscription=SubscriptionResponse.model_validate(subscription) if subscription else None,
+        can_manage_billing=membership.role in {"owner", "admin", "billing"},
+    )
 
 
 @router.post(

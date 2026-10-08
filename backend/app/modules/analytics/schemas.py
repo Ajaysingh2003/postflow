@@ -176,6 +176,7 @@ class LimitUsageDetail(BaseModel):
 class PlanLimitsResponse(BaseModel):
     plan_code: str
     cycle_start: datetime
+    cycle_end: datetime
     connected_accounts: LimitUsageDetail
     scheduled_posts: LimitUsageDetail
     ai_credits: LimitUsageDetail

@@ -1,8 +1,9 @@
 // fronted/src/modules/types.ts
+import type { IconSvgElement } from "@hugeicons/react";
 
 export interface FeatureItem {
   label: string;
-  icon: any;
+  icon: IconSvgElement;
 }
 
 export interface BillingCycleConfig {
@@ -18,6 +19,7 @@ export interface PlanConfig {
   description: string;
   popular?: boolean;
   trial_days: number;
+  limits?: Record<string, number | null>;
   billing_cycles: {
     monthly: BillingCycleConfig;
     quarterly: BillingCycleConfig;

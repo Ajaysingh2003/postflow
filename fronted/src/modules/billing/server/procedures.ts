@@ -26,6 +26,7 @@ export interface SubscriptionData {
 export const defaultPlans: BillingConfigResponse = {
   starter: {
     id: "starter",
+    limits: { ai_credits: 250, scheduled_posts: 50, connected_accounts: 5, seats: 3, workspaces: 3 },
     name: "Starter",
     description: "Ideal for founders & creators scaling their personal brand.",
     trial_days: 3,
@@ -37,6 +38,7 @@ export const defaultPlans: BillingConfigResponse = {
   },
   pro: {
     id: "pro",
+    limits: { ai_credits: 1000, scheduled_posts: 250, connected_accounts: 15, seats: 5, workspaces: 5 },
     name: "Pro",
     description: "For growth leaders & high-volume teams running campaigns.",
     popular: true,
@@ -49,8 +51,9 @@ export const defaultPlans: BillingConfigResponse = {
   },
   business: {
     id: "business",
+    limits: { ai_credits: 5000, scheduled_posts: 1000, connected_accounts: 50, seats: 15, workspaces: 10 },
     name: "Business",
-    description: "For agencies managing multiple clients & unlimited pipelines.",
+    description: "For agencies managing client workspaces and larger publishing schedules.",
     trial_days: 3,
     billing_cycles: {
       monthly: { amount: 129, price_id: "business_monthly", currency: "USD", interval: "month" },

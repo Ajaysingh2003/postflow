@@ -6,6 +6,17 @@ import regex
 
 URL = regex.compile(r"https?://[^\s<>]+", regex.IGNORECASE)
 EMOJI = regex.compile(r"\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20e3")
+POST_LINK = regex.compile(
+    r"(?<![\p{L}\p{N}_@.])(?:https?://[^\s<>]+|www\.[^\s<>]+|"
+    r"(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,61}[\p{L}\p{N}])?\.)+"
+    r"(?:[\p{L}]{2,63}|xn--[a-z0-9-]{2,59})(?![\p{L}\p{N}_@-]))",
+    regex.IGNORECASE,
+)
+
+
+def contains_post_link(text: str) -> bool:
+    """Detect URLs, www links and bare domains without treating emails as links."""
+    return bool(POST_LINK.search(unicodedata.normalize("NFC", text)))
 
 
 def graphemes(text: str) -> int:

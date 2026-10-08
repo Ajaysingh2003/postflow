@@ -159,7 +159,7 @@ def test_home_limits_previews_without_truncating_counts_and_has_fixed_query_cost
             result.counts["drafts"] == 102
         )  # The orphan now has variants, counted once per destination.
         assert all(len(p.text) <= 600 for p in result.drafts)
-        assert len(queries) == 6  # Counts, accounts, and four bounded preview lists. No lazy loads.
+        assert len(queries) == 12  # Six preview queries plus six bounded usage queries. No lazy loads.
     finally:
         event.remove(engine, "before_cursor_execute", record)
 

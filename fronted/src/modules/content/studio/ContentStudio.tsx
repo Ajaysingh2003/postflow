@@ -476,7 +476,13 @@ function AccountStudio({
   const create = useMutation(trpc.studio.create.mutationOptions());
   const edit = useMutation(trpc.studio.editDraft.mutationOptions());
   const { mutateAsync: runAssistant } = useMutation(
-    trpc.studio.runFeature.mutationOptions(),
+    trpc.studio.runFeature.mutationOptions({onSettled: () => {
+      void Promise.all([
+        queryClient.invalidateQueries({queryKey: trpc.studio.usage.queryKey()}),
+        queryClient.invalidateQueries({queryKey: trpc.studio.billingUsage.queryKey()}),
+        queryClient.invalidateQueries({queryKey: trpc.studio.home.queryKey()}),
+      ]);
+    }}),
   );
   const cancel = useMutation(
     trpc.studio.cancel.mutationOptions({
@@ -1569,9 +1575,7 @@ function AccountStudio({
               <p className="text-[11px] leading-relaxed text-center text-muted-foreground opacity-65 mt-14">
                 {preview
                   ? "Preview · your content, as it will read on the platform"
-                  : account.platform === "x"
-                    ? "One idea or a whole thread. Make it yours."
-                    : profileFor(account.platform).help}
+                  : profileFor(account.platform).help}
               </p>
             )}
           </div>

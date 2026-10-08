@@ -43,10 +43,7 @@ import {
   type DestinationDraft,
   type DestinationResult,
 } from "./publicationModel";
-import {
-  editorMedia,
-  socialEditorIssues,
-} from "../component/editor/socialEditorModel";
+import { xLinkIssues } from "./xLinks";
 
 type Props = {
   source: Variant;
@@ -210,6 +207,10 @@ function PublicationContent({
               : "This version was already submitted.",
             variant,
           };
+        }
+        if (account.platform === "x") {
+          const linkIssues = xLinkIssues(draft.payload);
+          if (linkIssues.length) throw new Error(linkIssues.join(" "));
         }
         const xText = draftText(draft.payload, account.platform).trim();
         if (
@@ -418,6 +419,8 @@ function PublicationContent({
           const locked =
             account.status !== "active" || !canSubmitDestination(draft.variant);
           const result = results.find((item) => item.accountId === account.id);
+          const linkIssues = !locked && account.platform === "x" && selected.includes(account.id)
+            ? xLinkIssues(draft.payload) : [];
           return (
             <div
               key={account.id}
@@ -470,6 +473,11 @@ function PublicationContent({
                   </Link>
                   .
                 </p>
+              )}
+              {linkIssues.length > 0 && (
+                <div role="alert" className="mt-3 space-y-1 text-xs leading-relaxed text-destructive">
+                  {linkIssues.map((issue) => <p key={issue}>{issue}</p>)}
+                </div>
               )}
               {result ? (
                 <p

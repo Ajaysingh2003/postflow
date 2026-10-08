@@ -1,4 +1,5 @@
 import type { Payload } from "@/modules/studio/types";
+import { xLinkIssues } from "@/modules/content/studio/xLinks";
 
 export type EditorMedia = { count: number; types: string[] };
 
@@ -55,6 +56,7 @@ export function replaceCaptionHashtags(caption: string, tags: string) {
 /** Mirror the formats handled by the current publisher before submitting a draft. */
 export function socialEditorIssues(platform: string, payload: Payload, media: EditorMedia, capabilities: Payload): string[] {
   const issues: string[] = [];
+  if (platform === "x") issues.push(...xLinkIssues(payload));
   if (platform === "facebook" && payload.link) {
     if (!safePostLink(payload.link)) issues.push("Enter a complete http or https link.");
     if (media.count) issues.push("Use a link or media for this Facebook post. Remove one before publishing.");

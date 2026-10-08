@@ -3,6 +3,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.modules.analytics.schemas import PlanLimitsResponse
+
 
 class PostVariantCreate(BaseModel):
     connected_account_id: str | None = None
@@ -111,6 +113,7 @@ class HomeSummary(BaseModel):
     fetched_at: datetime
     can_edit: bool
     can_manage_channels: bool
+    usage: PlanLimitsResponse
     counts: dict[str, int]
     accounts: list[HomeAccount]
     drafts: list[HomePost]

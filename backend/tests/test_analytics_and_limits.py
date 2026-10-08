@@ -638,6 +638,9 @@ async def test_scheduled_posts_limit_enforcement(test_setup):
         # Free plan has limit of 5 scheduled posts
         variants = []
         for i in range(5):
+            post = Post(workspace_id=ws_id, author_id=user_id, status="draft")
+            db.add(post)
+            db.flush()
             v = PostVariant(
                 post_id=post.id,
                 platform="x",

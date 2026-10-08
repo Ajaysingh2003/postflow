@@ -35,6 +35,8 @@ import { DraftArtifactCard } from "./DraftArtifactCard";
 import { CommandDialog } from "./CommandDialog";
 import { DEFAULT_COMMANDS, getCommandIcon, type CommandItem } from "../types";
 import GenerateAvatar from "@/modules/user/component/GenerateAvartar";
+import { AiUsageNotice } from "@/modules/billing/component/AiUsageNotice";
+import { useAiAllowance, useRefreshUsage } from "@/modules/billing/useAiAllowance";
 import { PersonaDialog } from "./PersonaDialog";
 
 const SHIMMER_BASE = "#8a929c";
@@ -142,6 +144,8 @@ export function ComposerSidecar({
     ? { ...composerState, content: sidecarBridge.content }
     : composerState;
   const workspace = useQuery(trpc.workspace.current.queryOptions());
+  const allowance = useAiAllowance(workspace.data?.id);
+  const refreshUsage = useRefreshUsage();
   const account = useQuery(
     trpc.workspace.getLinkedInConnection.queryOptions(
       {
@@ -200,6 +204,7 @@ export function ComposerSidecar({
   async function send(prompt = input, previousAssets?: SourceAsset[]) {
     if (
       !contextReady ||
+      allowance.blocked ||
       agent.busy ||
       files.busy ||
       files.queue.some((item) => item.stage === "failed")
@@ -214,7 +219,7 @@ export function ComposerSidecar({
       setInput("");
     }
     follow.current = true;
-    await agent.send(prompt, assets);
+    try { await agent.send(prompt, assets); } finally { void refreshUsage(); }
   }
 
   function rate(id: Run["id"], value: Rating) {
@@ -342,7 +347,7 @@ export function ComposerSidecar({
                   >
                     <button
                       type="button"
-                      disabled={!contextReady}
+                      disabled={!contextReady || allowance.blocked}
                       onClick={() => void send(cmd.prompt)}
                       className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-xl px-3.5 text-left text-[15px] font-medium text-[#2f3640] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 disabled:opacity-40"
                     >
@@ -522,6 +527,8 @@ export function ComposerSidecar({
         {agent.busy ? "Assistant is working" : "Assistant is ready"}
       </div>
 
+      <div className="shrink-0 px-4"><AiUsageNotice usage={allowance.data} loading={allowance.isPending} error={!!allowance.error} onRetry={() => void allowance.refetch()} /></div>
+
       {/* Composer */}
       <div className="shrink-0 px-4 pb-4 pt-1">
         <form
@@ -669,6 +676,7 @@ export function ComposerSidecar({
                 type="submit"
                 disabled={
                   !contextReady ||
+                  allowance.blocked ||
                   files.busy ||
                   files.queue.some((item) => item.stage === "failed") ||
                   (input.trim().length < 3 &&

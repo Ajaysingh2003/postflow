@@ -58,6 +58,7 @@ import {
 } from "@/components/ui/tooltip";
 import { getAccountAvatarUrl } from "@/modules/channels/component/AccountAvatar";
 import { MediaPreview } from "../MediaPicker";
+import { containsPostLink, X_LINK_MESSAGE } from "../xLinks";
 import {
   getOverflowSplit,
   profileFor,
@@ -344,6 +345,12 @@ export default function XEditor({
                       }
                     }}
                   />
+                )}
+
+                {!readOnly && !isThreads && containsPostLink(itemText) && (
+                  <p role="alert" className="mt-2 text-xs leading-relaxed text-destructive">
+                    {X_LINK_MESSAGE}
+                  </p>
                 )}
 
                 {/* Media preview per post */}

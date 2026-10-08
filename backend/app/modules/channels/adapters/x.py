@@ -84,6 +84,7 @@ class XAdapter(XManagement):
             supports_scheduling=True,
         )
 
+    from app.modules.channels.adapters.analytics_posts import x_posts as fetch_analytics_posts
     from app.modules.channels.adapters.media import upload_x as prepare_media
     from app.modules.channels.adapters.media import validate_x_media as validate_media
 
@@ -208,7 +209,6 @@ class XAdapter(XManagement):
                 "name": name,
                 "profile_image_url": user_info.get("profile_image_url"),
                 "avatar_url": user_info.get("profile_image_url"),
-                "public_metrics": user_info.get("public_metrics", {}),
             },
         )
 
@@ -219,7 +219,7 @@ class XAdapter(XManagement):
                 f"{X_API_BASE}/users/me",
                 headers={"Authorization": f"Bearer {access_token}"},
                 params={
-                    "user.fields": "id,name,username,profile_image_url,public_metrics,description"
+                    "user.fields": "id,name,username,profile_image_url,description"
                 },
             )
         finally:
@@ -369,9 +369,15 @@ class XAdapter(XManagement):
                 )
             )
         if payload.get("reply_settings") not in {
-            None, "following", "mentionedUsers", "subscribers", "verified"
+            None,
+            "following",
+            "mentionedUsers",
+            "subscribers",
+            "verified",
         }:
-            issues.append(Issue(field="reply_settings", message="Choose a supported reply audience"))
+            issues.append(
+                Issue(field="reply_settings", message="Choose a supported reply audience")
+            )
         for field in ("paid_partnership", "made_with_ai"):
             if field in payload and not isinstance(payload[field], bool):
                 issues.append(Issue(field=field, message="Disclosure must be true or false"))
@@ -521,7 +527,10 @@ class XAdapter(XManagement):
             raise RuntimeError(f"Failed to delete tweet (HTTP {resp.status_code}): {resp.text}")
 
     async def fetch_metrics(
-        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
     ) -> Metrics:
         """
         Fetch post-level metrics for a tweet using GET /2/tweets/:id.
@@ -537,6 +546,13 @@ class XAdapter(XManagement):
                 headers={"Authorization": f"Bearer {raw_access}"},
                 params={"tweet.fields": "public_metrics,non_public_metrics,organic_metrics"},
             )
+            if resp.status_code in {400, 403}:
+                resp = await client.get(
+                    f"{X_API_BASE}/tweets/{external_post_id}",
+                    headers={"Authorization": f"Bearer {raw_access}"},
+                    params={"tweet.fields": "public_metrics"},
+                )
+            resp.raise_for_status()
         finally:
             if self._http_client is None:
                 await client.aclose()
@@ -548,6 +564,10 @@ class XAdapter(XManagement):
             raise RuntimeError(f"Metrics API error: HTTP {resp.status_code}")
 
         data = resp.json().get("data", {})
+        return self.metrics_from_post(data)
+
+    @staticmethod
+    def metrics_from_post(data: dict) -> Metrics:
         pub = data.get("public_metrics") or {}
         private = data.get("non_public_metrics") or {}
         organic = data.get("organic_metrics") or {}
@@ -570,9 +590,7 @@ class XAdapter(XManagement):
         quotes = int(pub.get("quote_count", 0) or 0)
         replies = int(pub.get("reply_count", 0) or 0)
         clicks_present = "url_link_clicks" in private or "url_link_clicks" in organic
-        clicks = int(
-            private.get("url_link_clicks", organic.get("url_link_clicks", 0)) or 0
-        )
+        clicks = int(private.get("url_link_clicks", organic.get("url_link_clicks", 0)) or 0)
         profile_clicks = int(
             private.get("user_profile_clicks", organic.get("user_profile_clicks", 0)) or 0
         )
@@ -582,6 +600,8 @@ class XAdapter(XManagement):
             available_metrics.append("comments")
         if retweets or "retweet_count" in pub or quotes or "quote_count" in pub:
             available_metrics.append("shares")
+        if "user_profile_clicks" in private or "user_profile_clicks" in organic:
+            available_metrics.append("profile_clicks")
         if clicks_present:
             available_metrics.append("clicks")
         if "bookmark_count" in pub:
@@ -592,14 +612,14 @@ class XAdapter(XManagement):
             available_metrics.append("engagements")
         else:
             total_engagements = likes + retweets + quotes + replies + clicks + profile_clicks
+            if {"likes", "comments", "shares"}.issubset(available_metrics):
+                available_metrics.append("engagements")
 
         exact_engagements_available = "engagements" in private
         required_public_metrics = {"impressions", "likes", "comments", "shares"}
         public_metrics_available = required_public_metrics.issubset(available_metrics)
         metrics_status = (
-            "available"
-            if exact_engagements_available and public_metrics_available
-            else "partial"
+            "available" if exact_engagements_available and public_metrics_available else "partial"
         )
         if not exact_engagements_available:
             metrics_notice = (
@@ -651,6 +671,7 @@ class XAdapter(XManagement):
             if self._http_client is None:
                 await client.aclose()
 
+        resp.raise_for_status()
         if resp.status_code != 200:
             logger.warning("Failed to fetch X account metrics for %s: %s", account.id, resp.text)
             raise RuntimeError("Account metrics request failed or is unsupported")
@@ -665,8 +686,19 @@ class XAdapter(XManagement):
             extras={
                 "metrics_status": "available",
                 "metrics_notice": None,
-                "available_metrics": ["followers_count", "following_count", "posts_count"],
+                "available_metrics": [
+                    name
+                    for name, key in {
+                        "followers_count": "followers_count",
+                        "following_count": "following_count",
+                        "posts_count": "tweet_count",
+                        "like_count": "like_count",
+                    }.items()
+                    if key in pub
+                ],
                 "metrics_source": "X API v2 /2/users/me",
                 "listed_count": pub.get("listed_count", 0),
+                "like_count": pub.get("like_count", 0),
+                "tweet_count": pub.get("tweet_count", 0),
             },
         )

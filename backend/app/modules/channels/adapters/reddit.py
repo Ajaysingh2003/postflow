@@ -44,6 +44,8 @@ class RedditAdapter(RedditManagement):
     subreddit targeting, and adherence to subreddit rules and flair requirements.
     """
 
+    from app.modules.channels.adapters.analytics_posts import reddit_posts as fetch_analytics_posts
+
     platform = "reddit"
     required_credentials = ("client_id", "client_secret")
 
@@ -181,7 +183,11 @@ class RedditAdapter(RedditManagement):
         refresh_token = token_data.get("refresh_token")
         expires_in = token_data.get("expires_in", 3600)
         granted_scope_str = token_data.get("scope", "")
-        granted_scopes = granted_scope_str.split(" ") if granted_scope_str else opts.get("oauth_metadata", {}).get("requested_scopes", REDDIT_SCOPES)
+        granted_scopes = (
+            granted_scope_str.split(" ")
+            if granted_scope_str
+            else opts.get("oauth_metadata", {}).get("requested_scopes", REDDIT_SCOPES)
+        )
 
         # Fetch authenticated Reddit user identity
         user_info = await self._fetch_me(access_token)
@@ -205,9 +211,6 @@ class RedditAdapter(RedditManagement):
             account_metadata={
                 "username": username,
                 "reddit_id": reddit_id,
-                "total_karma": user_info.get("total_karma", 0),
-                "link_karma": user_info.get("link_karma", 0),
-                "comment_karma": user_info.get("comment_karma", 0),
                 "icon_img": icon_url,
                 "avatar_url": icon_url,
             },
@@ -902,7 +905,10 @@ class RedditAdapter(RedditManagement):
             )
 
     async def fetch_metrics(
-        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
     ) -> Metrics:
         """
         Fetch post-level performance metrics (score, upvotes, comments, upvote ratio).
@@ -947,6 +953,9 @@ class RedditAdapter(RedditManagement):
             extras={
                 "unavailable_metrics": ["reach", "clicks"]
                 + (["impressions"] if post_data.get("view_count") is None else []),
+                "metrics_status": "partial",
+                "available_metrics": ["likes", "comments", "engagements"]
+                + (["impressions"] if post_data.get("view_count") is not None else []),
                 "score": score,
                 "upvote_ratio": upvote_ratio,
                 "total_awards_received": post_data.get("total_awards_received", 0),
@@ -987,6 +996,10 @@ class RedditAdapter(RedditManagement):
             followers_count=subscribers,
             engagements=total_karma,
             extras={
+                "metrics_status": "partial",
+                "available_metrics": ["followers_count"]
+                if "subscribers" in user_data.get("subreddit", {})
+                else [],
                 "total_karma": total_karma,
                 "link_karma": link_karma,
                 "comment_karma": comment_karma,

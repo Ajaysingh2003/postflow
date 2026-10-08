@@ -100,10 +100,37 @@ class AnalyticsMockAdapter:
         external_post_id: str,
         context: dict[str, Any] | None = None,
     ) -> Metrics:
-        return Metrics(impressions=600, reach=450, engagements=55, likes=40, comments=10, clicks=5)
+        return Metrics(
+            impressions=600,
+            reach=450,
+            engagements=55,
+            likes=40,
+            comments=10,
+            clicks=5,
+            extras={
+                "metrics_status": "available",
+                "available_metrics": [
+                    "impressions",
+                    "reach",
+                    "engagements",
+                    "likes",
+                    "comments",
+                    "clicks",
+                ],
+            },
+        )
 
     async def fetch_account_metrics(self, account: ConnectedAccount) -> AccountMetrics:
-        return AccountMetrics(followers_count=3200, profile_views=420, impressions=12000, reach=8500)
+        return AccountMetrics(
+            followers_count=3200,
+            profile_views=420,
+            impressions=12000,
+            reach=8500,
+            extras={
+                "metrics_status": "available",
+                "available_metrics": ["followers_count", "profile_views", "impressions", "reach"],
+            },
+        )
 
 
 @pytest.fixture
@@ -173,355 +200,379 @@ def test_setup():
 # ==============================================================================
 
 
-def test_analytics_overview_and_platform_breakdown(analytics_adapter, test_setup):
-    client = test_setup["client"]
-    headers = test_setup["headers"]
-    ws_id = test_setup["workspace_id"]
-    user_id = test_setup["user_id"]
-
+def analytics_account(test_setup, name="account", platform="mock_analytics"):
     with SessionLocal() as db:
-        # Create an account
         account = ConnectedAccount(
-            workspace_id=ws_id,
-            platform="mock_analytics",
-            external_account_id="acc_ext_1",
-            display_name="Tester",
+            workspace_id=test_setup["workspace_id"],
+            platform=platform,
+            external_account_id=name,
+            display_name=name,
             status="active",
         )
         db.add(account)
-        db.flush()
+        db.commit()
+        return account.id
 
-        # Create published post with variant
-        post = Post(workspace_id=ws_id, author_id=user_id, title="Analytics Post", status="published")
+
+def analytics_variant(
+    test_setup, account_id, identifier="post", published_at=None, platform="mock_analytics"
+):
+    with SessionLocal() as db:
+        post = Post(
+            workspace_id=test_setup["workspace_id"],
+            author_id=test_setup["user_id"],
+            title="Launch",
+            status="published",
+        )
         db.add(post)
         db.flush()
-
         variant = PostVariant(
             post_id=post.id,
-            connected_account_id=account.id,
-            platform="mock_analytics",
+            connected_account_id=account_id,
+            platform=platform,
             status="published",
-            external_post_id="ext_p1",
-            idempotency_key=str(uuid4()),
-        )
-        db.add(variant)
-        db.flush()
-
-        # Add a variant metric snapshot
-        snap = MetricSnapshot(
-            workspace_id=ws_id,
-            connected_account_id=account.id,
-            variant_id=variant.id,
-            snapshot_type="variant",
-            fetched_at=datetime.now(UTC),
-            impressions=1500,
-            reach=1200,
-            engagements=130,
-            likes=100,
-            comments=20,
-            shares_reposts=10,
-            clicks=15,
-        )
-        db.add(snap)
-        db.commit()
-
-    resp = client.get("/api/v1/analytics/overview?days=30", headers=headers)
-    assert resp.status_code == 200
-    data = resp.json()
-
-    assert data["total_impressions"] == 1500
-    assert data["total_reach"] == 1200
-    assert data["total_likes"] == 100
-    assert data["total_comments"] == 20
-    assert data["total_posts_published"] == 1
-
-    # Verify platform breakdown
-    assert "mock_analytics" in data["by_platform"]
-    p_data = data["by_platform"]["mock_analytics"]
-    assert p_data["impressions"] == 1500
-    assert p_data["likes"] == 100
-    assert p_data["posts_count"] == 1
-
-
-def test_whole_account_analytics_endpoints(analytics_adapter, test_setup):
-    client = test_setup["client"]
-    headers = test_setup["headers"]
-    ws_id = test_setup["workspace_id"]
-
-    with SessionLocal() as db:
-        account = ConnectedAccount(
-            workspace_id=ws_id,
-            platform="mock_analytics",
-            external_account_id="acc_whole_1",
-            display_name="Growth Profile",
-            account_type="creator",
-            status="active",
-        )
-        db.add(account)
-        db.flush()
-        account_id = account.id
-
-        # Add historical account snapshots
-        snap1 = MetricSnapshot(
-            workspace_id=ws_id,
-            connected_account_id=account.id,
-            variant_id=None,
-            snapshot_type="account",
-            fetched_at=datetime.now(UTC) - timedelta(days=2),
-            followers_count=3000,
-            profile_views=250,
-            impressions=8000,
-            reach=5000,
-        )
-        snap2 = MetricSnapshot(
-            workspace_id=ws_id,
-            connected_account_id=account.id,
-            variant_id=None,
-            snapshot_type="account",
-            fetched_at=datetime.now(UTC),
-            followers_count=3200,
-            profile_views=310,
-            impressions=10000,
-            reach=6500,
-        )
-        db.add_all([snap1, snap2])
-        db.commit()
-
-    # 1. List accounts analytics
-    resp = client.get("/api/v1/analytics/accounts", headers=headers)
-    assert resp.status_code == 200
-    accounts_data = resp.json()
-    assert len(accounts_data) == 1
-    acc_entry = accounts_data[0]
-    assert acc_entry["account_id"] == account_id
-    assert acc_entry["followers_count"] == 3200  # latest
-    assert len(acc_entry["historical_snapshots"]) == 2
-
-    # 2. Get single account analytics
-    resp_single = client.get(f"/api/v1/analytics/accounts/{account_id}", headers=headers)
-    assert resp_single.status_code == 200
-    assert resp_single.json()["followers_count"] == 3200
-
-
-def test_post_and_variant_analytics_endpoints(analytics_adapter, test_setup):
-    client = test_setup["client"]
-    headers = test_setup["headers"]
-    ws_id = test_setup["workspace_id"]
-    user_id = test_setup["user_id"]
-
-    with SessionLocal() as db:
-        post = Post(workspace_id=ws_id, author_id=user_id, title="Multi-variant Launch", status="published")
-        db.add(post)
-        db.flush()
-
-        v1 = PostVariant(post_id=post.id, platform="mock_analytics", status="published", idempotency_key=str(uuid4()))
-        v2 = PostVariant(post_id=post.id, platform="mock_analytics", status="published", idempotency_key=str(uuid4()))
-        db.add_all([v1, v2])
-        db.flush()
-
-        # Add metric snapshot to v1
-        db.add(
-            MetricSnapshot(
-                workspace_id=ws_id,
-                connected_account_id="acc_dummy",
-                variant_id=v1.id,
-                snapshot_type="variant",
-                fetched_at=datetime.now(UTC),
-                impressions=800,
-                likes=60,
-                comments=10,
-                extras={"bookmark_count": 7, "unavailable_metrics": ["reach"]},
-            )
-        )
-        # Add metric snapshot to v2
-        db.add(
-            MetricSnapshot(
-                workspace_id=ws_id,
-                connected_account_id="acc_dummy",
-                variant_id=v2.id,
-                snapshot_type="variant",
-                fetched_at=datetime.now(UTC),
-                impressions=400,
-                likes=25,
-                comments=5,
-            )
-        )
-        db.commit()
-        post_id = post.id
-        v1_id = v1.id
-
-    # 1. Variant analytics
-    resp_v = client.get(f"/api/v1/analytics/variants/{v1_id}", headers=headers)
-    assert resp_v.status_code == 200
-    assert resp_v.json()["impressions"] == 800
-    assert resp_v.json()["likes"] == 60
-    assert resp_v.json()["extras"] == {"bookmark_count": 7, "unavailable_metrics": ["reach"]}
-
-    # 2. Post aggregated analytics
-    resp_p = client.get(f"/api/v1/analytics/posts/{post_id}", headers=headers)
-    assert resp_p.status_code == 200
-    p_data = resp_p.json()
-    assert p_data["total_impressions"] == 1200  # 800 + 400
-    assert p_data["total_likes"] == 85          # 60 + 25
-    assert len(p_data["variants"]) == 2
-
-
-def test_sync_metrics_endpoint(analytics_adapter, test_setup):
-    client = test_setup["client"]
-    headers = test_setup["headers"]
-    ws_id = test_setup["workspace_id"]
-    user_id = test_setup["user_id"]
-
-    with SessionLocal() as db:
-        acc = ConnectedAccount(
-            workspace_id=ws_id,
-            platform="mock_analytics",
-            external_account_id="acc_sync_1",
-            display_name="Sync Target",
-            status="active",
-        )
-        db.add(acc)
-        db.flush()
-
-        post = Post(workspace_id=ws_id, author_id=user_id, status="published")
-        db.add(post)
-        db.flush()
-
-        variant = PostVariant(
-            post_id=post.id,
-            connected_account_id=acc.id,
-            platform="mock_analytics",
-            status="published",
-            external_post_id="post_sync_1",
+            external_post_id=identifier,
+            published_at=published_at or datetime.now(UTC),
+            payload={"text": identifier},
             idempotency_key=str(uuid4()),
         )
         db.add(variant)
         db.commit()
-
-    resp = client.post("/api/v1/analytics/sync-now", headers=headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["accounts_synced"] == 1
-    assert data["variants_synced"] == 1
+        return variant.id, post.id
 
 
-def test_analytics_feed_and_overview_date_filtering(analytics_adapter, test_setup):
-    """Verify that start_date and end_date correctly filter feed posts and workspace overview."""
-    client = test_setup["client"]
-    headers = test_setup["headers"]
-    ws_id = test_setup["workspace_id"]
-    user_id = test_setup["user_id"]
+def test_post_summary_counts_only_this_workspaces_selected_account(test_setup):
+    account = analytics_account(test_setup)
+    other = analytics_account(test_setup, "other")
+    variant, _ = analytics_variant(test_setup, account)
+    analytics_variant(test_setup, other)
+    with SessionLocal.begin() as db:
+        db.get(PostVariant, variant).status = "draft"
+    result = test_setup["client"].get(
+        "/api/v1/posts/summary",
+        headers=test_setup["headers"],
+        params={"connected_account_id": account},
+    )
+    assert result.status_code == 200
+    assert result.json() == {"draft": 1}
+    assert (
+        test_setup["client"]
+        .get(
+            "/api/v1/posts/summary",
+            headers=test_setup["headers"],
+            params={"connected_account_id": str(uuid4())},
+        )
+        .json()
+        == {}
+    )
 
+
+def test_analytics_ignores_stored_metrics_and_never_writes(analytics_adapter, test_setup):
+    account = analytics_account(test_setup)
+    variant, post = analytics_variant(test_setup, account)
+    with SessionLocal() as db:
+        db.add(
+            MetricSnapshot(
+                workspace_id=test_setup["workspace_id"],
+                connected_account_id=account,
+                variant_id=variant,
+                snapshot_type="variant",
+                fetched_at=datetime.now(UTC),
+                impressions=99999,
+            )
+        )
+        db.commit()
+    client, headers = test_setup["client"], test_setup["headers"]
+    for url in [
+        f"/analytics/variants/{variant}?live=false",
+        f"/analytics/feed?account_id={account}",
+    ]:
+        result = client.get("/api/v1" + url, headers=headers)
+        assert result.status_code == 200, result.text
+        data = result.json()
+        item = data[0] if isinstance(data, list) else data
+        assert item["impressions"] == 600
+        assert item["likes"] == 40
+    overview = client.get("/api/v1/analytics/overview", headers=headers).json()
+    assert overview["total_impressions"] == 600
+    assert overview["by_platform"]["mock_analytics"]["likes"] == 40
+    post_result = client.get(f"/api/v1/analytics/posts/{post}", headers=headers).json()
+    assert post_result["total_impressions"] == 600
+    account_result = client.get(
+        f"/api/v1/analytics/accounts/{account}?live=false", headers=headers
+    ).json()
+    assert account_result["followers_count"] == 3200
+    assert account_result["historical_snapshots"] == []
+    assert client.post("/api/v1/analytics/sync-now", headers=headers).status_code == 200
+    with SessionLocal() as db:
+        assert len(list(db.scalars(select(MetricSnapshot)))) == 1
+        assert db.get(ConnectedAccount, account).last_synced_at is None
+
+
+def test_failed_live_request_never_falls_back_to_snapshot(
+    analytics_adapter, test_setup, monkeypatch
+):
+    account = analytics_account(test_setup)
+    variant, _ = analytics_variant(test_setup, account)
+    with SessionLocal() as db:
+        db.add_all(
+            [
+                MetricSnapshot(
+                    workspace_id=test_setup["workspace_id"],
+                    connected_account_id=account,
+                    variant_id=variant,
+                    snapshot_type="variant",
+                    fetched_at=datetime.now(UTC),
+                    impressions=99999,
+                ),
+                MetricSnapshot(
+                    workspace_id=test_setup["workspace_id"],
+                    connected_account_id=account,
+                    snapshot_type="account",
+                    fetched_at=datetime.now(UTC),
+                    followers_count=88888,
+                ),
+            ]
+        )
+        db.commit()
+
+    async def denied(*args, **kwargs):
+        from fastapi import HTTPException
+
+        raise HTTPException(403, "Denied")
+
+    monkeypatch.setattr(analytics_adapter, "fetch_metrics", denied)
+    monkeypatch.setattr(analytics_adapter, "fetch_account_metrics", denied)
+    client, headers = test_setup["client"], test_setup["headers"]
+    for endpoint in [f"variants/{variant}", f"accounts/{account}"]:
+        response = client.get(f"/api/v1/analytics/{endpoint}", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["metrics_status"] == "unavailable"
+        assert response.json()["available_metrics"] == []
+        assert "API access" in response.json()["metrics_notice"]
+    result = client.get(f"/api/v1/analytics/dashboard?account_id={account}", headers=headers).json()
+    assert result["overview"]["total_impressions"] == 0
+    assert result["overview"]["metrics_status"] == "unavailable"
+    assert result["accounts"][0]["followers_count"] == 0
+
+
+def test_dashboard_reads_external_posts_and_full_aggregate(
+    analytics_adapter, test_setup, monkeypatch
+):
+    from app.modules.channels.base import AnalyticsPost, AnalyticsPosts
+
+    account = analytics_account(test_setup)
+    calls = []
+
+    async def account_posts(acc, start, end):
+        calls.append(acc.id)
+        return AnalyticsPosts(
+            posts=[
+                AnalyticsPost(
+                    external_post_id=str(i),
+                    text=f"External {i}",
+                    published_at=datetime.now(UTC) - timedelta(days=1),
+                    metrics=Metrics(
+                        impressions=i + 1,
+                        likes=2,
+                        extras={
+                            "metrics_status": "partial",
+                            "available_metrics": ["impressions", "likes"],
+                        },
+                    ),
+                )
+                for i in range(105)
+            ]
+        )
+
+    monkeypatch.setattr(analytics_adapter, "fetch_analytics_posts", account_posts, raising=False)
+    result = test_setup["client"].get(
+        "/api/v1/analytics/dashboard",
+        params={"account_id": account, "limit": 50, "offset": 100},
+        headers=test_setup["headers"],
+    )
+    assert result.status_code == 200, result.text
+    assert result.headers["cache-control"] == "no-store"
+    data = result.json()
+    assert data["account_id"] == account
+    assert len(data["posts"]) == 5
+    assert data["posts"][0]["post_id"] is None
+    assert data["overview"]["total_posts_published"] == 105
+    assert data["overview"]["total_impressions"] == sum(range(1, 106))
+    assert data["overview"]["available_metrics"] == ["impressions", "likes"]
+    assert calls == [account]
+    with SessionLocal() as db:
+        assert list(db.scalars(select(MetricSnapshot))) == []
+        assert list(db.scalars(select(Post))) == []
+
+
+@pytest.mark.parametrize(
+    "platform",
+    ["x", "linkedin", "reddit", "bluesky", "mastodon", "facebook", "instagram", "threads"],
+)
+def test_account_feed_keeps_native_posts_alongside_postflow_posts(
+    platform, analytics_adapter, test_setup, monkeypatch
+):
+    from app.modules.channels.base import AnalyticsPost, AnalyticsPosts
+
+    # Exercise account routing for every supported channel. Adapter HTTP pagination
+    # and provider-specific fields are covered by test_live_analytics_adapters.py.
+    assert callable(channel_registry.require(platform).fetch_analytics_posts)
+    monkeypatch.setitem(channel_registry._adapters, platform, analytics_adapter)
+    account = analytics_account(test_setup, platform=platform)
+    other = analytics_account(test_setup, "other", platform=platform)
+    local_variant, local_post = analytics_variant(
+        test_setup, account, "from-postflow", platform=platform
+    )
+    analytics_variant(test_setup, account, "missing-from-api", platform=platform)
+    analytics_variant(test_setup, other, "native-post", platform=platform)
     now = datetime.now(UTC)
-    recent_date = now - timedelta(days=5)
-    older_date = now - timedelta(days=45)
 
+    def api_post(identifier, days, impressions):
+        return AnalyticsPost(
+            external_post_id=identifier,
+            text=f"Official copy of {identifier}",
+            external_url=f"https://social.test/posts/{identifier}",
+            published_at=now - timedelta(days=days),
+            metrics=Metrics(
+                impressions=impressions,
+                extras={"metrics_status": "partial", "available_metrics": ["impressions"]},
+            ),
+        )
+
+    async def account_posts(acc, start, end):
+        assert acc.id == account
+        return AnalyticsPosts(
+            posts=[
+                api_post("from-postflow", 1, 10),
+                api_post("native-post", 2, 20),
+                api_post("another-native", 3, 30),
+                api_post("native-post", 2, 20),  # Provider duplicate, counted once.
+                api_post("outside-date-range", 45, 999),
+            ]
+        )
+
+    monkeypatch.setattr(analytics_adapter, "fetch_analytics_posts", account_posts, raising=False)
+    client, headers = test_setup["client"], test_setup["headers"]
+    params = {"account_id": account, "content_type": "posts", "limit": 1}
+    first = client.get("/api/v1/analytics/dashboard", params=params, headers=headers).json()
+    assert first["posts"][0]["variant_id"] == local_variant
+    assert first["posts"][0]["post_id"] == local_post
+    assert first["posts"][0]["text"] == "Official copy of from-postflow"
+    second = client.get(
+        "/api/v1/analytics/dashboard", params={**params, "offset": 1}, headers=headers
+    ).json()
+    assert second["posts"][0]["external_post_id"] == "native-post"
+    assert second["posts"][0]["platform"] == platform
+    assert second["posts"][0]["post_id"] is None
+    assert second["posts"][0]["variant_id"].startswith(f"external:{account}:")
+    assert second["posts"][0]["external_url"] == "https://social.test/posts/native-post"
+    for data in (first, second):
+        assert data["feed_total"] == 3
+        assert data["overview"]["total_posts_published"] == 3
+        assert data["overview"]["total_impressions"] == 60
+        assert data["dataset_complete"]
+    # The Postflow library remains local-only and native API posts are not imported.
+    library = client.get(
+        "/api/v1/posts/library",
+        params={"connected_account_id": account, "category": "posts"},
+        headers=headers,
+    ).json()
+    assert {item["external_post_id"] for item in library["items"]} == {
+        "from-postflow",
+        "missing-from-api",
+    }
     with SessionLocal() as db:
-        acc = ConnectedAccount(
-            workspace_id=ws_id,
-            platform="mock_analytics",
-            external_account_id=f"acc_{uuid4().hex[:6]}",
-            display_name="Date Filter Profile",
-            status="active",
-        )
-        db.add(acc)
-        db.flush()
+        assert len(list(db.scalars(select(Post)))) == 3
+        assert list(db.scalars(select(MetricSnapshot))) == []
 
-        # Recent post
-        p_recent = Post(workspace_id=ws_id, author_id=user_id, status="published")
-        db.add(p_recent)
-        db.flush()
-        v_recent = PostVariant(
-            post_id=p_recent.id,
-            connected_account_id=acc.id,
-            platform="mock_analytics",
-            status="published",
-            published_at=recent_date,
-            updated_at=recent_date,
-            payload={"text": "Recent post from 5 days ago"},
-            idempotency_key=str(uuid4()),
-        )
-        db.add(v_recent)
-        db.flush()
-        db.add(
-            MetricSnapshot(
-                workspace_id=ws_id,
-                connected_account_id=acc.id,
-                variant_id=v_recent.id,
-                snapshot_type="variant",
-                # Snapshot retrieval time is independent of the post's selected date range.
-                fetched_at=recent_date - timedelta(days=60),
-                impressions=500,
-                likes=50,
-            )
+
+def test_dashboard_scope_and_freshness(analytics_adapter, test_setup, monkeypatch):
+    from app.modules.channels.base import AnalyticsPost, AnalyticsPosts
+
+    first, second = analytics_account(test_setup, "first"), analytics_account(test_setup, "second")
+    calls = []
+
+    async def account_posts(acc, start, end):
+        calls.append(acc.id)
+        return AnalyticsPosts(
+            posts=[
+                AnalyticsPost(
+                    external_post_id=acc.external_account_id,
+                    text=acc.display_name,
+                    published_at=datetime.now(UTC) - timedelta(seconds=1),
+                    metrics=Metrics(
+                        likes=len(calls),
+                        extras={"metrics_status": "partial", "available_metrics": ["likes"]},
+                    ),
+                )
+            ]
         )
 
-        # Older post
-        p_old = Post(workspace_id=ws_id, author_id=user_id, status="published")
-        db.add(p_old)
-        db.flush()
-        v_old = PostVariant(
-            post_id=p_old.id,
-            connected_account_id=acc.id,
-            platform="mock_analytics",
-            status="published",
-            published_at=older_date,
-            updated_at=older_date,
-            payload={"text": "Old post from 45 days ago"},
-            idempotency_key=str(uuid4()),
+    monkeypatch.setattr(analytics_adapter, "fetch_analytics_posts", account_posts, raising=False)
+    for i, account in enumerate([first, second, first], 1):
+        response = test_setup["client"].get(
+            "/api/v1/analytics/dashboard",
+            params={"account_id": account},
+            headers=test_setup["headers"],
         )
-        db.add(v_old)
-        db.flush()
-        db.add(
-            MetricSnapshot(
-                workspace_id=ws_id,
-                connected_account_id=acc.id,
-                variant_id=v_old.id,
-                snapshot_type="variant",
-                # A fresh snapshot for an old post must not bring it into the selected range.
-                fetched_at=now,
-                impressions=1000,
-                likes=100,
-            )
-        )
-        db.commit()
-
-    # 1. Query feed without filter: returns both
-    resp_all = client.get(f"/api/v1/analytics/feed?account_id={acc.id}", headers=headers)
-    assert resp_all.status_code == 200
-    items_all = resp_all.json()
-    assert len(items_all) == 2
-
-    # 2. Query feed with date filter covering last 10 days only
-    start_filter = (now - timedelta(days=10)).isoformat()
-    end_filter = now.isoformat()
-    resp_filtered = client.get(
-        f"/api/v1/analytics/feed?account_id={acc.id}&start_date={start_filter}&end_date={end_filter}",
-        headers=headers,
+        data = response.json()
+        assert data["account_id"] == account
+        assert data["posts"][0]["connected_account_id"] == account
+        assert data["posts"][0]["likes"] == i
+        assert [a["account_id"] for a in data["accounts"]] == [account]
+    assert calls == [first, second, first]
+    missing = test_setup["client"].get(
+        "/api/v1/analytics/dashboard",
+        params={"account_id": "foreign-account"},
+        headers=test_setup["headers"],
     )
-    assert resp_filtered.status_code == 200
-    items_filtered = resp_filtered.json()
-    assert len(items_filtered) == 1
-    assert items_filtered[0]["text"] == "Recent post from 5 days ago"
-    assert items_filtered[0]["impressions"] == 500
+    assert missing.status_code == 404
+    assert len(calls) == 3
 
-    # 3. Query overview with custom date filter
-    resp_ov = client.get(
-        f"/api/v1/analytics/overview?account_id={acc.id}&start_date={start_filter}&end_date={end_filter}",
-        headers=headers,
+
+def test_dashboard_dates_and_partial_coverage(analytics_adapter, test_setup, monkeypatch):
+    from app.modules.channels.base import AnalyticsPost, AnalyticsPosts
+
+    account = analytics_account(test_setup)
+    now = datetime.now(UTC)
+
+    async def posts(acc, start, end):
+        return AnalyticsPosts(
+            posts=[
+                AnalyticsPost(
+                    external_post_id=str(days),
+                    text="post",
+                    published_at=now - timedelta(days=days),
+                    metrics=Metrics(
+                        likes=12,
+                        extras={"metrics_status": "partial", "available_metrics": ["likes"]},
+                    ),
+                )
+                for days in [5, 45]
+            ],
+            complete=False,
+            notice="The API limited this dataset.",
+        )
+
+    monkeypatch.setattr(analytics_adapter, "fetch_analytics_posts", posts, raising=False)
+    result = test_setup["client"].get(
+        "/api/v1/analytics/dashboard",
+        params={
+            "account_id": account,
+            "start_date": (now - timedelta(days=10)).isoformat(),
+            "end_date": now.isoformat(),
+        },
+        headers=test_setup["headers"],
     )
-    assert resp_ov.status_code == 200
-    ov_data = resp_ov.json()
-    assert ov_data["start_date"] is not None
-    assert ov_data["end_date"] is not None
-    assert ov_data["total_posts_published"] == 1
-    assert ov_data["total_impressions"] == 500
-    assert ov_data["total_likes"] == 50
-
-
-# ==============================================================================
-# 2. Plan Limits Summary & Enforcement Tests
-# ==============================================================================
+    assert result.status_code == 200
+    data = result.json()
+    assert len(data["posts"]) == 1
+    assert data["posts"][0]["available_metrics"] == ["likes"]
+    assert not data["dataset_complete"]
+    assert "limited" in data["dataset_notice"]
+    assert data["overview"]["available_metrics"] == []
+    assert data["overview"]["metrics_status"] == "partial"
 
 
 def test_plan_limits_summary_endpoint(test_setup):
@@ -546,7 +597,11 @@ def test_connected_accounts_limit_enforcement(test_setup):
         # Free plan limit is 2
         # Add 1st account: OK
         acc1 = ConnectedAccount(
-            workspace_id=ws_id, platform="x", external_account_id="x1", display_name="X 1", status="active"
+            workspace_id=ws_id,
+            platform="x",
+            external_account_id="x1",
+            display_name="X 1",
+            status="active",
         )
         db.add(acc1)
         db.commit()
@@ -554,7 +609,11 @@ def test_connected_accounts_limit_enforcement(test_setup):
 
         # Add 2nd account: OK
         acc2 = ConnectedAccount(
-            workspace_id=ws_id, platform="linkedin", external_account_id="l1", display_name="L 1", status="active"
+            workspace_id=ws_id,
+            platform="linkedin",
+            external_account_id="l1",
+            display_name="L 1",
+            status="active",
         )
         db.add(acc2)
         db.commit()
@@ -655,3 +714,280 @@ def test_plan_upgrade_relaxes_limits(test_setup):
         assert summary["connected_accounts"]["limit"] == 15
         assert summary["scheduled_posts"]["limit"] == 250
         assert summary["ai_credits"]["limit"] == 1000
+
+
+def test_real_time_official_api_fetching_on_request(analytics_adapter, test_setup):
+    """Verify that requests directly invoke the official platform API in real time."""
+    client = test_setup["client"]
+    headers = test_setup["headers"]
+    ws_id = test_setup["workspace_id"]
+    user_id = test_setup["user_id"]
+
+    with SessionLocal() as db:
+        acc = ConnectedAccount(
+            workspace_id=ws_id,
+            platform="mock_analytics",
+            external_account_id=f"acc_live_{uuid4().hex[:6]}",
+            display_name="Live Profile",
+            status="active",
+        )
+        db.add(acc)
+        db.flush()
+
+        post = Post(workspace_id=ws_id, author_id=user_id, status="published")
+        db.add(post)
+        db.flush()
+
+        variant = PostVariant(
+            post_id=post.id,
+            connected_account_id=acc.id,
+            platform="mock_analytics",
+            status="published",
+            external_post_id="post_live_123",
+            idempotency_key=str(uuid4()),
+        )
+        db.add(variant)
+        db.commit()
+
+    # 1. Feed request fetches live from adapter (mock adapter returns 600 impressions, 40 likes)
+    resp_feed = client.get(f"/api/v1/analytics/feed?account_id={acc.id}&live=true", headers=headers)
+    assert resp_feed.status_code == 200
+    feed_items = resp_feed.json()
+    assert len(feed_items) == 1
+    assert feed_items[0]["impressions"] == 600
+    assert feed_items[0]["likes"] == 40
+
+    # 2. Account request fetches live from adapter (mock adapter returns 3200 followers)
+    resp_acc = client.get(f"/api/v1/analytics/accounts/{acc.id}?live=true", headers=headers)
+    assert resp_acc.status_code == 200
+    acc_data = resp_acc.json()
+    assert acc_data["followers_count"] == 3200
+
+
+def test_analytics_invalid_interval_is_rejected_without_api_calls(
+    analytics_adapter, test_setup, monkeypatch
+):
+    calls = []
+
+    async def read(account):
+        calls.append(account.id)
+        return AccountMetrics()
+
+    monkeypatch.setattr(analytics_adapter, "fetch_account_metrics", read)
+    account = analytics_account(test_setup)
+    for dates in [
+        {"start_date": "garbage"},
+        {"start_date": "2026-10-07", "end_date": "2026-09-01"},
+    ]:
+        response = test_setup["client"].get(
+            "/api/v1/analytics/dashboard",
+            params={"account_id": account, **dates},
+            headers=test_setup["headers"],
+        )
+        assert response.status_code == 422
+    assert calls == []
+
+
+@pytest.mark.anyio
+async def test_x_dashboard_and_feed_exclude_replies_from_totals_and_pagination(
+    test_setup, monkeypatch
+):
+    import httpx
+
+    from app.modules.channels.adapters.x import XAdapter
+
+    published = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    entries = [
+        {
+            "id": identifier,
+            "text": identifier,
+            "created_at": published,
+            "public_metrics": {
+                "impression_count": impressions,
+                "like_count": likes,
+                "reply_count": 2,
+                "retweet_count": 0,
+                "quote_count": 0,
+            },
+            **({"referenced_tweets": [{"type": "replied_to", "id": "parent"}]} if reply else {}),
+        }
+        for identifier, impressions, likes, reply in [
+            ("reply", 9999, 999, True),
+            ("original-1", 10, 2, False),
+            ("original-2", 20, 3, False),
+        ]
+    ]
+
+    def handler(request):
+        if request.url.path.endswith("/users/me"):
+            return httpx.Response(200, json={"data": {"public_metrics": {"followers_count": 95}}})
+        if "/users/" in request.url.path:
+            assert request.url.params["exclude"] == "retweets"
+            return httpx.Response(200, json={"data": entries})
+        assert request.url.params["ids"] == "original-1,original-2,reply"
+        return httpx.Response(200, json={"data": entries})
+
+    with SessionLocal.begin() as db:
+        account = ConnectedAccount(
+            workspace_id=test_setup["workspace_id"],
+            platform="x",
+            external_account_id="123",
+            display_name="X author",
+            status="active",
+            encrypted_access_token=encrypt_token("test-access"),
+        )
+        db.add(account)
+        db.flush()
+        account_id = account.id
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        adapter = XAdapter(http_client=http_client)
+        monkeypatch.setattr(channel_registry, "get", lambda platform: adapter)
+        for offset in [0, 1]:
+            response = test_setup["client"].get(
+                "/api/v1/analytics/dashboard",
+                headers=test_setup["headers"],
+                params={"account_id": account_id, "limit": 1, "offset": offset},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["overview"]["total_posts_published"] == 2
+            assert data["overview"]["total_impressions"] == 30
+            assert data["overview"]["total_likes"] == 5
+            assert data["inclusive_impressions"] == {
+                "total": 10029,
+                "post_impressions": 30,
+                "reply_impressions": 9999,
+                "replies_count": 1,
+                "complete": True,
+            }
+            assert len(data["posts"]) == 1
+            assert data["posts"][0]["external_post_id"].startswith("original-")
+            assert data["posts"][0]["comments"] == 2
+            assert data["dataset_complete"]
+        response = test_setup["client"].get(
+            "/api/v1/analytics/feed",
+            params={"account_id": account_id},
+            headers=test_setup["headers"],
+        )
+        assert response.status_code == 200
+        assert {p["external_post_id"] for p in response.json()} == {"original-1", "original-2"}
+        for content_type, expected in [("all", 3), ("replies", 1)]:
+            data = (
+                test_setup["client"]
+                .get(
+                    "/api/v1/analytics/dashboard",
+                    headers=test_setup["headers"],
+                    params={"account_id": account_id, "content_type": content_type, "limit": 1},
+                )
+                .json()
+            )
+            assert data["feed_total"] == expected
+            assert data["overview"]["total_impressions"] == 30
+            assert data["replies_count"] == 1
+            if content_type == "replies":
+                assert data["posts"][0]["is_reply"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("use_target_metadata", [True, False])
+async def test_linkedin_company_dashboard_reads_official_feed_and_metrics(
+    test_setup, monkeypatch, use_target_metadata
+):
+    import httpx
+
+    from app.modules.channels.adapters.linkedin import LinkedInAdapter
+
+    org = "urn:li:organization:42"
+    post_id = "urn:li:share:123"
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        assert request.url.host == "api.linkedin.com"
+        if "networkSizes" in request.url.path:
+            return httpx.Response(200, json={"firstDegreeSize": 123})
+        if request.url.path.endswith("posts"):
+            assert request.url.params["author"] == org
+            return httpx.Response(
+                200,
+                json={
+                    "elements": [
+                        {
+                            "id": post_id,
+                            "commentary": "Company launch outside Postflow",
+                            "publishedAt": int(
+                                (datetime.now(UTC) - timedelta(hours=1)).timestamp() * 1000
+                            ),
+                            "lifecycleState": "PUBLISHED",
+                        }
+                    ]
+                },
+            )
+        if request.url.path.endswith("organizationPageStatistics"):
+            return httpx.Response(
+                200,
+                json={
+                    "elements": [
+                        {"totalPageStatistics": {"views": {"allPageViews": {"pageViews": 900}}}}
+                    ]
+                },
+            )
+        assert request.url.path.endswith("organizationalEntityShareStatistics")
+        assert request.url.params["organizationalEntity"] == org
+        return httpx.Response(
+            200,
+            json={
+                "elements": [
+                    {
+                        "share": post_id,
+                        "totalShareStatistics": {
+                            "impressionCount": 800,
+                            "uniqueImpressionsCount": 400,
+                            "likeCount": 10,
+                            "commentCount": 2,
+                            "shareCount": 3,
+                            "clickCount": 5,
+                        },
+                    }
+                ]
+            },
+        )
+
+    with SessionLocal.begin() as db:
+        account = ConnectedAccount(
+            workspace_id=test_setup["workspace_id"],
+            platform="linkedin",
+            external_account_id="member-42" if use_target_metadata else org,
+            display_name="Company Page",
+            account_type="page",
+            status="active",
+            encrypted_access_token=encrypt_token("test-company-access"),
+            account_metadata={"target_org_urn": org} if use_target_metadata else {},
+        )
+        db.add(account)
+        db.flush()
+        account_id = account.id
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        adapter = LinkedInAdapter(http_client=http_client)
+        monkeypatch.setattr(channel_registry, "get", lambda platform: adapter)
+        response = test_setup["client"].get(
+            "/api/v1/analytics/dashboard",
+            params={"account_id": account_id},
+            headers=test_setup["headers"],
+        )
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    result = response.json()
+    assert result["accounts"][0]["followers_count"] == 123
+    assert result["overview"]["metrics_status"] == "available"
+    assert result["overview"]["total_impressions"] == 800
+    assert result["overview"]["total_engagements"] == 20
+    assert result["posts"][0]["text"] == "Company launch outside Postflow"
+    assert result["posts"][0]["post_id"] is None
+    assert result["dataset_complete"]
+    assert len(calls) == 5
+    with SessionLocal() as db:
+        assert list(db.scalars(select(MetricSnapshot))) == []
+        assert list(db.scalars(select(PostVariant))) == []

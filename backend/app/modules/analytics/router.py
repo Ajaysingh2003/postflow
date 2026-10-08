@@ -1,12 +1,14 @@
 from datetime import UTC, date, datetime
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_workspace, require_content_access
 from app.db.session import get_db
 from app.modules.analytics.schemas import (
     AccountAnalyticsResponse,
+    AnalyticsDashboardResponse,
     PlanLimitsResponse,
     PostAnalyticsResponse,
     PostFeedItemAnalytics,
@@ -15,6 +17,7 @@ from app.modules.analytics.schemas import (
 )
 from app.modules.analytics.service import (
     get_account_analytics,
+    get_dashboard,
     get_post_analytics,
     get_posts_analytics_feed,
     get_variant_analytics,
@@ -24,11 +27,43 @@ from app.modules.analytics.service import (
 from app.modules.billing.entitlements import get_plan_limits_summary
 from app.modules.identity.models import Workspace
 
+
+def prevent_analytics_cache(response: Response) -> None:
+    response.headers["Cache-Control"] = "no-store"
+
+
 router = APIRouter(
     prefix="/analytics",
     tags=["analytics"],
-    dependencies=[Depends(require_content_access)],
+    dependencies=[Depends(require_content_access), Depends(prevent_analytics_cache)],
 )
+
+
+@router.get("/dashboard", response_model=AnalyticsDashboardResponse)
+async def get_dashboard_endpoint(
+    response: Response,
+    account_id: str | None = Query(default=None),
+    start_date: str | None = Query(default=None),
+    end_date: str | None = Query(default=None),
+    days: int = Query(default=30, ge=1, le=365),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    content_type: Literal["posts", "replies", "all"] = Query(default="posts"),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> AnalyticsDashboardResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return await get_dashboard(
+        db,
+        workspace.id,
+        account_id,
+        parse_flexible_datetime(start_date),
+        parse_flexible_datetime(end_date),
+        days,
+        limit,
+        offset,
+        content_type,
+    )
 
 
 def parse_flexible_datetime(dt_str: str | None) -> datetime | None:
@@ -43,12 +78,12 @@ def parse_flexible_datetime(dt_str: str | None) -> datetime | None:
         try:
             d = date.fromisoformat(cleaned)
             return datetime(d.year, d.month, d.day, tzinfo=UTC)
-        except (ValueError, TypeError, AttributeError):
-            return None
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise HTTPException(422, "Invalid analytics date") from exc
 
 
 @router.get("/overview", response_model=WorkspaceOverviewResponse)
-def get_overview_endpoint(
+async def get_overview_endpoint(
     days: int = Query(default=30, ge=1, le=365, description="Timeframe in days"),
     account_id: str | None = Query(default=None),
     start_date: str | None = Query(default=None, description="Start date for custom range filter"),
@@ -57,7 +92,7 @@ def get_overview_endpoint(
     db: Session = Depends(get_db),
 ) -> WorkspaceOverviewResponse:
     """Aggregate total performance metrics across all social channels for this workspace."""
-    return get_workspace_overview(
+    return await get_workspace_overview(
         db,
         workspace.id,
         days=days,
@@ -68,22 +103,30 @@ def get_overview_endpoint(
 
 
 @router.get("/accounts", response_model=list[AccountAnalyticsResponse])
-def get_accounts_analytics_endpoint(
+async def get_accounts_analytics_endpoint(
+    live: bool = Query(
+        default=True,
+        description="Deprecated: analytics always reads the official APIs, including when false",
+    ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ) -> list[AccountAnalyticsResponse]:
     """Retrieve whole-account analytics (followers, profile views, impressions) for all connected accounts."""
-    return get_account_analytics(db, workspace.id)
+    return await get_account_analytics(db, workspace.id, live=live)
 
 
 @router.get("/accounts/{account_id}", response_model=AccountAnalyticsResponse)
-def get_single_account_analytics_endpoint(
+async def get_single_account_analytics_endpoint(
     account_id: str,
+    live: bool = Query(
+        default=True,
+        description="Deprecated: analytics always reads the official APIs, including when false",
+    ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ) -> AccountAnalyticsResponse:
     """Retrieve detailed analytics and historical snapshots for a specific connected account."""
-    accounts = get_account_analytics(db, workspace.id, account_id=account_id)
+    accounts = await get_account_analytics(db, workspace.id, account_id=account_id, live=live)
     if not accounts:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -93,37 +136,49 @@ def get_single_account_analytics_endpoint(
 
 
 @router.get("/variants/{variant_id}", response_model=VariantAnalyticsResponse)
-def get_variant_analytics_endpoint(
+async def get_variant_analytics_endpoint(
     variant_id: str,
+    live: bool = Query(
+        default=True,
+        description="Deprecated: analytics always reads the official APIs, including when false",
+    ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ) -> VariantAnalyticsResponse:
     """Retrieve post-level performance metrics for an individual variant."""
-    return get_variant_analytics(db, workspace.id, variant_id)
+    return await get_variant_analytics(db, workspace.id, variant_id, live=live)
 
 
 @router.get("/posts/{post_id}", response_model=PostAnalyticsResponse)
-def get_post_analytics_endpoint(
+async def get_post_analytics_endpoint(
     post_id: str,
+    live: bool = Query(
+        default=True,
+        description="Deprecated: analytics always reads the official APIs, including when false",
+    ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ) -> PostAnalyticsResponse:
     """Retrieve aggregated metrics across all channel variants for a post."""
-    return get_post_analytics(db, workspace.id, post_id)
+    return await get_post_analytics(db, workspace.id, post_id, live=live)
 
 
 @router.get("/feed", response_model=list[PostFeedItemAnalytics])
-def get_analytics_feed_endpoint(
+async def get_analytics_feed_endpoint(
     account_id: str | None = Query(default=None),
     start_date: str | None = Query(default=None, description="Start date for custom range filter"),
     end_date: str | None = Query(default=None, description="End date for custom range filter"),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    live: bool = Query(
+        default=True,
+        description="Deprecated: analytics always reads the official APIs, including when false",
+    ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ) -> list[PostFeedItemAnalytics]:
     """Retrieve published posts feed with individual performance metrics and engagement rates."""
-    return get_posts_analytics_feed(
+    return await get_posts_analytics_feed(
         db,
         workspace.id,
         account_id=account_id,
@@ -131,6 +186,7 @@ def get_analytics_feed_endpoint(
         end_date=parse_flexible_datetime(end_date),
         limit=limit,
         offset=offset,
+        live=live,
     )
 
 

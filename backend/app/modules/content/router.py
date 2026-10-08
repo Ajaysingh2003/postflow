@@ -1,9 +1,10 @@
+from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.dependencies import get_current_user, get_current_workspace, require_content_access
 from app.db.session import get_db
@@ -11,7 +12,10 @@ from app.modules.channels.models import ConnectedAccount
 from app.modules.channels.registry import channel_registry
 from app.modules.content.models import ContentTemplate, Post, PostVariant, PostVariantMedia
 from app.modules.content.schemas import (
+    HomeSummary,
     PostCreate,
+    PostLibraryItem,
+    PostLibraryPage,
     PostResponse,
     PostUpdate,
     PostVariantCreate,
@@ -22,6 +26,7 @@ from app.modules.content.schemas import (
 )
 from app.modules.identity.models import User, Workspace
 from app.modules.media.models import MediaAsset
+from app.modules.workspaces.models import WorkspaceMembership
 
 router = APIRouter(tags=["content"], dependencies=[Depends(require_content_access)])
 
@@ -55,10 +60,16 @@ def _media(db, workspace_id, variant, ids):
     ]
     if any(asset is None for asset in assets):
         raise HTTPException(422, "Attachments must be ready assets in this workspace")
-    variant.media_links = [
-        PostVariantMedia(media_asset_id=asset.id, order_index=i, alt_text=asset.alt_text)
-        for i, asset in enumerate(assets)
-    ]
+    # Keep existing links: inserting replacements before orphan deletion violates
+    # the unique variant/asset constraint on every save of an attached draft.
+    existing = {link.media_asset_id: link for link in variant.media_links}
+    links = []
+    for i, asset in enumerate(assets):
+        link = existing.get(asset.id) or PostVariantMedia(media_asset_id=asset.id)
+        link.order_index = i
+        link.alt_text = asset.alt_text
+        links.append(link)
+    variant.media_links = links
 
 
 def _variant(db, workspace_id, variant_id):
@@ -130,8 +141,10 @@ def create_post(
 
 @router.get("/posts", response_model=list[PostResponse])
 def list_posts(
-    workspace: Workspace = Depends(get_current_workspace), db: Session = Depends(get_db),
-    offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
     variant_status: str | None = Query(default=None),
     connected_account_id: str | None = Query(default=None),
 ) -> list[Post]:
@@ -147,11 +160,101 @@ def list_posts(
         query = query.where(Post.variants.any(and_(*conditions)))
     return list(
         db.scalars(
-            query
+            query.options(selectinload(Post.variants).selectinload(PostVariant.media_links))
             .order_by(Post.updated_at.desc(), Post.id.asc())
             .offset(offset)
             .limit(limit)
         )
+    )
+
+
+@router.get("/posts/summary", response_model=dict[str, int])
+def post_summary(
+    connected_account_id: str | None = Query(default=None),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    query = (
+        select(PostVariant.status, func.count(PostVariant.id))
+        .join(Post, PostVariant.post_id == Post.id)
+        .where(Post.workspace_id == workspace.id)
+        .group_by(PostVariant.status)
+    )
+    if connected_account_id:
+        query = query.where(PostVariant.connected_account_id == connected_account_id)
+    return dict(db.execute(query).all())
+
+
+@router.get("/posts/library", response_model=PostLibraryPage)
+def post_library(
+    category: Literal["posts", "scheduled", "drafts"] = Query(default="posts"),
+    connected_account_id: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> PostLibraryPage:
+    """Postflow's own variants only; browsing never reads a platform timeline."""
+    categories = {
+        "posts": ("published",),
+        "scheduled": ("scheduled", "publishing"),
+        "drafts": ("draft", "failed", "rejected"),
+    }
+    conditions = [Post.workspace_id == workspace.id]
+    if connected_account_id:
+        conditions.append(PostVariant.connected_account_id == connected_account_id)
+    statuses = dict(
+        db.execute(
+            select(PostVariant.status, func.count(PostVariant.id))
+            .join(Post, PostVariant.post_id == Post.id)
+            .where(*conditions)
+            .group_by(PostVariant.status)
+        ).all()
+    )
+    counts = {
+        key: sum(statuses.get(status, 0) for status in values) for key, values in categories.items()
+    }
+    # Page variants, not parent posts: multiple destinations cannot change page size
+    # or expose another account's payload. Media relationships are loaded in bulk.
+    rows = db.execute(
+        select(PostVariant, Post.title, Post.base_text)
+        .join(Post, PostVariant.post_id == Post.id)
+        .where(*conditions, PostVariant.status.in_(categories[category]))
+        .options(selectinload(PostVariant.media_links))
+        .order_by(PostVariant.updated_at.desc(), PostVariant.id.asc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return PostLibraryPage(
+        items=[
+            PostLibraryItem(
+                **PostVariantResponse.model_validate(variant).model_dump(),
+                title=title,
+                base_text=base_text,
+            )
+            for variant, title, base_text in rows
+        ],
+        counts=counts,
+        total=counts[category],
+        next_offset=offset + limit if offset + limit < counts[category] else None,
+    )
+
+
+@router.get("/posts/home", response_model=HomeSummary)
+def workspace_home(
+    response: Response,
+    workspace: Workspace = Depends(get_current_workspace),
+    membership: WorkspaceMembership = Depends(require_content_access),
+    db: Session = Depends(get_db),
+) -> HomeSummary:
+    from app.modules.content.home import home_summary
+
+    response.headers["Cache-Control"] = "private, no-store"
+    return home_summary(
+        db,
+        workspace,
+        membership.role in {"owner", "admin", "editor"},
+        can_manage_channels=membership.role in {"owner", "admin"},
     )
 
 
@@ -199,7 +302,9 @@ def add_variant(
     _account(db, workspace.id, payload.platform, payload.connected_account_id)
 
     def replay():
-        existing = db.scalar(select(PostVariant).where(PostVariant.idempotency_key == payload.idempotency_key))
+        existing = db.scalar(
+            select(PostVariant).where(PostVariant.idempotency_key == payload.idempotency_key)
+        )
         if existing and (
             existing.post_id != post_id
             or existing.platform != payload.platform

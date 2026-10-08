@@ -2049,6 +2049,7 @@ function CalendarPostDialog({
       lock.current = false;
       await Promise.all([
         client.invalidateQueries({ queryKey: trpc.studio.calendar.queryKey() }),
+        client.invalidateQueries({ queryKey: trpc.studio.home.queryKey() }),
         client.invalidateQueries({ queryKey: trpc.studio.posts.queryKey() }),
         client.invalidateQueries({ queryKey: trpc.studio.postLibrary.queryKey() }),
         client.invalidateQueries({ queryKey: trpc.studio.post.queryKey() }),

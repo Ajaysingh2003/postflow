@@ -51,6 +51,10 @@ class MastodonAdapter(MastodonManagement):
     and supports content warnings (spoiler_text) and visibility levels.
     """
 
+    from app.modules.channels.adapters.analytics_posts import (
+        mastodon_posts as fetch_analytics_posts,
+    )
+
     platform = "mastodon"
 
     def __init__(
@@ -655,7 +659,10 @@ class MastodonAdapter(MastodonManagement):
             )
 
     async def fetch_metrics(
-        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
     ) -> Metrics:
         """
         Fetch status metrics (favourites, reblogs, replies).
@@ -702,6 +709,9 @@ class MastodonAdapter(MastodonManagement):
                 "visibility": data.get("visibility"),
                 "replies_count": replies,
                 "unavailable_metrics": ["impressions", "reach", "clicks"],
+                "metrics_status": "partial",
+                "available_metrics": ["likes", "comments", "shares", "engagements"],
+                "metrics_notice": "This platform provides interactions, but does not expose views, reach or clicks.",
             },
         )
 
@@ -737,5 +747,18 @@ class MastodonAdapter(MastodonManagement):
             followers_count=followers,
             following_count=following,
             posts_count=statuses,
-            extras={"instance_domain": domain, "acct": data.get("acct")},
+            extras={
+                "instance_domain": domain,
+                "acct": data.get("acct"),
+                "metrics_status": "partial",
+                "available_metrics": [
+                    name
+                    for name, key in {
+                        "followers_count": "followers_count",
+                        "following_count": "following_count",
+                        "posts_count": "statuses_count",
+                    }.items()
+                    if key in data
+                ],
+            },
         )

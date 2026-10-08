@@ -71,6 +71,54 @@ class PostResponse(BaseModel):
         return self.base_text
 
 
+class PostLibraryItem(PostVariantResponse):
+    title: str
+    base_text: str
+
+
+class PostLibraryPage(BaseModel):
+    items: list[PostLibraryItem]
+    counts: dict[str, int]
+    total: int
+    next_offset: int | None = None
+
+
+class HomeAccount(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    platform: str
+    display_name: str
+    status: str
+
+
+class HomePost(BaseModel):
+    post_id: str
+    variant_id: str | None = None
+    connected_account_id: str | None = None
+    platform: str | None = None
+    title: str
+    text: str
+    status: str
+    updated_at: datetime
+    scheduled_time: datetime | None = None
+    published_at: datetime | None = None
+    last_error: str | None = None
+
+
+class HomeSummary(BaseModel):
+    workspace_id: str
+    workspace_name: str
+    fetched_at: datetime
+    can_edit: bool
+    can_manage_channels: bool
+    counts: dict[str, int]
+    accounts: list[HomeAccount]
+    drafts: list[HomePost]
+    upcoming: list[HomePost]
+    published: list[HomePost]
+    failed: list[HomePost]
+
+
 class TemplateCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     base_text: str = Field(default="", max_length=50_000)

@@ -625,6 +625,7 @@ async def test_threads_oauth_refresh_publish_delete():
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         adapter = ThreadsAdapter(app_id="app", app_secret="secret", http_client=client)
+        adapter.redirect_base_url = "https://postflow.example/api/v1/channels/threads/callback"
         start = await adapter.build_auth_url("ws", "state")
         assert "state=state" in start.auth_url
         account = await adapter.handle_callback("ws", {"code": "code"}, "state")
@@ -912,7 +913,6 @@ async def test_provider_bad_schema_still_records_billed_tokens(owners):
 
 @pytest.mark.anyio
 async def test_metrics_fetch_has_no_100_variant_or_50_account_cap(owners, monkeypatch):
-    from app.jobs.runner import fetch_metrics_job_async
     from app.modules.analytics.models import MetricSnapshot
     from app.modules.channels.base import AccountMetrics, Metrics
     from app.modules.content.models import Post, PostVariant
@@ -963,11 +963,11 @@ async def test_metrics_fetch_has_no_100_variant_or_50_account_cap(owners, monkey
             ]
         )
         db.commit()
-        assert await fetch_metrics_job_async(db) == 152
-        assert db.scalar(select(func.count()).select_from(MetricSnapshot)) == 152
+        assert db.scalar(select(func.count()).select_from(MetricSnapshot)) == 0
         from app.modules.analytics.service import get_workspace_overview
 
-        assert get_workspace_overview(db, post.workspace_id).total_posts_published == 101
+        assert (await get_workspace_overview(db, post.workspace_id)).total_posts_published == 101
+        assert db.scalar(select(func.count()).select_from(MetricSnapshot)) == 0
 
 
 @pytest.mark.anyio

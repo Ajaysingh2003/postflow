@@ -113,7 +113,7 @@ async def test_handle_callback_success():
     assert account.display_name == "u/tech_enthusiast"
     assert decrypt_token(account.encrypted_access_token) == "reddit_acc_tok_999"
     assert decrypt_token(account.encrypted_refresh_token) == "reddit_ref_tok_888"
-    assert account.account_metadata["total_karma"] == 8450
+    assert not {"total_karma", "link_karma", "comment_karma"}.intersection(account.account_metadata)
 
 
 @pytest.mark.anyio

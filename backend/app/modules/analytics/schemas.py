@@ -9,23 +9,29 @@ from pydantic import BaseModel, ConfigDict, Field
 class PlatformMetricsSummary(BaseModel):
     platform: str
     impressions: int = 0
+    views: int = 0
     reach: int = 0
     engagements: int = 0
     likes: int = 0
     comments: int = 0
     shares: int = 0
     clicks: int = 0
+    profile_clicks: int = 0
+    bookmarks: int = 0
     posts_count: int = 0
 
 
 class WorkspaceOverviewResponse(BaseModel):
     total_impressions: int = 0
+    total_views: int = 0
     total_reach: int = 0
     total_engagements: int = 0
     total_likes: int = 0
     total_comments: int = 0
     total_shares: int = 0
     total_clicks: int = 0
+    total_profile_clicks: int = 0
+    total_bookmarks: int = 0
     total_posts_published: int = 0
     by_platform: dict[str, PlatformMetricsSummary] = Field(default_factory=dict)
     timeframe_days: int = 30
@@ -43,6 +49,7 @@ class MetricSnapshotSummary(BaseModel):
     followers_count: int = 0
     profile_views: int = 0
     impressions: int = 0
+    views: int = 0
     reach: int = 0
     engagements: int = 0
     likes: int = 0
@@ -60,7 +67,12 @@ class AccountAnalyticsResponse(BaseModel):
     followers_count: int = 0
     profile_views: int = 0
     impressions: int = 0
+    views: int = 0
     reach: int = 0
+    following_count: int = 0
+    posts_count: int = 0
+    engagements: int = 0
+    available_metrics: list[str] = Field(default_factory=list)
     last_synced_at: datetime | None = None
     historical_snapshots: list[MetricSnapshotSummary] = Field(default_factory=list)
     metrics_status: str = "unavailable"
@@ -75,6 +87,7 @@ class VariantAnalyticsResponse(BaseModel):
     external_post_id: str | None = None
     published_at: datetime | None = None
     impressions: int = 0
+    views: int = 0
     reach: int = 0
     engagements: int = 0
     likes: int = 0
@@ -83,6 +96,9 @@ class VariantAnalyticsResponse(BaseModel):
     clicks: int = 0
     latest_snapshot_at: datetime | None = None
     extras: dict[str, Any] = Field(default_factory=dict)
+    metrics_status: str = "unavailable"
+    metrics_notice: str | None = None
+    available_metrics: list[str] = Field(default_factory=list)
 
 
 class PostAnalyticsResponse(BaseModel):
@@ -90,6 +106,7 @@ class PostAnalyticsResponse(BaseModel):
     title: str
     status: str
     total_impressions: int = 0
+    total_views: int = 0
     total_engagements: int = 0
     total_likes: int = 0
     total_comments: int = 0
@@ -98,7 +115,7 @@ class PostAnalyticsResponse(BaseModel):
 
 class PostFeedItemAnalytics(BaseModel):
     variant_id: str
-    post_id: str
+    post_id: str | None = None
     platform: str
     connected_account_id: str | None = None
     account_display_name: str | None = None
@@ -108,12 +125,16 @@ class PostFeedItemAnalytics(BaseModel):
     created_at: datetime
     status: str
     external_post_id: str | None = None
+    external_url: str | None = None
+    is_reply: bool = False
     impressions: int = 0
+    views: int = 0
     reach: int = 0
     likes: int = 0
     comments: int = 0
     shares: int = 0
     clicks: int = 0
+    profile_clicks: int = 0
     bookmarks: int = 0
     engagements: int = 0
     engagement_rate: float = 0.0
@@ -122,6 +143,28 @@ class PostFeedItemAnalytics(BaseModel):
     metrics_notice: str | None = None
     available_metrics: list[str] = Field(default_factory=list)
     metrics_fetched_at: datetime | None = None
+
+
+class InclusiveImpressions(BaseModel):
+    total: int | None = None
+    post_impressions: int | None = None
+    reply_impressions: int | None = None
+    replies_count: int = 0
+    complete: bool = False
+
+
+class AnalyticsDashboardResponse(BaseModel):
+    account_id: str | None = None
+    accounts: list[AccountAnalyticsResponse] = Field(default_factory=list)
+    overview: WorkspaceOverviewResponse
+    posts: list[PostFeedItemAnalytics] = Field(default_factory=list)
+    fetched_at: datetime
+    dataset_complete: bool = True
+    dataset_notice: str | None = None
+    inclusive_impressions: InclusiveImpressions | None = None
+    replies_supported: bool = False
+    replies_count: int = 0
+    feed_total: int = 0
 
 
 class LimitUsageDetail(BaseModel):

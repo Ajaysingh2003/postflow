@@ -26,8 +26,10 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     linkedin_api_version: str = "202609"
     graph_api_version: str = "v23.0"
+    graph_insights_api_version: str = "v26.0"
     threads_app_id: str | None = None
     threads_app_secret: str | None = None
+    threads_redirect_uri: str | None = None
     bluesky_private_key: str | None = None
     bluesky_key_id: str = "postflow-1"
     llm_mock_enabled: bool = False
@@ -99,6 +101,7 @@ class Settings(BaseSettings):
         explicit_uri = {
             "facebook": self.facebook_redirect_uri,
             "instagram": self.instagram_redirect_uri,
+            "threads": self.threads_redirect_uri,
         }.get(platform)
         if explicit_uri:
             # Registered provider URIs are exact values: do not normalize or format them.

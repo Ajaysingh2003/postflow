@@ -14,7 +14,7 @@ function getPageMetadata(pathname: string): {
   section?: string;
 } {
   if (pathname === "/dashboard" || pathname === "/dashboard/") {
-    return { title: "Overview", section: "Dashboard" };
+    return { title: "Home", section: "Workspace" };
   }
   if (pathname.startsWith("/dashboard/channels")) {
     return { title: "Connected Channels", section: "Manage" };

@@ -4,6 +4,26 @@ export function hasMetric(fields: string[] | null | undefined, key: string): boo
   return Array.isArray(fields) && fields.includes(key);
 }
 
+export function analyticsPostUrl(post: Pick<PostFeedItemAnalytics, "platform" | "external_post_id" | "external_url">): string | null {
+  for (const value of [post.external_url, post.external_post_id]) {
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === "https:" && !url.username && !url.password) return url.href;
+    } catch { /* An identifier may still have a known platform permalink. */ }
+  }
+  const id = post.external_post_id;
+  if (!id) return null;
+  if (post.platform === "x" && /^\d+$/.test(id)) return `https://x.com/i/status/${id}`;
+  if (post.platform === "linkedin" && /^urn:li:(share|ugcPost):\d+$/.test(id)) return `https://www.linkedin.com/feed/update/${id}`;
+  if (post.platform === "reddit" && /^(t3_)?[a-z0-9]+$/i.test(id)) return `https://reddit.com/comments/${id.replace(/^t3_/, "")}`;
+  if (post.platform === "bluesky") {
+    const match = /^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/]+)$/.exec(id);
+    if (match) return `https://bsky.app/profile/${encodeURIComponent(match[1])}/post/${encodeURIComponent(match[2])}`;
+  }
+  return null;
+}
+
 // Keep returned zero counts; hide columns only when no row supplies the metric.
 export function visiblePostMetrics(posts: PostFeedItemAnalytics[]): string[] {
   return ["views", "impressions", "likes", "comments", "shares", "bookmarks"].filter(

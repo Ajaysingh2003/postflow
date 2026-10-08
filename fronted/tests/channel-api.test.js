@@ -9,9 +9,9 @@ mock.module("../src/trpc/init", () => ({
 }));
 mock.module("../src/lib/http-error", () => ({
   getApiBase: () => "http://backend.test",
-  getAuthHeaders: async () => ({
+  getAuthHeaders: async (_, workspaceId) => ({
     Authorization: "Bearer test-only-token",
-    "X-Workspace-ID": "workspace",
+    "X-Workspace-ID": workspaceId ?? "workspace",
   }),
   handleBackendError: (error) => {
     throw error;
@@ -24,6 +24,16 @@ let request;
 afterEach(() => request?.mockRestore());
 
 describe("social account API wiring", () => {
+  test("preloads one workspace Home summary with explicit workspace headers", async () => {
+    const data = {workspace_id: accountId, counts: {}, drafts: [], upcoming: [], published: [], failed: [], accounts: []};
+    request = spyOn(axios, "request").mockResolvedValue({data});
+    expect(await caller.home({workspace_id: accountId})).toEqual(data);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET", url: "http://backend.test/v1/posts/home",
+      headers: {Authorization: "Bearer test-only-token", "X-Workspace-ID": accountId},
+    }));
+  });
   test("loads Postflow posts and counts with one bounded library request", async () => {
     const data = {items: [], counts: {posts: 0, scheduled: 1, drafts: 2}, total: 0, next_offset: null};
     request = spyOn(axios, "request").mockResolvedValue({data});
@@ -48,6 +58,15 @@ describe("social account API wiring", () => {
     expect(await caller.analyticsDashboard(input)).toEqual(data);
     expect(request).toHaveBeenCalledTimes(1);
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: "GET", url: "http://backend.test/v1/analytics/dashboard", params: input }));
+  });
+
+  test("analytics returns account-native posts without filtering for a saved Postflow id", async () => {
+    const native = {post_id: null, variant_id: "external:native", text: "Published in the native app"};
+    const data = {account_id: accountId, posts: [native], feed_total: 1};
+    request = spyOn(axios, "request").mockResolvedValue({data});
+    expect((await caller.analyticsDashboard({account_id: accountId, content_type: "posts"})).posts).toEqual([native]);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({url: "http://backend.test/v1/analytics/dashboard", params: {account_id: accountId, content_type: "posts", offset: 0, limit: 50}}));
   });
 
   test("loads dated calendar entries with the requested interval and pagination", async () => {

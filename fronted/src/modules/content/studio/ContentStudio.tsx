@@ -782,6 +782,7 @@ function AccountStudio({
   }
   async function refresh() {
     await Promise.all([
+      queryClient.invalidateQueries({ queryKey: trpc.studio.home.queryKey() }),
       queryClient.invalidateQueries({ queryKey: trpc.studio.posts.queryKey() }),
       queryClient.invalidateQueries({ queryKey: trpc.studio.postLibrary.queryKey() }),
       queryClient.invalidateQueries({ queryKey: trpc.studio.post.queryKey() }),

@@ -91,6 +91,8 @@ class BlueskyAdapter(BlueskyOAuth, BlueskyManagement):
     grapheme cluster validation (300 grapheme limit), and rich-text facet generation.
     """
 
+    from app.modules.channels.adapters.analytics_posts import bluesky_posts as fetch_analytics_posts
+
     platform = "bluesky"
 
     def __init__(
@@ -356,7 +358,10 @@ class BlueskyAdapter(BlueskyOAuth, BlueskyManagement):
             )
 
     async def fetch_metrics(
-        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
     ) -> Metrics:
         """
         Fetch post thread view for like, repost, reply, and quote counts.
@@ -406,6 +411,9 @@ class BlueskyAdapter(BlueskyOAuth, BlueskyManagement):
                 "quoteCount": quotes,
                 "cid": post_view.get("cid"),
                 "unavailable_metrics": ["impressions", "reach", "clicks"],
+                "metrics_status": "partial",
+                "available_metrics": ["likes", "comments", "shares", "engagements"],
+                "metrics_notice": "This platform provides interactions, but does not expose views, reach or clicks.",
             },
         )
 
@@ -447,6 +455,16 @@ class BlueskyAdapter(BlueskyOAuth, BlueskyManagement):
             following_count=follows,
             posts_count=posts_count,
             extras={
+                "metrics_status": "partial",
+                "available_metrics": [
+                    name
+                    for name, key in {
+                        "followers_count": "followersCount",
+                        "following_count": "followsCount",
+                        "posts_count": "postsCount",
+                    }.items()
+                    if key in profile
+                ],
                 "handle": profile.get("handle"),
                 "indexedAt": profile.get("indexedAt"),
             },

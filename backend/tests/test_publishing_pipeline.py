@@ -23,10 +23,8 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.jobs.runner import (
     dispatch_due_async,
-    fetch_metrics_job_async,
 )
 from app.main import app
-from app.modules.analytics.models import MetricSnapshot
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -665,41 +663,12 @@ async def test_dispatch_due_runner(mock_adapter, test_setup):
         assert variant.status == "published"
 
 
-@pytest.mark.anyio
-async def test_fetch_metrics_job_runner(mock_adapter, test_setup):
-    with SessionLocal() as db:
-        _, variant, account = create_test_post_and_variant(
-            db,
-            test_setup["workspace_id"],
-            test_setup["user_id"],
-            platform="pipe_mock",
-            status="published",
-            external_post_id="post_metrics_target_1",
-        )
+def test_scheduler_has_no_metrics_collection_job():
+    import inspect
 
-        snapshots = await fetch_metrics_job_async(db)
-        assert snapshots >= 1
-
-        # Check post-level snapshot
-        post_snap = db.scalar(
-            select(MetricSnapshot).where(
-                MetricSnapshot.variant_id == variant.id,
-                MetricSnapshot.snapshot_type == "variant",
-            )
-        )
-        assert post_snap is not None
-        assert post_snap.impressions == 250
-        assert post_snap.likes == 15
-
-        # Check whole-account snapshot
-        acc_snap = db.scalar(
-            select(MetricSnapshot).where(
-                MetricSnapshot.connected_account_id == account.id,
-                MetricSnapshot.snapshot_type == "account",
-            )
-        )
-        assert acc_snap is not None
-        assert acc_snap.followers_count == 850
+    from app.jobs import runner
+    assert not hasattr(runner, "fetch_metrics_job_async")
+    assert "fetch_metrics" not in inspect.getsource(runner.run)
 
 
 # ==============================================================================

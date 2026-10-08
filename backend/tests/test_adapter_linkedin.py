@@ -404,6 +404,8 @@ async def test_fetch_account_metrics_organization(mock_linkedin_account):
     """Organization follower totals come from LinkedIn's networkSizes endpoint."""
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if "networkSizes" not in str(request.url):
+            return httpx.Response(403, json={"message": "Restricted analytics"})
         encoded_org = urllib.parse.quote("urn:li:organization:998877", safe=":")
         assert f"{LINKEDIN_V2_BASE}/networkSizes/{encoded_org}" in str(request.url)
         assert request.url.params["edgeType"] == "CompanyFollowedByMember"

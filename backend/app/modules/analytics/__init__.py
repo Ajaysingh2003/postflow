@@ -1,4 +1,4 @@
-"""Analytics module for metrics snapshots, performance aggregation, and reporting."""
+"""Live official API analytics and request-scoped performance aggregation."""
 
 from app.modules.analytics.models import MetricSnapshot
 from app.modules.analytics.router import router

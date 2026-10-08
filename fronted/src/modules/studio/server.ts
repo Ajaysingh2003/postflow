@@ -24,12 +24,14 @@ import type {
   PostFeedItemAnalytics,
 } from "./types";
 import type { CalendarPage } from "@/modules/schedule/calendarModel";
+import type { HomeSummary } from "@/modules/dashboard/homeModel";
 
 async function backend<T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   data?: unknown,
   params?: Record<string, unknown>,
+  workspaceId?: string,
 ): Promise<T> {
   try {
     const response = await axios.request<T>({
@@ -37,7 +39,7 @@ async function backend<T>(
       url: `${getApiBase()}/v1${path}`,
       data,
       params,
-      headers: await getAuthHeaders(),
+      headers: await getAuthHeaders(undefined, workspaceId),
       timeout: 60000,
     });
     return response.data;
@@ -59,6 +61,9 @@ const resources = {
 } as const;
 
 export const studioRouter = createTRPCRouter({
+  home: authedProcedure
+    .input(z.object({ workspace_id: id.optional() }))
+    .query(({ input }) => backend<HomeSummary>("GET", "/posts/home", undefined, undefined, input.workspace_id)),
   postLibrary: authedProcedure
     .input(z.object({
       connected_account_id: id,

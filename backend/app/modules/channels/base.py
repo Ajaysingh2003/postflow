@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from fastapi import HTTPException
@@ -88,6 +89,7 @@ class Metrics(BaseModel):
     """Post-variant metrics fetched from the original platform API."""
 
     impressions: int = 0
+    views: int = 0
     reach: int = 0
     engagements: int = 0
     likes: int = 0
@@ -104,10 +106,32 @@ class AccountMetrics(BaseModel):
     following_count: int = 0
     profile_views: int = 0
     impressions: int = 0
+    views: int = 0
     reach: int = 0
     engagements: int = 0
     posts_count: int = 0
     extras: dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsPost(BaseModel):
+    """An account post read from its platform, never persisted by analytics."""
+
+    external_post_id: str
+    text: str = ""
+    published_at: datetime
+    media_urls: list[str] = Field(default_factory=list)
+    metrics: Metrics | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    is_reply: bool = False
+    external_url: str | None = None
+
+
+class AnalyticsPosts(BaseModel):
+    posts: list[AnalyticsPost] = Field(default_factory=list)
+    replies: list[AnalyticsPost] = Field(default_factory=list)
+    supports_replies: bool = False
+    complete: bool = True
+    notice: str | None = None
 
 
 @runtime_checkable
@@ -166,4 +190,10 @@ class PlatformAdapter(Protocol):
 
     async def fetch_account_metrics(self, account: ConnectedAccount) -> AccountMetrics:
         """Fetch whole-account performance metrics from the official platform API."""
+        ...
+
+    async def fetch_analytics_posts(
+        self, account: ConnectedAccount, start: datetime, end: datetime
+    ) -> AnalyticsPosts:
+        """Read account posts and pagination from the official API for the date range."""
         ...

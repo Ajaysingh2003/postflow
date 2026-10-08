@@ -1,6 +1,17 @@
 import { describe, test, expect } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { currentDashboard, liveAnalyticsOptions } from "../src/modules/analytics/liveAnalytics";
+import { analyticsPostUrl, currentDashboard, liveAnalyticsOptions } from "../src/modules/analytics/liveAnalytics";
+
+test("account analytics retains native posts without a Postflow record and opens their official permalink", () => {
+  const native = {post_id: null, variant_id: "external:threads:native", platform: "threads", external_post_id: "native", external_url: "https://www.threads.com/@writer/post/Native"};
+  const local = {post_id: "saved", variant_id: "local", platform: "x", external_post_id: "123"};
+  const dashboard = {account_id: "account", posts: [native, local]};
+  expect(currentDashboard(dashboard, "account", false, false).posts).toEqual([native, local]);
+  expect(analyticsPostUrl(native)).toBe(native.external_url);
+  expect(analyticsPostUrl(local)).toBe("https://x.com/i/status/123");
+  expect(analyticsPostUrl({...native, external_url: "javascript:alert(1)"})).toBeNull();
+  expect(analyticsPostUrl({...native, external_url: "https://secret@example.com"})).toBeNull();
+});
 
 describe("live analytics account switching", () => {
   test("hides previous data during refresh, errors, and a different selection", () => {

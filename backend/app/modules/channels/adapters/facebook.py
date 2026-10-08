@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.modules.channels.adapters.management import FacebookManagement
 from app.modules.channels.adapters.media import save_state
 from app.modules.channels.adapters.meta import graph_items
+from app.modules.channels.adapters.meta_insights import count, coverage, fetch_insights
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 GRAPH_API_VERSION = get_settings().graph_api_version
 GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
+GRAPH_INSIGHTS_API_BASE = f"https://graph.facebook.com/{get_settings().graph_insights_api_version}"
 FACEBOOK_OAUTH_DIALOG = f"https://www.facebook.com/{GRAPH_API_VERSION}/dialog/oauth"
 
 # Official permissions needed to manage, publish, and fetch analytics for Facebook Pages
@@ -47,6 +49,10 @@ class FacebookAdapter(FacebookManagement):
     Per spec: Publishing is to Pages only, not personal profiles.
     Handles Page selection after login (via list_targets) and long-lived Page tokens.
     """
+
+    from app.modules.channels.adapters.analytics_posts import (
+        facebook_posts as fetch_analytics_posts,
+    )
 
     platform = "facebook"
     required_credentials = ("app_id", "app_secret")
@@ -549,147 +555,145 @@ class FacebookAdapter(FacebookManagement):
                 f"Failed to delete Facebook post (HTTP {resp.status_code}): {resp.text}"
             )
 
+    def _analytics_page_id(self, account: ConnectedAccount) -> str:
+        pages = account.account_metadata.get("pages", [])
+        return str(
+            account.account_metadata.get("primary_page_id") or (pages[0]["id"] if pages else "")
+        )
+
     async def fetch_metrics(
-        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
     ) -> Metrics:
-        """
-        Fetch post reactions, comments, shares, and post insights.
-        """
-        page_id = external_post_id.split("_")[0] if "_" in external_post_id else ""
+        payload = (context or {}).get("payload") or {}
+        page_id = str(payload.get("target_page_id") or self._analytics_page_id(account))
+        # Facebook IDs are page_post. Match stored IDs instead of truncating IDs
+        # that contain underscores (including adapter fixtures and legacy IDs).
+        for page in account.account_metadata.get("pages", []):
+            if external_post_id.startswith(f"{page['id']}_"):
+                page_id = str(page["id"])
+                break
         token = self._get_page_access_token(account, page_id) or decrypt_token(
             account.encrypted_access_token
         )
         if not token:
             raise ValueError("Missing decrypted access token")
-
         client = await self._get_client()
         try:
-            # 1. Fetch public reactions, comments, and shares
             resp = await client.get(
                 f"{GRAPH_API_BASE}/{external_post_id}",
                 params={
-                    "fields": "shares,comments.summary(true),reactions.summary(true)",
+                    "fields": "shares,comments.limit(0).summary(true),reactions.limit(0).summary(true)",
                     "access_token": token,
                 },
             )
-            # 2. Fetch post impressions and clicks from insights
-            insights_resp = await client.get(
-                f"{GRAPH_API_BASE}/{external_post_id}/insights",
-                params={
-                    "metric": "post_impressions,post_engaged_users,post_clicks",
-                    "access_token": token,
-                },
+            insights, notice = await fetch_insights(
+                client,
+                f"{GRAPH_INSIGHTS_API_BASE}/{external_post_id}/insights",
+                {"access_token": token, "period": "lifetime"},
+                ["post_media_view", "post_total_media_view_unique", "post_clicks"],
+                "Facebook",
             )
         finally:
             if self._http_client is None:
                 await client.aclose()
-
-        if resp.status_code != 200:
-            logger.warning(
-                "Failed to fetch Facebook metrics for %s: %s", external_post_id, resp.text
+        data = resp.json() if resp.status_code == 200 else {}
+        values = {}
+        for name, value in {
+            "likes": (data.get("reactions") or {}).get("summary", {}).get("total_count"),
+            "comments": (data.get("comments") or {}).get("summary", {}).get("total_count"),
+            "shares": (data.get("shares") or {}).get("count"),
+        }.items():
+            if count(value) is not None:
+                values[name] = count(value)
+        for name, key in {
+            "views": "post_media_view",
+            "reach": "post_total_media_view_unique",
+            "clicks": "post_clicks",
+        }.items():
+            if key in insights:
+                values[name] = insights[key]
+        if {"likes", "comments", "shares", "clicks"}.issubset(values):
+            values["engagements"] = sum(
+                values[k] for k in ("likes", "comments", "shares", "clicks")
             )
-            raise RuntimeError("Metrics request failed or is unsupported")
-
-        data = resp.json()
-        likes = data.get("reactions", {}).get("summary", {}).get("total_count", 0)
-        comments = data.get("comments", {}).get("summary", {}).get("total_count", 0)
-        shares = data.get("shares", {}).get("count", 0)
-
-        impressions = 0
-        clicks = 0
-        if insights_resp.status_code != 200:
-            raise RuntimeError("Insights are unavailable; no zero snapshot was recorded")
-        if insights_resp.status_code == 200:
-            for item in insights_resp.json().get("data", []):
-                m_name = item.get("name")
-                val = item.get("values", [{}])[0].get("value", 0)
-                if m_name == "post_impressions":
-                    impressions = int(val)
-                elif m_name == "post_clicks":
-                    clicks = int(val)
-
+        if resp.status_code != 200 and not notice:
+            notice = "Facebook reactions, comments and shares are unavailable with this account's API access."
         return Metrics(
-            impressions=impressions,
-            reach=impressions,
-            engagements=likes + comments + shares + clicks,
-            likes=likes,
-            comments=comments,
-            shares_reposts=shares,
-            clicks=clicks,
+            **{k: v for k, v in values.items() if k != "shares"},
+            shares_reposts=values.get("shares", 0),
+            extras=coverage(
+                values,
+                notice,
+                page_id=page_id,
+                insights=insights,
+                reach_definition="Unique media viewers reported by Facebook",
+            ),
         )
 
     async def fetch_account_metrics(self, account: ConnectedAccount) -> AccountMetrics:
-        """
-        Fetch whole-account (Page) followers and engagement metrics from original Facebook Graph API source.
-        """
-        raw_user_token = decrypt_token(account.encrypted_access_token)
-        if not raw_user_token:
-            raise ValueError("Missing decrypted access token")
-
-        # Resolve primary Page ID from metadata
-        pages = account.account_metadata.get("pages", [])
-        page_id = str(pages[0].get("id")) if pages else ""
+        page_id = self._analytics_page_id(account)
         if not page_id:
-            raise RuntimeError("Account metrics request failed or is unsupported")
-
-        page_token = self._get_page_access_token(account, page_id) or raw_user_token
-
+            return AccountMetrics(extras=coverage({}, "Select a Facebook Page to view analytics."))
+        token = self._get_page_access_token(account, page_id) or decrypt_token(
+            account.encrypted_access_token
+        )
+        if not token:
+            raise ValueError("Missing decrypted access token")
+        until = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        since = until - timedelta(days=1)
         client = await self._get_client()
         try:
-            # 1. Fetch followers count and fan count
-            page_resp = await client.get(
+            response = await client.get(
                 f"{GRAPH_API_BASE}/{page_id}",
-                params={
-                    "fields": "followers_count,fan_count,name",
-                    "access_token": page_token,
-                },
+                params={"fields": "followers_count,name", "access_token": token},
             )
-            # 2. Fetch page impressions from insights
-            insights_resp = await client.get(
-                f"{GRAPH_API_BASE}/{page_id}/insights",
-                params={
-                    "metric": "page_impressions,page_engaged_users,page_views_total",
+            insights, notice = await fetch_insights(
+                client,
+                f"{GRAPH_INSIGHTS_API_BASE}/{page_id}/insights",
+                {
+                    "access_token": token,
                     "period": "day",
-                    "access_token": page_token,
+                    "since": int(since.timestamp()),
+                    "until": int(until.timestamp()),
                 },
+                [
+                    "page_media_view",
+                    "page_total_media_view_unique",
+                    "page_post_engagements",
+                    "page_views_total",
+                ],
+                "Facebook",
             )
         finally:
             if self._http_client is None:
                 await client.aclose()
-
-        if page_resp.status_code != 200:
-            logger.warning(
-                "Failed to fetch Facebook Page stats for %s: %s", page_id, page_resp.text
-            )
-            raise RuntimeError("Account metrics request failed or is unsupported")
-
-        page_data = page_resp.json()
-        followers = page_data.get("followers_count") or page_data.get("fan_count", 0)
-
-        impressions = 0
-        engagements = 0
-        views = 0
-        if insights_resp.status_code == 200:
-            for item in insights_resp.json().get("data", []):
-                m_name = item.get("name")
-                val = item.get("values", [{}])[0].get("value", 0)
-                if m_name == "page_impressions":
-                    impressions = int(val)
-                elif m_name == "page_engaged_users":
-                    engagements = int(val)
-                elif m_name == "page_views_total":
-                    views = int(val)
-        else:
-            logger.info(
-                "Facebook Page insights unavailable for %s (status %s); saving page counts",
-                page_id,
-                insights_resp.status_code,
-            )
-
+        data = response.json() if response.status_code == 200 else {}
+        values = {}
+        if count(data.get("followers_count")) is not None:
+            values["followers_count"] = count(data["followers_count"])
+        for name, key in {
+            "views": "page_media_view",
+            "reach": "page_total_media_view_unique",
+            "engagements": "page_post_engagements",
+            "profile_views": "page_views_total",
+        }.items():
+            if key in insights:
+                values[name] = insights[key]
+        if response.status_code != 200 and not notice:
+            notice = "Facebook follower counts are unavailable with this account's API access."
         return AccountMetrics(
-            followers_count=followers,
-            impressions=impressions,
-            engagements=engagements,
-            profile_views=views,
-            extras={"page_id": page_id, "page_name": page_data.get("name")},
+            **values,
+            extras=coverage(
+                values,
+                notice,
+                page_id=page_id,
+                page_name=data.get("name"),
+                insights=insights,
+                insights_since=since.isoformat(),
+                insights_until=until.isoformat(),
+                reach_definition="Unique media viewers reported by Facebook",
+            ),
         )

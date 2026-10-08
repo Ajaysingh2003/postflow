@@ -148,6 +148,7 @@ async def test_handle_callback_discovers_authorized_instagram_account():
     assert account.account_metadata["oauth_flow"] == "instagram_login"
     assert "ig_tokens" not in account.account_metadata
     assert account.account_metadata["instagram_accounts"][0]["username"] == "acme_creative"
+    assert "followers_count" not in account.account_metadata["instagram_accounts"][0]
 
 
 @pytest.mark.anyio
@@ -383,7 +384,7 @@ async def test_fetch_metrics(mock_instagram_account):
                 200,
                 json={
                     "data": [
-                        {"name": "impressions", "values": [{"value": 8500}]},
+                        {"name": "views", "values": [{"value": 8500}]},
                         {"name": "reach", "values": [{"value": 7200}]},
                         {"name": "saved", "values": [{"value": 115}]},
                         {"name": "shares", "values": [{"value": 48}]},
@@ -407,7 +408,7 @@ async def test_fetch_metrics(mock_instagram_account):
     assert metrics.likes == 480
     assert metrics.comments == 62
     assert metrics.shares_reposts == 48
-    assert metrics.impressions == 8500
+    assert metrics.views == 8500
     assert metrics.reach == 7200
     assert metrics.extras["saved"] == 115
 
@@ -423,7 +424,7 @@ async def test_fetch_account_metrics(mock_instagram_account):
                 200,
                 json={
                     "data": [
-                        {"name": "impressions", "values": [{"value": 142000}]},
+                        {"name": "views", "values": [{"value": 142000}]},
                         {"name": "profile_views", "values": [{"value": 3600}]},
                         {"name": "reach", "values": [{"value": 98000}]},
                     ]
@@ -448,6 +449,6 @@ async def test_fetch_account_metrics(mock_instagram_account):
     assert account_metrics.followers_count == 28400
     assert account_metrics.following_count == 450
     assert account_metrics.posts_count == 182
-    assert account_metrics.impressions == 142000
+    assert account_metrics.views == 142000
     assert account_metrics.profile_views == 3600
     assert account_metrics.reach == 98000

@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from app.core.config import get_settings
 from app.modules.channels.adapters.management import InstagramManagement
+from app.modules.channels.adapters.meta_insights import count, coverage, fetch_insights
 from app.modules.channels.base import (
     AccountMetrics,
     AuthStart,
@@ -44,6 +45,10 @@ class InstagramAdapter(InstagramManagement):
     Supports single feed images, multi-image carousels, and Reels via the two-step
     container creation and publishing pipeline.
     """
+
+    from app.modules.channels.adapters.analytics_posts import (
+        instagram_posts as fetch_analytics_posts,
+    )
 
     platform = "instagram"
     required_credentials = ("app_id", "app_secret")
@@ -212,7 +217,7 @@ class InstagramAdapter(InstagramManagement):
             profile_resp = await client.get(
                 f"{GRAPH_API_BASE}/me",
                 params={
-                    "fields": "user_id,username,name,account_type,profile_picture_url,followers_count",
+                    "fields": "user_id,username,name,account_type,profile_picture_url",
                     "access_token": user_access_token,
                 },
             )
@@ -243,7 +248,6 @@ class InstagramAdapter(InstagramManagement):
             "id": ig_id,
             "username": username,
             "name": profile.get("name"),
-            "followers_count": profile.get("followers_count", 0),
             "profile_picture_url": picture,
         }
         requested_scopes = opts.get("oauth_metadata", {}).get("requested_scopes", INSTAGRAM_SCOPES)
@@ -343,7 +347,7 @@ class InstagramAdapter(InstagramManagement):
                     id=ig_id,
                     name=f"@{username}",
                     target_type="instagram_account",
-                    description=f"Followers: {item.get('followers_count', 0)}",
+                    description="Instagram Business or Creator account",
                     metadata=item,
                 )
             )
@@ -574,146 +578,163 @@ class InstagramAdapter(InstagramManagement):
             "Instagram does not support deleting published media through this API; delete it in Instagram",
         )
 
+    def _analytics_api_base(self, account: ConnectedAccount, *, insights: bool = False) -> str:
+        version = get_settings().graph_insights_api_version if insights else GRAPH_API_VERSION
+        if account.account_metadata.get("oauth_flow") == "instagram_login":
+            return f"https://graph.instagram.com/{version}"
+        return f"https://graph.facebook.com/{version}"
+
+    def _insights_permissions(self, account: ConnectedAccount) -> str:
+        if account.account_metadata.get("oauth_flow") == "instagram_login":
+            return "instagram_business_manage_insights for a professional account"
+        return "instagram_manage_insights and pages_read_engagement for a professional account"
+
     async def fetch_metrics(
-        self, account: ConnectedAccount, external_post_id: str, context: dict[str, Any] | None = None
+        self,
+        account: ConnectedAccount,
+        external_post_id: str,
+        context: dict[str, Any] | None = None,
     ) -> Metrics:
-        """
-        Fetch Instagram media likes, comments, shares, saves, impressions, and reach.
-        """
         ig_user_id = account.account_metadata.get("primary_ig_id", "")
         token = self._get_ig_token(account, ig_user_id)
         if not token:
             raise ValueError("Missing decrypted access token")
-
+        api_base = self._analytics_api_base(account)
         client = await self._get_client()
         try:
-            # 1. Fetch public like and comment counts
-            media_resp = await client.get(
-                f"{GRAPH_API_BASE}/{external_post_id}",
+            response = await client.get(
+                f"{api_base}/{external_post_id}",
                 params={
-                    "fields": "like_count,comments_count,media_type,permalink",
+                    "fields": "like_count,comments_count,media_type,media_product_type,permalink",
                     "access_token": token,
                 },
             )
-            # 2. Fetch insights (impressions, reach, saved, shares)
-            insights_resp = await client.get(
-                f"{GRAPH_API_BASE}/{external_post_id}/insights",
-                params={"metric": "impressions,reach,saved,shares", "access_token": token},
+            data = response.json() if response.status_code == 200 else {}
+            requested = [
+                "views",
+                "reach",
+                "saved",
+                "shares",
+                "likes",
+                "comments",
+                "total_interactions",
+            ]
+            if account.account_metadata.get("oauth_flow") != "instagram_login":
+                # Paid/boosted totals are only exposed with Facebook Login.
+                # Keep them separate from organic views/likes/comments.
+                requested += ["total_views", "total_likes", "total_comments"]
+            if data.get("media_product_type") == "REELS":
+                requested += ["ig_reels_avg_watch_time", "ig_reels_video_view_total_time"]
+            insights, notice = await fetch_insights(
+                client,
+                f"{self._analytics_api_base(account, insights=True)}/{external_post_id}/insights",
+                {"access_token": token},
+                requested,
+                "Instagram",
+                permissions=self._insights_permissions(account),
             )
         finally:
             if self._http_client is None:
                 await client.aclose()
-
-        if media_resp.status_code != 200:
-            logger.warning(
-                "Failed to fetch Instagram metrics for %s: %s", external_post_id, media_resp.text
+        values = {}
+        for name, key in {"likes": "like_count", "comments": "comments_count"}.items():
+            if count(data.get(key)) is not None:
+                values[name] = count(data[key])
+        for name, key in {
+            "views": "views",
+            "reach": "reach",
+            "bookmarks": "saved",
+            "shares": "shares",
+            "likes": "likes",
+            "comments": "comments",
+            "engagements": "total_interactions",
+        }.items():
+            if key in insights:
+                values[name] = insights[key]
+        if "engagements" not in values and {"likes", "comments", "shares", "bookmarks"}.issubset(
+            values
+        ):
+            values["engagements"] = sum(
+                values[k] for k in ("likes", "comments", "shares", "bookmarks")
             )
-            raise RuntimeError("Metrics request failed or is unsupported")
-
-        media_data = media_resp.json()
-        likes = media_data.get("like_count", 0)
-        comments = media_data.get("comments_count", 0)
-
-        impressions = 0
-        reach = 0
-        saved = 0
-        shares = 0
-
-        if insights_resp.status_code != 200:
-            raise RuntimeError("Insights are unavailable; no zero snapshot was recorded")
-        if insights_resp.status_code == 200:
-            for item in insights_resp.json().get("data", []):
-                name = item.get("name")
-                val = item.get("values", [{}])[0].get("value", 0)
-                if name == "impressions":
-                    impressions = int(val)
-                elif name == "reach":
-                    reach = int(val)
-                elif name == "saved":
-                    saved = int(val)
-                elif name == "shares":
-                    shares = int(val)
-
+        if response.status_code != 200 and not notice:
+            notice = "Instagram public media counts are unavailable with this account's API access."
         return Metrics(
-            impressions=impressions,
-            reach=reach or impressions,
-            engagements=likes + comments + shares + saved,
-            likes=likes,
-            comments=comments,
-            shares_reposts=shares,
-            extras={"saved": saved, "permalink": media_data.get("permalink")},
+            **{k: v for k, v in values.items() if k not in {"shares", "bookmarks"}},
+            shares_reposts=values.get("shares", 0),
+            extras=coverage(
+                values,
+                notice,
+                saved=values.get("bookmarks"),
+                insights=insights,
+                permalink=data.get("permalink"),
+                media_type=data.get("media_type"),
+                media_product_type=data.get("media_product_type"),
+            ),
         )
 
     async def fetch_account_metrics(self, account: ConnectedAccount) -> AccountMetrics:
-        """
-        Fetch whole-account follower and profile metrics directly from the original Instagram API source.
-        """
         ig_user_id = account.account_metadata.get("primary_ig_id", "")
         token = self._get_ig_token(account, ig_user_id)
         if not token:
             raise ValueError("Missing decrypted access token")
-
+        api_base = self._analytics_api_base(account)
+        until = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        since = until - timedelta(days=1)
         client = await self._get_client()
         try:
-            # 1. Profile counts
-            user_resp = await client.get(
-                f"{GRAPH_API_BASE}/{ig_user_id}",
+            response = await client.get(
+                f"{api_base}/{ig_user_id}",
                 params={
                     "fields": "followers_count,follows_count,media_count,name,username",
                     "access_token": token,
                 },
             )
-            # 2. Account insights
-            insights_resp = await client.get(
-                f"{GRAPH_API_BASE}/{ig_user_id}/insights",
-                params={
-                    "metric": "impressions,reach,profile_views",
-                    "period": "day",
+            insights, notice = await fetch_insights(
+                client,
+                f"{self._analytics_api_base(account, insights=True)}/{ig_user_id}/insights",
+                {
                     "access_token": token,
+                    "period": "day",
+                    "metric_type": "total_value",
+                    "since": int(since.timestamp()),
+                    "until": int(until.timestamp()),
                 },
+                ["views", "reach", "profile_views", "total_interactions"],
+                "Instagram",
+                permissions=self._insights_permissions(account),
             )
         finally:
             if self._http_client is None:
                 await client.aclose()
-
-        if user_resp.status_code != 200:
-            logger.warning(
-                "Failed to fetch Instagram account stats for %s: %s", ig_user_id, user_resp.text
-            )
-            raise RuntimeError("Account metrics request failed or is unsupported")
-
-        data = user_resp.json()
-        followers = data.get("followers_count", 0)
-        follows = data.get("follows_count", 0)
-        media_count = data.get("media_count", 0)
-
-        impressions = 0
-        profile_views = 0
-        reach = 0
-
-        if insights_resp.status_code == 200:
-            for item in insights_resp.json().get("data", []):
-                name = item.get("name")
-                val = item.get("values", [{}])[0].get("value", 0)
-                if name in ("impressions", "views"):
-                    impressions = int(val)
-                elif name == "profile_views":
-                    profile_views = int(val)
-                elif name == "reach":
-                    reach = int(val)
-        else:
-            logger.info(
-                "Instagram account insights unavailable for %s (status %s); saving profile counts",
-                ig_user_id,
-                insights_resp.status_code,
-            )
-
+        data = response.json() if response.status_code == 200 else {}
+        values = {}
+        for name, key in {
+            "followers_count": "followers_count",
+            "following_count": "follows_count",
+            "posts_count": "media_count",
+        }.items():
+            if count(data.get(key)) is not None:
+                values[name] = count(data[key])
+        for name, key in {
+            "views": "views",
+            "reach": "reach",
+            "profile_views": "profile_views",
+            "engagements": "total_interactions",
+        }.items():
+            if key in insights:
+                values[name] = insights[key]
+        if response.status_code != 200 and not notice:
+            notice = "Instagram profile counts are unavailable with this account's API access."
         return AccountMetrics(
-            followers_count=followers,
-            following_count=follows,
-            posts_count=media_count,
-            impressions=impressions,
-            reach=reach,
-            profile_views=profile_views,
-            extras={"username": data.get("username"), "name": data.get("name")},
+            **values,
+            extras=coverage(
+                values,
+                notice,
+                username=data.get("username"),
+                name=data.get("name"),
+                insights=insights,
+                insights_since=since.isoformat(),
+                insights_until=until.isoformat(),
+            ),
         )

@@ -34,8 +34,23 @@ async def publish_thread(adapter, account, variant, reply_builder):
         payload = {"text": item} if isinstance(item, str) else dict(item)
         payload.update(reply_builder(completed))
         child = SimpleNamespace(
-            payload=payload, idempotency_key=f"{variant.idempotency_key}:{index}"
+            payload=payload,
+            idempotency_key=f"{variant.idempotency_key}:{index}",
+            publish_state=dict(
+                (getattr(variant, "publish_state", None) or {})
+                .get("thread_child_states", {})
+                .get(str(index), {})
+            ),
         )
+
+        async def persist_child(child=child, index=index):
+            states = dict(
+                (getattr(variant, "publish_state", None) or {}).get("thread_child_states", {})
+            )
+            states[str(index)] = child.publish_state
+            await save_state(variant, thread_child_states=states)
+
+        child.persist_publish_state = persist_child
         result = await adapter.publish(account, child)
         if not result.success:
             return result

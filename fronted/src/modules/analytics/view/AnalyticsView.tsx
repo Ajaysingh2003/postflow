@@ -1268,8 +1268,6 @@ import { useRouter } from "next/navigation";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { motion } from "framer-motion";
-
 import { toast } from "sonner";
 
 import {
@@ -1344,7 +1342,7 @@ import {
 
 
 
-import { currentDashboard, liveAnalyticsOptions, hasMetric, hasEngagementRate, visiblePostMetrics } from "../liveAnalytics";
+import { analyticsPostUrl, currentDashboard, liveAnalyticsOptions, hasMetric, hasEngagementRate, visiblePostMetrics } from "../liveAnalytics";
 
 import { useTRPC } from "@/trpc/client";
 
@@ -1539,48 +1537,6 @@ function postEngagementRate(post: PostFeedItemAnalytics): string {
   if (!hasEngagementRate(post)) return "–";
 
   return `${post.engagement_rate}%`;
-
-}
-
-
-
-function getExternalPostUrl(
-
-  platform: string,
-
-  externalId?: string | null,
-
-): string | null {
-
-  if (!externalId) return null;
-
-  if (/^https?:\/\//i.test(externalId)) return externalId;
-
-  if (platform === "x") return `https://x.com/i/status/${externalId}`;
-
-  if (platform === "linkedin") {
-
-    return externalId.includes("urn:")
-
-      ? `https://www.linkedin.com/feed/update/${externalId}`
-
-      : null;
-
-  }
-
-  if (platform === "reddit") {
-
-    const redditId = externalId.startsWith("t3_") ? externalId.slice(3) : externalId;
-
-    return `https://reddit.com/comments/${redditId}`;
-
-  }
-
-  // These networks do not expose a reliably constructible public permalink from
-
-  // the external ID alone. A direct URL is accepted above when one is provided.
-
-  return null;
 
 }
 
@@ -1885,6 +1841,8 @@ export default function AnalyticsView() {
       limit: ANALYTICS_PAGE_SIZE,
 
       offset: feedOffset,
+
+      content_type: "posts",
 
     }),
 
@@ -2418,7 +2376,7 @@ export default function AnalyticsView() {
 
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Analytics</h1>
 
-          <p className="mt-1 text-sm text-muted-foreground">
+          {/* <p className="mt-1 text-sm text-muted-foreground">
 
             {selectedAccountId === "all"
 
@@ -2430,11 +2388,11 @@ export default function AnalyticsView() {
 
             {formattedDateLabel}
 
-          </p>
+          </p> */}
 
           <p className="mt-1 text-xs text-muted-foreground/80">
 
-            Date range filters posts by publish date; engagement counts are each post’s latest reported totals.
+            All posts from the selected account, including those published outside Postflow. The date range filters posts by publish date; metrics are their latest reported totals.
 
           </p>
 
@@ -3194,13 +3152,7 @@ export default function AnalyticsView() {
 
               const mediaThumb = post.media_urls?.[0];
 
-              const externalUrl = getExternalPostUrl(
-
-                post.platform,
-
-                post.external_post_id,
-
-              );
+              const externalUrl = analyticsPostUrl(post);
 
               const num =
 
@@ -3231,7 +3183,6 @@ export default function AnalyticsView() {
                         {mediaThumb ? (
 
                           // eslint-disable-next-line @next/next/no-img-element
-
                           <img
 
                             src={mediaThumb}
@@ -3292,7 +3243,7 @@ export default function AnalyticsView() {
 
                           {post.post_id && <Link
 
-                            href={`/dashboard/content?variant=${post.variant_id}`}
+                            href={`/dashboard/content?${new URLSearchParams({post: post.post_id, variant: post.variant_id})}`}
 
                             className="shrink-0 underline-offset-2 transition-colors hover:text-foreground hover:underline"
 
@@ -3408,7 +3359,7 @@ export default function AnalyticsView() {
 
                             router.push(
 
-                              `/dashboard/content?variant=${post.variant_id}`,
+                              `/dashboard/content?${new URLSearchParams({post: post.post_id!, variant: post.variant_id})}`,
 
                             )
 

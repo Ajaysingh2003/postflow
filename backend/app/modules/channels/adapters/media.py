@@ -21,6 +21,33 @@ async def save_state(variant, **values):
         await persist()
 
 
+def bind_uploaded_media(variant, assets, uploaded, field):
+    """Map workspace attachments to provider identifiers on their own thread post."""
+    if not variant.payload.get("thread"):
+        variant.payload = {**variant.payload, field: uploaded}
+        return
+    items = variant.payload["thread"]
+    assigned = any(
+        isinstance(item, dict) and ("media_ids" in item or "media_asset_ids" in item)
+        for item in items
+    )
+    mapped = {asset.id: value for (asset, _), value in zip(assets, uploaded, strict=True)}
+    updated = []
+    for index, item in enumerate(items):
+        payload = {"text": item} if isinstance(item, str) else dict(item)
+        ids = (
+            payload.get("media_asset_ids", payload.get("media_ids", []))
+            if assigned
+            else ([asset.id for asset, _ in assets] if index == 0 else [])
+        )
+        if any(aid not in mapped for aid in ids):
+            raise HTTPException(422, "Thread attachment is unavailable in this variant")
+        payload["media_asset_ids"] = ids
+        payload[field] = [mapped[aid] for aid in ids]
+        updated.append(payload)
+    variant.payload = {**variant.payload, "thread": updated}
+
+
 async def upload_x(self, account, variant, assets):
     client = await self._get_client()
     headers = {"Authorization": f"Bearer {decrypt_token(account.encrypted_access_token)}"}
@@ -92,32 +119,7 @@ async def upload_x(self, account, variant, assets):
                     max(1, int(processing.get("check_after_secs", 60))),
                 )
             await save_state(variant, x_processing_media=None)
-        if variant.payload.get("thread"):
-            items = list(variant.payload["thread"])
-            has_per_item = any(
-                isinstance(it, dict) and bool(it.get("media_ids") or it.get("media_asset_ids"))
-                for it in items
-            )
-            if has_per_item:
-                asset_to_x = {
-                    str(getattr(a, "id", i)): x_id
-                    for i, (a, x_id) in enumerate(zip(assets, ids))
-                }
-                updated = []
-                for it in items:
-                    it_dict = {"text": it} if isinstance(it, str) else dict(it)
-                    item_aids = it_dict.get("media_ids") or it_dict.get("media_asset_ids") or []
-                    item_x = [asset_to_x[str(aid)] for aid in item_aids if str(aid) in asset_to_x]
-                    if item_x:
-                        it_dict["media_ids"] = item_x
-                    updated.append(it_dict)
-                variant.payload = {**variant.payload, "thread": updated}
-            else:
-                first = items[0]
-                items[0] = {**({"text": first} if isinstance(first, str) else first), "media_ids": ids}
-                variant.payload = {**variant.payload, "thread": items}
-        else:
-            variant.payload = {**variant.payload, "media_ids": ids}
+        bind_uploaded_media(variant, assets, ids, "media_ids")
     finally:
         if self._http_client is None:
             await client.aclose()
@@ -246,7 +248,7 @@ async def upload_mastodon(self, account, variant, assets):
             ):
                 raise MediaProcessingPending("Mastodon media is still processing")
             status.raise_for_status()
-        variant.payload = {**variant.payload, "media_ids": ids}
+        bind_uploaded_media(variant, assets, ids, "media_ids")
     finally:
         if self._http_client is None:
             await client.aclose()
@@ -285,13 +287,32 @@ async def upload_bluesky(self, account, variant, assets):
             response.raise_for_status()
             blobs.append({"blob": response.json()["blob"], "alt": alt})
             await save_state(variant, uploaded_media=blobs)
-        variant.payload = {**variant.payload, "media_blobs": blobs}
+        bind_uploaded_media(variant, assets, blobs, "media_blobs")
     finally:
         if self._http_client is None:
             await client.aclose()
 
 
 async def remote_urls(self, account, variant, assets):
+    if variant.payload.get("thread"):
+        items = variant.payload["thread"]
+        assigned = any(isinstance(item, dict) and "media_ids" in item for item in items)
+        mapped = {asset.id: (asset, alt) for asset, alt in assets}
+        updated = []
+        for index, item in enumerate(items):
+            payload = {"text": item} if isinstance(item, str) else dict(item)
+            ids = payload.get("media_ids", [])
+            if any(aid not in mapped for aid in ids):
+                raise HTTPException(422, "Thread attachment is unavailable in this variant")
+            selected = [mapped[aid] for aid in ids] if assigned else (assets if index == 0 else [])
+            payload.update(
+                media_urls=[public_media_url(asset) for asset, _ in selected],
+                media_types=[asset.content_type for asset, _ in selected],
+                media_alt_texts=[alt for _, alt in selected],
+            )
+            updated.append(payload)
+        variant.payload = {**variant.payload, "thread": updated}
+        return
     variant.payload = {
         **variant.payload,
         "media_urls": [public_media_url(asset) for asset, _ in assets],

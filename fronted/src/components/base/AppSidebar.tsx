@@ -84,7 +84,7 @@ type NavItem = {
 
 const overviewNavigation: NavItem[] = [
   {
-    label: "Dashboard",
+    label: "Home",
     href: ROUTES.dashboard,
     icon: LayoutDashboard,
     exact: true,

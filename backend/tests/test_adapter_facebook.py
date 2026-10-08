@@ -262,7 +262,7 @@ async def test_fetch_metrics(mock_facebook_account):
                 200,
                 json={
                     "data": [
-                        {"name": "post_impressions", "values": [{"value": 3400}]},
+                        {"name": "post_media_view", "values": [{"value": 3400}]},
                         {"name": "post_clicks", "values": [{"value": 85}]},
                     ]
                 },
@@ -284,7 +284,7 @@ async def test_fetch_metrics(mock_facebook_account):
     assert metrics.likes == 142
     assert metrics.comments == 28
     assert metrics.shares_reposts == 16
-    assert metrics.impressions == 3400
+    assert metrics.views == 3400
     assert metrics.clicks == 85
     assert metrics.engagements == 142 + 28 + 16 + 85
 
@@ -300,8 +300,8 @@ async def test_fetch_account_metrics(mock_facebook_account):
                 200,
                 json={
                     "data": [
-                        {"name": "page_impressions", "values": [{"value": 82000}]},
-                        {"name": "page_engaged_users", "values": [{"value": 4100}]},
+                        {"name": "page_media_view", "values": [{"value": 82000}]},
+                        {"name": "page_post_engagements", "values": [{"value": 4100}]},
                         {"name": "page_views_total", "values": [{"value": 1250}]},
                     ]
                 },
@@ -321,7 +321,7 @@ async def test_fetch_account_metrics(mock_facebook_account):
 
     account_metrics = await adapter.fetch_account_metrics(mock_facebook_account)
     assert account_metrics.followers_count == 18500
-    assert account_metrics.impressions == 82000
+    assert account_metrics.views == 82000
     assert account_metrics.engagements == 4100
     assert account_metrics.profile_views == 1250
     assert account_metrics.extras["page_name"] == "Acme Brand"

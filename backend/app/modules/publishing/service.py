@@ -105,7 +105,37 @@ async def validate_variant(
             if variant.validation_account
             else adapter.capabilities
         )
-        if len(assets) > caps.max_media_count:
+        groups = [assets]
+        thread = variant.payload.get("thread")
+        if caps.supports_threads and isinstance(thread, list) and thread:
+            assigned = any(
+                isinstance(item, dict) and ("media_ids" in item or "media_asset_ids" in item)
+                for item in thread
+            )
+            mapped = {asset.id: (asset, alt) for asset, alt in assets}
+            groups = []
+            for index, item in enumerate(thread):
+                ids = (
+                    item.get("media_asset_ids", item.get("media_ids", []))
+                    if isinstance(item, dict)
+                    else []
+                )
+                if not isinstance(ids, list) or any(not isinstance(aid, str) for aid in ids):
+                    issues.append(Issue(field="media", message="Invalid thread attachments"))
+                    ids = []
+                if any(aid not in mapped for aid in ids):
+                    issues.append(
+                        Issue(
+                            field="media",
+                            message="Thread attachment is unavailable in this variant",
+                        )
+                    )
+                groups.append(
+                    [mapped[aid] for aid in ids if aid in mapped]
+                    if assigned
+                    else (assets if index == 0 else [])
+                )
+        if any(len(group) > caps.max_media_count for group in groups):
             issues.append(Issue(field="media", message="Too many attachments for this account"))
         if any(a.content_type not in caps.supported_media_types for a, _ in assets):
             issues.append(Issue(field="media", message="Unsupported media type for this platform"))
@@ -119,7 +149,9 @@ async def validate_variant(
             )
         validate_media = getattr(adapter, "validate_media", None)
         if validate_media:
-            issues.extend(await validate_media(assets))
+            for group in groups:
+                if group:
+                    issues.extend(await validate_media(group))
     adapter_issues = await adapter.validate(variant)
     if assets:
         adapter_issues = [
@@ -346,7 +378,9 @@ async def publish_variant_job(
 
                 await refresh_account_tokens(db, account, adapter)
             except Exception as exc:  # noqa: BLE001
-                logger.info("Just-in-time refresh for account %s did not recover: %s", account.id, exc)
+                logger.info(
+                    "Just-in-time refresh for account %s did not recover: %s", account.id, exc
+                )
 
     if account.status in ("needs_reauth", "disabled"):
         variant.status = "failed"

@@ -44,9 +44,9 @@ async def test_x_thread_attachment_is_sent_with_first_item(mock_account, monkeyp
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         adapter = XAdapter(http_client=client)
         variant = SimpleNamespace(payload={"thread": [{"text": "First", "paid_partnership": True}, {"text": "Second"}]}, publish_state={})
-        await upload_x(adapter, mock_account, variant, [(SimpleNamespace(content_type="image/jpeg"), "")])
-        assert variant.payload["thread"][0] == {"text": "First", "paid_partnership": True, "media_ids": ["media_1"]}
-        assert variant.payload["thread"][1] == {"text": "Second"}
+        await upload_x(adapter, mock_account, variant, [(SimpleNamespace(id="asset_1", content_type="image/jpeg"), "")])
+        assert variant.payload["thread"][0] == {"text": "First", "paid_partnership": True, "media_ids": ["media_1"], "media_asset_ids": ["asset_1"]}
+        assert variant.payload["thread"][1] == {"text": "Second", "media_ids": [], "media_asset_ids": []}
         assert "media_ids" not in variant.payload
 
 
@@ -157,7 +157,7 @@ async def test_handle_callback_success():
     assert decrypt_token(account.encrypted_access_token) == "new_access_token_123"
     assert decrypt_token(account.encrypted_refresh_token) == "new_refresh_token_456"
     assert account.account_metadata["username"] == "postflow_ai"
-    assert account.account_metadata["public_metrics"]["followers_count"] == 8500
+    assert "public_metrics" not in account.account_metadata
 
 
 @pytest.mark.anyio

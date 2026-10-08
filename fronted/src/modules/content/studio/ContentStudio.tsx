@@ -55,6 +55,9 @@ import {
   profileFor,
   splitPostText,
   threadItems,
+  setPostMedia,
+  postMediaIds,
+  draftMediaIds,
   xLength,
   type WritingDraft,
 } from "./model";
@@ -146,6 +149,7 @@ function ContentStudioWorkspace() {
   const searchParams = useSearchParams();
   const requestedPost = searchParams.get("post");
   const requestedVariant = searchParams.get("variant");
+  const requestedAccount = searchParams.get("account");
   const startNew = searchParams.get("new") === "1";
   const linkedPost = useQuery(
     trpc.studio.post.queryOptions(
@@ -246,11 +250,12 @@ function ContentStudioWorkspace() {
     );
   return (
     <WorkspaceStudio
-      key={`${workspace.data.id}:${requestedVariant ?? ""}:${startNew}`}
+      key={`${workspace.data.id}:${requestedVariant ?? ""}:${requestedAccount ?? ""}:${startNew}`}
       workspaceId={workspace.data.id}
       accounts={accounts.data}
       linkedVariant={linkedVariant}
       startNew={startNew}
+      requestedAccount={requestedAccount}
     />
   );
 }
@@ -260,11 +265,13 @@ function WorkspaceStudio({
   accounts,
   linkedVariant,
   startNew,
+  requestedAccount,
 }: {
   workspaceId: string;
   accounts: Account[];
   linkedVariant?: Variant;
   startNew: boolean;
+  requestedAccount: string | null;
 }) {
   const [session, setSession] = useState(() => {
     if (
@@ -282,7 +289,7 @@ function WorkspaceStudio({
       };
     const stored = readWritingSession(workspaceId, accounts);
     if (!startNew) return stored;
-    const account = accounts.find(
+    const account = accounts.find((item) => item.id === requestedAccount) ?? accounts.find(
       (item) => item.id === stored.activeAccountId,
     )!;
     return {
@@ -767,26 +774,7 @@ function AccountStudio({
 
   function change(payload: Payload) {
     if (editable && !busy) {
-      let nextMediaIds = writingMediaIds;
-      if (Array.isArray(payload.thread)) {
-        const threadMediaIds = Array.from(
-          new Set(
-            payload.thread.flatMap((it) =>
-              it && typeof it === "object" && Array.isArray((it as any).media_ids)
-                ? ((it as any).media_ids as string[])
-                : [],
-            ),
-          ),
-        );
-        if (
-          threadMediaIds.length > 0 ||
-          payload.thread.some(
-            (it) => it && typeof it === "object" && "media_ids" in (it as any),
-          )
-        ) {
-          nextMediaIds = threadMediaIds;
-        }
-      }
+      const nextMediaIds = draftMediaIds(payload, writingMediaIds);
       update({ ...current.current, payload, mediaIds: nextMediaIds });
       setIssues([]);
       setDismissedLimitBanner(false);
@@ -795,6 +783,7 @@ function AccountStudio({
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: trpc.studio.posts.queryKey() }),
+      queryClient.invalidateQueries({ queryKey: trpc.studio.postLibrary.queryKey() }),
       queryClient.invalidateQueries({ queryKey: trpc.studio.post.queryKey() }),
     ]);
   }
@@ -1668,63 +1657,20 @@ function AccountStudio({
         />
       </section>
       <MediaPicker
+        key={`${account.id}:${draft.localId}:${mediaTargetIndex ?? 0}`}
         open={mediaOpen && editable && !busy}
         onClose={() => {
           setMediaOpen(false);
           setMediaTargetIndex(null);
         }}
         assets={assets}
-        ids={
-          mediaTargetIndex !== null &&
-          writingPayload.thread &&
-          Array.isArray(writingPayload.thread)
-            ? (((writingPayload.thread[mediaTargetIndex] as any)?.media_ids ??
-                (mediaTargetIndex === 0 &&
-                !writingPayload.thread.some(
-                  (it: any, i: number) => i > 0 && it?.media_ids?.length,
-                )
-                  ? writingMediaIds
-                  : [])) as string[])
-            : writingMediaIds
-        }
+        ids={postMediaIds(writingPayload, writingMediaIds, mediaTargetIndex ?? 0)}
         capabilities={capabilities.data ?? {}}
         platform={account.platform}
         onChange={(chosenMediaIds) => {
-          const currentPayload = writingPayload;
-          if (
-            currentPayload.thread &&
-            Array.isArray(currentPayload.thread) &&
-            mediaTargetIndex !== null
-          ) {
-            const items = [...currentPayload.thread];
-            const targetIdx = mediaTargetIndex ?? 0;
-            const currentItem =
-              typeof items[targetIdx] === "string"
-                ? { text: items[targetIdx] }
-                : { ...(items[targetIdx] as any) };
-            items[targetIdx] = { ...currentItem, media_ids: chosenMediaIds };
-
-            const allMediaIds = Array.from(
-              new Set(
-                items.flatMap((it) =>
-                  typeof it === "object" && Array.isArray((it as any).media_ids)
-                    ? (it as any).media_ids
-                    : [],
-                ),
-              ),
-            );
-            update({
-              ...current.current,
-              payload: { ...currentPayload, thread: items },
-              mediaIds: allMediaIds.length ? allMediaIds : chosenMediaIds,
-            });
-          } else {
-            update({
-              ...current.current,
-              payload: writingPayload,
-              mediaIds: chosenMediaIds,
-            });
-          }
+          const currentDraft = current.current;
+          const next = setPostMedia(currentDraft.payload, currentDraft.mediaIds, mediaTargetIndex ?? 0, chosenMediaIds);
+          update({ ...currentDraft, ...next });
         }}
         onRefresh={() => void mediaQuery.refetch()}
       />
@@ -1797,4 +1743,3 @@ function AccountStudio({
     </div>
   );
 }
-

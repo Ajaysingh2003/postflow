@@ -1,748 +1,3585 @@
+// "use client";
+
+// import React, { useEffect, useMemo, useState } from "react";
+// import Link from "next/link";
+// import { useRouter } from "next/navigation";
+// import { useQuery } from "@tanstack/react-query";
+// import { motion } from "framer-motion";
+// import { toast } from "sonner";
+// import {
+//   format,
+//   subDays,
+//   startOfDay,
+//   endOfDay,
+//   differenceInCalendarDays,
+// } from "date-fns";
+// import type { DateRange } from "react-day-picker";
+// import {
+//   Eye,
+//   Heart,
+//   MessageCircle,
+//   Repeat2,
+//   Bookmark,
+//   MousePointerClick,
+//   RefreshCw,
+//   TrendingUp,
+//   Download,
+//   Share,
+//   MoreHorizontal,
+//   ExternalLink,
+//   ArrowUpDown,
+//   Sparkles,
+//   Percent,
+//   Plus,
+//   CalendarDays,
+//   ChevronDown,
+//   Info,
+//   Copy,
+//   AlertCircle,
+//   Users,
+//   LucideIcon,
+//   FileText,
+//   Check,
+// } from "lucide-react";
+
+// import { currentDashboard, liveAnalyticsOptions, hasMetric, hasEngagementRate, visiblePostMetrics } from "../liveAnalytics";
+// import { useTRPC } from "@/trpc/client";
+// import { useComposer } from "@/modules/content/context/ComposerContext";
+// import { PlatformMark } from "@/modules/content/studio/AccountSwitcher";
+// import { channelName } from "@/modules/studio/types";
+// import { Button } from "@/components/ui/button";
+// import { Skeleton } from "@/components/ui/skeleton";
+// import {
+//   Popover,
+//   PopoverContent,
+//   PopoverTrigger,
+// } from "@/components/ui/popover";
+// import { Calendar } from "@/components/ui/calendar";
+// import {
+//   DropdownMenu,
+//   DropdownMenuContent,
+//   DropdownMenuItem,
+//   DropdownMenuTrigger,
+// } from "@/components/ui/dropdown-menu";
+// import { cn } from "@/lib/utils";
+// import type { Account, PostFeedItemAnalytics } from "@/modules/studio/types";
+
+// /* -------------------------------------------------------------------------- */
+// /*  Helpers                                                                   */
+// /* -------------------------------------------------------------------------- */
+
+// type SortKey = "latest" | "views" | "impressions" | "likes" | "engagements" | "eng_rate";
+// type Timeframe = "7d" | "30d" | "90d" | "all" | "custom";
+// const ANALYTICS_PAGE_SIZE = 50;
+// const EMPTY_ACCOUNTS: Account[] = [];
+// const EMPTY_FEED: PostFeedItemAnalytics[] = [];
+
+// const SORT_LABELS: Record<SortKey, string> = {
+//   latest: "Latest",
+//   impressions: "Most impressions",
+//   views: "Most views",
+//   likes: "Most likes",
+//   engagements: "Most engagements",
+//   eng_rate: "Highest engagement rate",
+// };
+
+// const PRESETS: {
+//   id: Exclude<Timeframe, "custom">;
+//   label: string;
+//   short: string;
+// }[] = [
+//   { id: "7d", label: "7 days", short: "7d" },
+//   { id: "30d", label: "30 days", short: "30d" },
+//   { id: "90d", label: "90 days", short: "90d" },
+//   { id: "all", label: "All time", short: "All" },
+// ];
+
+// function formatNumber(num: number | null | undefined): string {
+//   if (
+//     num === null ||
+//     num === undefined ||
+//     !Number.isFinite(num)
+//   ) return "–";
+//   if (num >= 1_000_000)
+//     return `${(num / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+//   if (num >= 10_000) return `${Math.round(num / 1_000)}K`;
+//   if (num >= 1_000) return `${(num / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+//   return num.toLocaleString();
+// }
+
+// function formatRelativeTime(dateStr: string | null): string {
+//   if (!dateStr) return "No sync time";
+//   const timestamp = new Date(dateStr).getTime();
+//   if (!Number.isFinite(timestamp)) return "Unknown update time";
+//   const diff = Date.now() - timestamp;
+//   const minutes = Math.floor(diff / 60_000);
+//   if (minutes < 1) return "Just now";
+//   if (minutes < 60) return `${minutes}m ago`;
+//   const hours = Math.floor(minutes / 60);
+//   if (hours < 24) return `${hours}h ago`;
+//   const days = Math.floor(hours / 24);
+//   if (days < 30) return `${days}d ago`;
+//   return new Date(dateStr).toLocaleDateString(undefined, {
+//     month: "short",
+//     day: "numeric",
+//   });
+// }
+
+// function postMetric(
+//   post: PostFeedItemAnalytics,
+//   key: string,
+//   value: number | null | undefined,
+// ): string {
+//   if (post.metrics_status === "unavailable" || !hasMetric(post.available_metrics, key)) {
+//     return "–";
+//   }
+//   return formatNumber(value);
+// }
+
+// function postEngagementRate(post: PostFeedItemAnalytics): string {
+//   if (!hasEngagementRate(post)) return "–";
+//   return `${post.engagement_rate}%`;
+// }
+
+// function getExternalPostUrl(
+//   platform: string,
+//   externalId?: string | null,
+// ): string | null {
+//   if (!externalId) return null;
+//   if (/^https?:\/\//i.test(externalId)) return externalId;
+//   if (platform === "x") return `https://x.com/i/status/${externalId}`;
+//   if (platform === "linkedin") {
+//     return externalId.includes("urn:")
+//       ? `https://www.linkedin.com/feed/update/${externalId}`
+//       : null;
+//   }
+//   if (platform === "reddit") {
+//     const redditId = externalId.startsWith("t3_") ? externalId.slice(3) : externalId;
+//     return `https://reddit.com/comments/${redditId}`;
+//   }
+//   // These networks do not expose a reliably constructible public permalink from
+//   // the external ID alone. A direct URL is accepted above when one is provided.
+//   return null;
+// }
+
+// /* -------------------------------------------------------------------------- */
+// /*  Small components                                                          */
+// /* -------------------------------------------------------------------------- */
+
+// function MetricCard({
+//   label,
+//   value,
+//   badge,
+//   hint,
+//   color = "#10b981",
+//   icon: Icon,
+//   suffix,
+//   featured = false,
+//   className,
+//   index = 0,
+// }: {
+//   label: string;
+//   value: string;
+//   badge?: React.ReactNode;
+//   hint?: string;
+//   color?: string;
+//   icon: LucideIcon;
+//   suffix?: string;
+//   featured?: boolean;
+//   className?: string;
+//   index?: number;
+// }) {
+//   return (
+//     <motion.div
+//       initial={{ opacity: 0, y: 6 }}
+//       animate={{ opacity: 1, y: 0 }}
+//       transition={{
+//         duration: 0.28,
+//         delay: index * 0.04,
+//         ease: [0.22, 1, 0.36, 1],
+//       }}
+//       className={cn(
+//         "flex min-h-32 flex-col justify-between rounded-2xl border-[0.5px] border-border bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_1px_1px_rgba(0,0,0,0.02)] transition-shadow hover:shadow-md",
+//         className,
+//       )}
+//     >
+//       <div className="flex items-center justify-between gap-2">
+//         <div className="flex min-w-0 items-center gap-2">
+//           <span
+//             className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+//             style={{
+//               backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
+//               color,
+//             }}
+//           >
+//             <Icon className="size-3.5" strokeWidth={2.25} />
+//           </span>
+//           <p className="truncate text-xs font-medium text-muted-foreground">
+//             {label}
+//           </p>
+//         </div>
+//         {badge}
+//       </div>
+//       <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+//         <span
+//           className={cn(
+//             "font-semibold tracking-tight text-foreground tabular-nums",
+//             featured ? "text-4xl" : "text-2xl",
+//           )}
+//         >
+//           {value}
+//         </span>
+//         {suffix && (
+//           <span className="text-xs font-medium text-muted-foreground">
+//             {suffix}
+//           </span>
+//         )}
+//       </div>
+//       {hint && (
+//         <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+//           {hint}
+//         </p>
+//       )}
+//     </motion.div>
+//   );
+// }
+
+// function SortableHead({
+//   children,
+//   active,
+//   onClick,
+//   align = "right",
+//   className,
+// }: {
+//   children: React.ReactNode;
+//   active?: boolean;
+//   onClick?: () => void;
+//   align?: "left" | "right";
+//   className?: string;
+// }) {
+//   return (
+//     <th
+//       className={cn(
+//         "sticky top-0 z-10 bg-card px-3 py-2.5 text-[11px] font-medium whitespace-nowrap",
+//         align === "right" ? "text-right" : "text-left",
+//         className,
+//       )}
+//     >
+//       <button
+//         type="button"
+//         onClick={onClick}
+//         disabled={!onClick}
+//         className={cn(
+//           "inline-flex items-center gap-1.5 transition-colors",
+//           align === "right" && "flex-row-reverse",
+//           onClick ? "cursor-pointer hover:text-foreground" : "cursor-default",
+//           active && "text-foreground",
+//         )}
+//       >
+//         <span className="inline-flex items-center gap-1.5">{children}</span>
+//         {/* Reserved width so active/inactive headers never shift */}
+//         <span
+//           className={cn(
+//             "w-2.5 text-[10px] leading-none",
+//             active ? "opacity-100" : "opacity-0",
+//           )}
+//         >
+//           ↓
+//         </span>
+//       </button>
+//     </th>
+//   );
+// }
+// /* -------------------------------------------------------------------------- */
+// /*  Main view                                                                 */
+// /* -------------------------------------------------------------------------- */
+
+// export default function AnalyticsView() {
+//   const trpc = useTRPC();
+//   const router = useRouter();
+//   const { setStudioNavigation } = useComposer();
+//   const [dateOpen, setDateOpen] = useState(false);
+//   const [accountSelection, setSelectedAccountId] = useState<string | "all">(
+//     "",
+//   );
+//   const [timeframe, setTimeframe] = useState<Timeframe>("30d");
+//   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => ({
+//     from: subDays(new Date(), 29),
+//     to: new Date(),
+//   }));
+//   const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>(
+//     () => ({ from: subDays(new Date(), 29), to: new Date() }),
+//   );
+//   const [sortBy, setSortBy] = useState<SortKey>("latest");
+//   const [pageState, setPageState] = useState({ scope: "", offset: 0 });
+
+//   // 1. Accounts
+//   const accountsQuery = useQuery(trpc.studio.accounts.queryOptions());
+//   const accounts: Account[] = accountsQuery.data ?? EMPTY_ACCOUNTS;
+
+//   const activeAccount = useMemo(() => {
+//     if (!accounts.length) return null;
+//     if (accountSelection && accountSelection !== "all") {
+//       const match = accounts.find((a) => a.id === accountSelection);
+//       if (match) return match;
+//     }
+//     return accounts.find((a) => a.status === "active") ?? accounts[0];
+//   }, [accounts, accountSelection]);
+//   const selectedAccountId = accountSelection === "all" ? "all" : activeAccount?.id ?? "";
+
+//   // 2. Keep top navigation in sync
+//   useEffect(() => {
+//     if (!activeAccount || !accounts.length) {
+//       setStudioNavigation(null);
+//       return;
+//     }
+//     setStudioNavigation({
+//       account: activeAccount,
+//       accounts,
+//       onSelect: (id: string) => setSelectedAccountId(id),
+//     });
+//     return () => setStudioNavigation(null);
+//   }, [activeAccount, accounts, setStudioNavigation]);
+
+//   // 3. Date bounds (full days so "today" isn't cut off mid-day)
+//   const startDateStr = useMemo(() => {
+//     if (timeframe === "all") return new Date(0).toISOString();
+//     if (!dateRange?.from) return undefined;
+//     return startOfDay(dateRange.from).toISOString();
+//   }, [timeframe, dateRange]);
+
+//   const endDateStr = useMemo(() => {
+//     if (timeframe === "all" || !dateRange?.to) return undefined;
+//     return endOfDay(dateRange.to).toISOString();
+//   }, [timeframe, dateRange]);
+
+//   const formattedDateLabel = useMemo(() => {
+//     if (timeframe === "all") return "All time";
+//     if (dateRange?.from && dateRange?.to) {
+//       return `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d, yyyy")}`;
+//     }
+//     if (dateRange?.from) return `From ${format(dateRange.from, "MMM d, yyyy")}`;
+//     return "Select date range";
+//   }, [timeframe, dateRange]);
+
+//   const handleSelectPreset = (preset: Exclude<Timeframe, "custom">) => {
+//     setTimeframe(preset);
+//     const now = new Date();
+//     if (preset === "all") {
+//       setDateRange(undefined);
+//       setDraftDateRange(undefined);
+//     } else {
+//       const from = subDays(now, parseInt(preset, 10) - 1);
+//       setDateRange({ from, to: now });
+//       setDraftDateRange({ from, to: now });
+//     }
+//   };
+
+//   const feedScope = JSON.stringify([
+//     selectedAccountId,
+//     startDateStr ?? "",
+//     endDateStr ?? "",
+//   ]);
+//   const feedOffset = pageState.scope === feedScope ? pageState.offset : 0;
+
+//   // One account-scoped response keeps the cards and table consistent.
+//   const dashboardQuery = useQuery({
+//     ...trpc.studio.analyticsDashboard.queryOptions({
+//       account_id: selectedAccountId === "all" ? undefined : activeAccount?.id,
+//       start_date: startDateStr,
+//       end_date: endDateStr,
+//       limit: ANALYTICS_PAGE_SIZE,
+//       offset: feedOffset,
+//     }),
+//     enabled: !!activeAccount?.id,
+//     ...liveAnalyticsOptions,
+//   });
+//   // Never render a previous result during a switch, refresh, or failed request.
+//   const dashboardData = currentDashboard(
+//     dashboardQuery.data,
+//     selectedAccountId === "all" ? null : activeAccount?.id ?? "",
+//     dashboardQuery.isFetching,
+//     dashboardQuery.isError,
+//   );
+//   const accountData = dashboardData?.accounts.find((a) => a.account_id === activeAccount?.id) ?? null;
+//   const overviewData = dashboardData?.overview ?? null;
+//   const feedPosts: PostFeedItemAnalytics[] = dashboardData?.posts ?? EMPTY_FEED;
+//   const accountMetricsQuery = dashboardQuery;
+//   const overviewQuery = dashboardQuery;
+//   const feedQuery = dashboardQuery;
+//   const refreshMetrics = async () => {
+//     const result = await dashboardQuery.refetch();
+//     if (result.error) toast.error("Couldn't refresh analytics");
+//   };
+
+//   // 5. Sort only the current server-paginated page.
+//   const sortedPosts = (() => {
+//     const list = [...feedPosts];
+//     const effectiveSort = sortBy === "latest" || feedPosts.some((post) => sortBy === "eng_rate" ? hasEngagementRate(post) : hasMetric(post.available_metrics, sortBy)) ? sortBy : "latest";
+//     list.sort((a, b) => {
+//       const metricSort = (
+//         metric: "views" | "impressions" | "likes" | "engagements" | "engagement_rate",
+//         key: string,
+//       ) => {
+//         const aAvailable = hasMetric(a.available_metrics, key);
+//         const bAvailable = hasMetric(b.available_metrics, key);
+//         if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+//         if (!aAvailable) return 0;
+//         return (b[metric] ?? 0) - (a[metric] ?? 0);
+//       };
+//       if (effectiveSort === "views") return metricSort("views", "views");
+//       if (effectiveSort === "impressions") return metricSort("impressions", "impressions");
+//       if (effectiveSort === "likes") return metricSort("likes", "likes");
+//       if (effectiveSort === "engagements") return metricSort("engagements", "engagements");
+//       if (effectiveSort === "eng_rate") {
+//         const aAvailable = hasEngagementRate(a);
+//         const bAvailable = hasEngagementRate(b);
+//         if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+//         if (!aAvailable) return 0;
+//         return b.engagement_rate - a.engagement_rate;
+//       }
+//       return (
+//         new Date(b.published_at || b.created_at).getTime() -
+//         new Date(a.published_at || a.created_at).getTime()
+//       );
+//     });
+//     return list;
+//   })();
+
+//   // Never substitute a page of feed rows or account lifetime totals for the
+//   // selected-range aggregate. Missing coverage stays visibly unavailable.
+//   const totalPublishedPosts = overviewData?.total_posts_published;
+//   const summaryMetric = (key: string, value: number | undefined) => {
+//     if (totalPublishedPosts === 0 && dashboardData?.dataset_complete) return formatNumber(0);
+//     if (
+//       !overviewData ||
+//       overviewData.metrics_status === "unavailable" ||
+//       !hasMetric(overviewData.available_metrics, key)
+//     ) {
+//       return "–";
+//     }
+//     return formatNumber(value);
+//   };
+//   const overviewNotice =
+//     overviewData?.metrics_notice ??
+//     feedPosts.find((post) => post.metrics_notice)?.metrics_notice ??
+//     null;
+//   const followerMetrics = (accountData?.extras as Record<string, unknown> | null)
+//     ?.available_metrics;
+//   const hasFollowerMetric =
+//     !!accountData && accountData.metrics_status !== "unavailable" &&
+//     (hasMetric(
+//       Array.isArray(followerMetrics) ? followerMetrics : undefined,
+//       "followers_count",
+//     ) || accountData?.metrics_status === "available");
+
+//   const tableMetrics = visiblePostMetrics(feedPosts);
+//   const showEngagementRate = feedPosts.some(hasEngagementRate);
+//   const metricLabels: Record<string, string> = {
+//     views: "Views", impressions: "Impressions", likes: "Likes",
+//     comments: selectedAccountId === "all" ? "Comments / replies" : ["x", "threads", "bluesky", "mastodon"].includes(activeAccount?.platform ?? "") ? "Replies" : "Comments",
+//     shares: selectedAccountId === "all" ? "Shares / reposts" : activeAccount?.platform === "threads" ? "Reposts & quotes" : ["x", "bluesky", "mastodon"].includes(activeAccount?.platform ?? "") ? "Reposts" : "Shares",
+//     bookmarks: activeAccount?.platform === "instagram" ? "Saves" : "Bookmarks",
+//   };
+//   const metricIcons: Record<string, LucideIcon> = {views: Eye, impressions: Eye, likes: Heart, comments: MessageCircle, shares: Repeat2, bookmarks: Bookmark};
+//   const sortOptions = (Object.keys(SORT_LABELS) as SortKey[]).filter((key) =>
+//     key === "latest" || (key === "eng_rate" ? showEngagementRate : feedPosts.some((post) => hasMetric(post.available_metrics, key))),
+//   );
+//   const displayedSort = sortOptions.includes(sortBy) ? sortBy : "latest";
+
+//   // 7. Actions
+//   const handleShare = async () => {
+//     if (navigator.share) {
+//       try {
+//         await navigator.share({
+//           title: `${selectedAccountId === "all" ? "All accounts" : activeAccount?.display_name ?? "Account"} analytics`,
+//           url: window.location.href,
+//         });
+//       } catch {
+//         /* user dismissed */
+//       }
+//     } else {
+//       await navigator.clipboard.writeText(window.location.href);
+//       toast.success("Link copied");
+//     }
+//   };
+
+//   const handleExportCSV = () => {
+//     if (!sortedPosts.length) {
+//       toast.message("No posts to export");
+//       return;
+//     }
+//     const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+//     const headers = ["Post text", "Platform", "Published at", ...tableMetrics.map((key) => metricLabels[key]), ...(showEngagementRate ? ["Engagement rate %"] : [])];
+//     const rows = sortedPosts.map((p) => [
+//       p.text, p.platform, p.published_at || p.created_at,
+//       ...tableMetrics.map((key) => postMetric(p, key, p[key as keyof PostFeedItemAnalytics] as number)),
+//       ...(showEngagementRate ? [postEngagementRate(p)] : []),
+//     ].map(esc).join(","));
+//     const blob = new Blob(
+//       ["\uFEFF" + [headers.map(esc).join(","), ...rows].join("\n")],
+//       {
+//         type: "text/csv;charset=utf-8;",
+//       },
+//     );
+//     const url = URL.createObjectURL(blob);
+//     const a = document.createElement("a");
+//     a.href = url;
+//     const exportName =
+//       selectedAccountId === "all"
+//         ? "all_accounts"
+//         : activeAccount?.display_name || "social";
+//     const safeExportName = exportName.replace(/[^a-z0-9_-]+/gi, "_");
+//     a.download = `${safeExportName}_analytics_${format(new Date(), "yyyy-MM-dd")}_page-${feedOffset / ANALYTICS_PAGE_SIZE + 1}.csv`;
+//     document.body.appendChild(a);
+//     a.click();
+//     document.body.removeChild(a);
+//     URL.revokeObjectURL(url);
+//     toast.success("CSV exported");
+//   };
+
+//   /* ------------------------------ Loading state ----------------------------- */
+
+//   if (accountsQuery.isLoading) {
+//     return (
+//       <div className="flex h-full flex-col gap-6 p-6 md:p-8">
+//         <div className="flex items-center justify-between">
+//           <Skeleton className="h-8 w-44" />
+//           <Skeleton className="h-8 w-28" />
+//         </div>
+//         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 ">
+//           {Array.from({ length: 7 }).map((_, i) => (
+//             <Skeleton key={i} className="h-[132px] rounded-2xl" />
+//           ))}
+//         </div>
+//         <Skeleton className="h-80 w-full rounded-2xl" />
+//       </div>
+//     );
+//   }
+
+//   if (accountsQuery.isError) {
+//     return (
+//       <div className="flex h-full min-h-[450px] flex-col items-center justify-center p-8 text-center">
+//         <AlertCircle className="mb-3 size-6 text-destructive" />
+//         <h2 className="text-base font-semibold tracking-tight">
+//           Accounts could not be loaded
+//         </h2>
+//         <p className="mt-1.5 max-w-sm text-[13px] text-muted-foreground">
+//           Check the connection and retry to load analytics.
+//         </p>
+//         <Button
+//           className="mt-5"
+//           variant="outline"
+//           onClick={() => void accountsQuery.refetch()}
+//         >
+//           Try again
+//         </Button>
+//       </div>
+//     );
+//   }
+
+//   /* ------------------------------- Empty state ------------------------------ */
+
+//   if (!accounts.length) {
+//     return (
+//       <div className="flex h-full min-h-[450px] flex-col items-center justify-center p-8 text-center">
+//         <div className="mb-4 flex size-12 items-center justify-center rounded-xl border-[0.5px] border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+//           <TrendingUp className="size-5 text-muted-foreground" />
+//         </div>
+//         <h2 className="text-base font-semibold tracking-tight">
+//           No accounts connected
+//         </h2>
+//         <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-muted-foreground">
+//           Connect an account to see post analytics, impression trends and
+//           audience engagement.
+//         </p>
+//         <Link href="/dashboard/channels" className="mt-5">
+//           <Button size="sm" className="gap-1.5">
+//             <Plus className="size-4" />
+//             Connect a channel
+//           </Button>
+//         </Link>
+//       </div>
+//     );
+//   }
+
+//   if (dashboardData && accountData?.metrics_status === "unavailable" &&
+//       overviewData?.metrics_status === "unavailable") {
+//     return (
+//       <div className="flex h-full min-h-[450px] flex-col items-center justify-center p-8 text-center" role="status">
+//         <PlatformMark platform={activeAccount?.platform ?? ""} className="mb-6 !size-12 !text-3xl" />
+//         <h2 className="text-xl font-semibold">{channelName(activeAccount?.platform ?? "")} analytics is not available</h2>
+//         <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">
+//           {dashboardData.dataset_notice ?? accountData.metrics_notice ?? "This account does not currently provide analytics through its official API."}
+//         </p>
+//         <Button className="mt-6" variant="outline" onClick={() => void refreshMetrics()}>
+//           <RefreshCw className="mr-2 size-4" /> Try again
+//         </Button>
+//       </div>
+//     );
+//   }
+
+//   const isRefreshing =
+//     feedQuery.isFetching || overviewQuery.isFetching || accountMetricsQuery.isFetching;
+//   const latestFeedSyncAt = feedPosts.reduce<string | null>((latest, post) => {
+//     const fetchedAt = post.metrics_fetched_at;
+//     if (!fetchedAt) return latest;
+//     if (!latest || new Date(fetchedAt).getTime() > new Date(latest).getTime()) {
+//       return fetchedAt;
+//     }
+//     return latest;
+//   }, null);
+//   const lastSyncedAt =
+//     selectedAccountId !== "all"
+//       ? accountData?.last_synced_at ?? latestFeedSyncAt
+//       : latestFeedSyncAt;
+//   const syncStatus = isRefreshing
+//     ? "Updating metrics"
+//     : lastSyncedAt
+//       ? `Updated ${formatRelativeTime(lastSyncedAt)}`
+//       : "Live analytics";
+//   const pageStart = feedPosts.length > 0 ? feedOffset + 1 : 0;
+//   const pageEnd = feedOffset + feedPosts.length;
+//   const canGoNext =
+//     totalPublishedPosts !== undefined
+//       ? pageEnd < totalPublishedPosts
+//       : feedPosts.length === ANALYTICS_PAGE_SIZE;
+
+//   /* --------------------------------- Render --------------------------------- */
+
+//   return (
+//     <div className="flex h-full flex-col space-y-5 overflow-y-auto bg-background px-4 py-5 md:px-8 md:py-6">
+//       {/* Page heading and source freshness */}
+//       <div className="flex flex-wrap items-end justify-between gap-4">
+//         <div>
+//           <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+//             Performance
+//           </p>
+//           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Analytics</h1>
+//           <p className="mt-1 text-sm text-muted-foreground">
+//             {selectedAccountId === "all"
+//               ? "All connected accounts"
+//               : activeAccount?.display_name ?? "Selected account"}
+//             <span className="px-1.5">·</span>
+//             {formattedDateLabel}
+//           </p>
+//           <p className="mt-1 text-xs text-muted-foreground/80">
+//             Date range filters posts by publish date; engagement counts are each post’s latest reported totals.
+//           </p>
+//         </div>
+
+//         <div className="flex items-center gap-2">
+//           <span className="inline-flex items-center gap-1.5 rounded-full border-[0.5px] border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+//             <span
+//               className={cn(
+//                 "size-1.5 rounded-full",
+//                 isRefreshing
+//                   ? "animate-pulse bg-blue-500"
+//                   : lastSyncedAt
+//                     ? "bg-emerald-500"
+//                     : "bg-muted-foreground/50",
+//               )}
+//             />
+//             {syncStatus}
+//           </span>
+//           <Button
+//             variant="outline"
+//             size="sm"
+//             onClick={() => void refreshMetrics()}
+//             disabled={isRefreshing}
+//             className="h-8 cursor-pointer gap-1.5 rounded-lg text-xs"
+//             title="Refresh metrics"
+//           >
+//             <RefreshCw
+//               className={cn("size-3.5", isRefreshing && "animate-spin")}
+//             />
+//             <span>{isRefreshing ? "Refreshing…" : "Refresh"}</span>
+//           </Button>
+//           <Button
+//             variant="ghost"
+//             size="sm"
+//             onClick={handleShare}
+//             className="h-8 cursor-pointer gap-1.5 rounded-lg text-xs font-medium"
+//           >
+//             <Share className="size-3.5" />
+//             Share
+//           </Button>
+//         </div>
+//       </div>
+
+//       {overviewQuery.isError || feedQuery.isError || accountMetricsQuery.isError ? (
+//         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3.5 text-sm" role="alert">
+//           <div className="flex items-start gap-2.5 text-muted-foreground">
+//             <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
+//             <span>Analytics could not be loaded. Try again to refresh this view.</span>
+//           </div>
+//           <Button
+//             variant="outline"
+//             size="sm"
+//             onClick={() => {
+//               void refreshMetrics();
+//             }}
+//           >
+//             Try again
+//           </Button>
+//         </div>
+//       ) : null}
+
+//       {dashboardData?.dataset_notice ? (
+//         <p className="rounded-xl border border-border p-3 text-sm text-muted-foreground" role="status">{dashboardData.dataset_notice}</p>
+//       ) : null}
+
+//       {overviewNotice && !overviewQuery.isError ? (
+//         <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 text-xs text-muted-foreground" role="status">
+//           <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
+//           <p className="leading-relaxed">
+//             {overviewNotice}
+//           </p>
+//         </div>
+//       ) : null}
+
+//       {accountData?.metrics_notice && !hasFollowerMetric ? (
+//         <p className="text-xs text-muted-foreground" role="status">{accountData.metrics_notice}</p>
+//       ) : null}
+//       {/* Only show metrics the selected account actually returns. */}
+//       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
+//         {dashboardQuery.isFetching ? [0, 1, 2].map((key) => <Skeleton key={key} className="h-32 rounded-xl" />) : null}
+//         {selectedAccountId !== "all" && hasFollowerMetric ? (
+//           <MetricCard index={0} icon={Users} color="#6366f1" label="Followers" value={formatNumber(accountData?.followers_count)} hint="Current account total" />
+//         ) : null}
+//         {[
+//           {key: "views", total: overviewData?.total_views, label: "Views", icon: Eye, color: "#10b981"},
+//           {key: "impressions", total: overviewData?.total_impressions, label: activeAccount?.platform === "x" ? "Post impressions" : "Impressions", icon: Eye, color: "#10b981"},
+//           {key: "reach", total: overviewData?.total_reach, label: "Reach", icon: TrendingUp, color: "#0ea5e9"},
+//           {key: "profile_clicks", total: overviewData?.total_profile_clicks, label: "Profile clicks", icon: MousePointerClick, color: "#0ea5e9"},
+//           {key: "engagements", total: overviewData?.total_engagements, label: "Engagements", icon: Heart, color: "#ec4899"},
+//           {key: "likes", total: overviewData?.total_likes, label: "Likes", icon: Heart, color: "#f97316"},
+//         ].filter((metric) => hasMetric(overviewData?.available_metrics, metric.key)).map((metric, index) => (
+//           <MetricCard key={metric.key} index={index + 1} icon={metric.icon} color={metric.color} label={metric.label} value={summaryMetric(metric.key, metric.total)} hint="Totals for posts published in this period" />
+//         ))}
+//         {activeAccount?.platform === "x" && selectedAccountId !== "all" && !dashboardQuery.isFetching ? (
+//             <MetricCard
+//               icon={MessageCircle}
+//               color="#8b5cf6"
+//               label="Total impressions"
+//               value={formatNumber(dashboardData?.inclusive_impressions?.total)}
+//               hint={dashboardData?.inclusive_impressions?.complete
+//                 ? "Posts + your replies published in this period"
+//                 : dashboardData?.inclusive_impressions?.total != null
+//                   ? "Partial total · posts + your replies returned by X"
+//                   : "Posts + your replies · currently unavailable"}
+//             />
+//         ) : null}
+//         {!dashboardQuery.isFetching ? <MetricCard index={6} icon={FileText} color="#8b5cf6" label="Published posts" value={dashboardData?.dataset_complete ? formatNumber(totalPublishedPosts) : "–"} hint="Returned by the platform for this period" /> : null}
+//       </div>
+
+//       {/* Filters row */}
+//       <div className="flex flex-wrap items-center justify-between gap-3">
+//   <div className="flex flex-wrap items-center gap-2">
+//     {/* Quick presets (desktop). Same state as the popover list. */}
+//     <div
+//       role="tablist"
+//       aria-label="Timeframe"
+//       className="hidden items-center gap-0.5 rounded-xl border-[0.5px] border-border bg-muted/50 p-0.5 sm:flex"
+//     >
+//       {PRESETS.map((p) => {
+//         const active = timeframe === p.id;
+//         return (
+//           <button
+//             key={p.id}
+//             role="tab"
+//             aria-selected={active}
+//             type="button"
+//             onClick={() => handleSelectPreset(p.id)}
+//             className={cn(
+//               "h-7 cursor-pointer rounded-[10px] px-3 text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+//               active
+//                 ? "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.08)] ring-[0.5px] ring-border"
+//                 : "text-muted-foreground hover:text-foreground",
+//             )}
+//           >
+//             {p.short}
+//           </button>
+//         );
+//       })}
+//     </div>
+
+//     {/* Date range popover */}
+//     <Popover
+//       open={dateOpen}
+//       onOpenChange={(open) => {
+//         setDateOpen(open);
+//         if (open) setDraftDateRange(dateRange);
+//       }}
+//     >
+//       <PopoverTrigger
+//         render={
+//           <Button
+//             variant="outline"
+//             size="sm"
+//             className={cn(
+//               "h-8 cursor-pointer gap-2 rounded-xl border-[0.5px] bg-card px-3 text-xs font-medium shadow-[0_1px_1px_rgba(0,0,0,0.03)]",
+//               timeframe === "custom" && "border-primary/40 text-foreground",
+//             )}
+//           >
+//             <CalendarDays className="size-3.5 text-muted-foreground" />
+//             <span className="tabular-nums">{formattedDateLabel}</span>
+//             <ChevronDown
+//               className={cn(
+//                 "size-3 text-muted-foreground/70 transition-transform duration-200",
+//                 dateOpen && "rotate-180",
+//               )}
+//             />
+//           </Button>
+//         }
+//       />
+//       <PopoverContent
+//         align="start"
+//         sideOffset={8}
+//         className="w-auto overflow-hidden rounded-2xl p-0 shadow-xl"
+//       >
+//         <div className="flex flex-col sm:flex-row">
+//           {/* Presets: sidebar on desktop, scroll row on mobile */}
+//           <div className="flex gap-1 overflow-x-auto border-b-[0.5px] border-border p-2 sm:w-40 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r-[0.5px] sm:p-2.5">
+//             <p className="hidden px-2.5 pb-1 pt-1 text-[11px] font-medium text-muted-foreground sm:block">
+//               Quick ranges
+//             </p>
+//             {PRESETS.map((p) => {
+//               const active = timeframe === p.id;
+//               return (
+//                 <button
+//                   key={p.id}
+//                   type="button"
+//                   onClick={() => {
+//                     handleSelectPreset(p.id);
+//                     setDateOpen(false);
+//                   }}
+//                   className={cn(
+//                     "flex shrink-0 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+//                     active
+//                       ? "bg-primary/10 text-foreground"
+//                       : "text-muted-foreground hover:bg-muted hover:text-foreground",
+//                   )}
+//                 >
+//                   {p.id === "all" ? "All time" : `Last ${p.label}`}
+//                   {active && <Check className="size-3.5 text-primary" />}
+//                 </button>
+//               );
+//             })}
+//             <button
+//               type="button"
+//               disabled
+//               className={cn(
+//                 "flex shrink-0 items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium",
+//                 timeframe === "custom"
+//                   ? "bg-primary/10 text-foreground"
+//                   : "hidden text-muted-foreground sm:flex",
+//               )}
+//             >
+//               Custom range
+//               {timeframe === "custom" && <Check className="size-3.5 text-primary" />}
+//             </button>
+//           </div>
+
+//           {/* Calendar + footer */}
+//           <div className="flex flex-col">
+//             <Calendar
+//               mode="range"
+//               selected={draftDateRange}
+//               defaultMonth={draftDateRange?.from}
+//               onSelect={setDraftDateRange}
+//               disabled={{ after: new Date() }}
+//               numberOfMonths={1}
+//               showOutsideDays={false}
+//               className="p-3"
+//             />
+
+//             <div className="flex items-center justify-between gap-4 border-t-[0.5px] border-border bg-muted/30 px-4 py-2.5">
+//               <div className="min-w-0 text-[11px] leading-tight">
+//                 {draftDateRange?.from ? (
+//                   <>
+//                     <p className="truncate font-medium text-foreground tabular-nums">
+//                       {format(draftDateRange.from, "MMM d, yyyy")}
+//                       {draftDateRange.to && ` – ${format(draftDateRange.to, "MMM d, yyyy")}`}
+//                     </p>
+//                     <p className="mt-0.5 text-muted-foreground">
+//                       {draftDateRange.to
+//                         ? `${differenceInCalendarDays(draftDateRange.to, draftDateRange.from) + 1} days selected`
+//                         : "Select an end date"}
+//                     </p>
+//                   </>
+//                 ) : (
+//                   <p className="text-muted-foreground">Choose a date range</p>
+//                 )}
+//               </div>
+
+//               <div className="flex shrink-0 items-center gap-1.5">
+//                 {timeframe !== "30d" && (
+//                   <Button
+//                     variant="ghost"
+//                     size="sm"
+//                     className="h-7 cursor-pointer px-2.5 text-xs text-muted-foreground hover:text-foreground"
+//                     onClick={() => {
+//                       handleSelectPreset("30d");
+//                       setDateOpen(false);
+//                     }}
+//                   >
+//                     Reset
+//                   </Button>
+//                 )}
+//                 <Button
+//                   size="sm"
+//                   className="h-7 cursor-pointer px-3 text-xs"
+//                   disabled={!!draftDateRange?.from && !draftDateRange?.to}
+//                   onClick={() => {
+//                     if (draftDateRange?.from && draftDateRange.to) {
+//                       setDateRange(draftDateRange);
+//                       setTimeframe("custom");
+//                     } else if (!draftDateRange) {
+//                       setTimeframe("all");
+//                       setDateRange(undefined);
+//                     }
+//                     setDateOpen(false);
+//                   }}
+//                 >
+//                   Apply
+//                 </Button>
+//               </div>
+//             </div>
+//           </div>
+//         </div>
+//       </PopoverContent>
+//     </Popover>
+//   </div>
+
+//   {/* Sort */}
+//   <DropdownMenu>
+//     <DropdownMenuTrigger
+//       render={
+//         <Button
+//           variant="outline"
+//           size="sm"
+//           className="h-8 cursor-pointer gap-2 rounded-xl border-[0.5px] bg-card px-3 text-xs font-medium shadow-[0_1px_1px_rgba(0,0,0,0.03)]"
+//         >
+//           <ArrowUpDown className="size-3 text-muted-foreground" />
+//           <span className="text-muted-foreground">Sort</span>
+//           <span>{SORT_LABELS[displayedSort]}</span>
+//           <ChevronDown className="size-3 text-muted-foreground/70" />
+//         </Button>
+//       }
+//     />
+//     <DropdownMenuContent align="end" className="w-56 rounded-xl p-1 text-xs">
+//       <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-muted-foreground">
+//         Sort posts by
+//       </p>
+//       {sortOptions.map((key) => (
+//         <DropdownMenuItem
+//           key={key}
+//           onClick={() => setSortBy(key)}
+//           className={cn(
+//             "cursor-pointer justify-between gap-2 rounded-lg py-1.5",
+//             sortBy === key && "bg-primary/10 font-medium",
+//           )}
+//         >
+//           {SORT_LABELS[key]}
+//           {sortBy === key && <Check className="size-3.5 text-primary" />}
+//         </DropdownMenuItem>
+//       ))}
+//     </DropdownMenuContent>
+//   </DropdownMenu>
+//   <Button
+//     variant="outline"
+//     size="sm"
+//     onClick={handleExportCSV}
+//     disabled={!sortedPosts.length}
+//     className="h-8 cursor-pointer gap-2 rounded-xl border-[0.5px] bg-card px-3 text-xs font-medium"
+//     title="Export the visible page of posts"
+//   >
+//     <Download className="size-3.5 text-muted-foreground" />
+//     Export page
+//   </Button>
+// </div>
+//       {/* Posts table */}
+//       <div className="max-h-[740px] min-h-[360px] overflow-auto rounded-xl border-[0.5px] border-border">
+//         <table className="w-full min-w-[760px] table-fixed text-xs">
+//           <colgroup>
+//             <col />
+//             {tableMetrics.map((key) => <col key={key} className={key === "shares" ? "w-[144px]" : "w-[100px]"} />)}
+//             {showEngagementRate ? <col className="w-[96px]" /> : null}
+//             <col className="w-12" />
+//           </colgroup>
+//           <thead>
+//             <tr className="border-b-[0.5px] border-border text-muted-foreground">
+//               <SortableHead align="left" active={displayedSort === "latest"} onClick={() => setSortBy("latest")}>Post</SortableHead>
+//               {tableMetrics.map((key) => {
+//                 const Icon = metricIcons[key];
+//                 const sortable = ["views", "impressions", "likes"].includes(key);
+//                 return <SortableHead key={key} active={displayedSort === key} onClick={sortable ? () => setSortBy(key as SortKey) : undefined}><Icon className="size-3 opacity-60" />{metricLabels[key]}</SortableHead>;
+//               })}
+//               {showEngagementRate ? <SortableHead active={displayedSort === "eng_rate"} onClick={() => setSortBy("eng_rate")}><Percent className="size-3 opacity-60" />Eng. rate</SortableHead> : null}
+//               <th className="sticky top-0 z-10 bg-card" />
+//             </tr>
+//           </thead>
+
+//           <tbody className="divide-y-[0.5px] divide-border">
+//             {!sortedPosts.length && (
+//               <tr>
+//                 <td colSpan={tableMetrics.length + (showEngagementRate ? 1 : 0) + 2} className="px-4 py-16 text-center">
+//                   <p className="text-sm font-medium text-foreground">
+//                     {feedQuery.isFetching
+//                       ? "Loading published posts…"
+//                       : feedQuery.isError || dashboardData?.dataset_complete === false
+//                         ? "Published posts could not be loaded"
+//                         : totalPublishedPosts === 0
+//                           ? `No posts published during ${formattedDateLabel.toLowerCase()}.`
+//                           : "No posts on this page."}
+//                   </p>
+//                   <p className="mt-1 text-xs text-muted-foreground">
+//                     {feedQuery.isError || dashboardData?.dataset_complete === false
+//                       ? "Retry the request to see post performance."
+//                       : "Change the date range or account to view another set of posts."}
+//                   </p>
+//                 </td>
+//               </tr>
+//             )}
+//             {sortedPosts.map((post) => {
+//               const mediaThumb = post.media_urls?.[0];
+//               const externalUrl = getExternalPostUrl(
+//                 post.platform,
+//                 post.external_post_id,
+//               );
+//               const num =
+//                 "px-3 py-3 text-right align-middle tabular-nums text-foreground";
+
+//               return (
+//                 <tr
+//                   key={post.variant_id}
+//                   title={post.metrics_notice ?? undefined}
+//                   className="group transition-colors hover:bg-muted/40"
+//                 >
+//                   {/* Post: thumb slot + clamped text + meta */}
+//                   <td className="min-w-0 px-3 py-3 align-middle">
+//                     <div className="flex min-w-0 items-center gap-3">
+//                       <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-[0.5px] border-border bg-muted/40">
+//                         {mediaThumb ? (
+//                           // eslint-disable-next-line @next/next/no-img-element
+//                           <img
+//                             src={mediaThumb}
+//                             alt=""
+//                             loading="lazy"
+//                             className="size-full object-cover"
+//                           />
+//                         ) : (
+//                           <FileText className="size-4 text-muted-foreground/60" />
+//                         )}
+//                       </div>
+
+//                       <div className="min-w-0 flex-1 space-y-1">
+//                         <p
+//                           title={post.text}
+//                           className="line-clamp-2 break-words text-[13px] leading-snug text-foreground"
+//                         >
+//                           {post.text || "No text content"}
+//                         </p>
+//                         <div className="flex min-w-0 items-center gap-3 overflow-hidden whitespace-nowrap text-[11px] text-muted-foreground">
+//                           <span className="shrink-0">
+//                             {formatRelativeTime(
+//                               post.published_at || post.created_at,
+//                             )}
+//                           </span>
+//                           <span className="shrink-0">
+//                             {selectedAccountId === "all"
+//                               ? `${post.account_display_name || channelName(post.platform)} · ${channelName(post.platform)}`
+//                               : channelName(post.platform)}
+//                           </span>
+//                           {post.post_id && <Link
+//                             href={`/dashboard/content?variant=${post.variant_id}`}
+//                             className="shrink-0 underline-offset-2 transition-colors hover:text-foreground hover:underline"
+//                           >
+//                             Open in studio
+//                           </Link>}
+//                           {externalUrl && (
+//                             <a
+//                               href={externalUrl}
+//                               target="_blank"
+//                               rel="noopener noreferrer"
+//                               className="inline-flex min-w-0 items-center gap-1 underline-offset-2 transition-colors hover:text-foreground hover:underline"
+//                             >
+//                               <span className="truncate">
+//                                 View on {channelName(post.platform)}
+//                               </span>
+//                               <ExternalLink className="size-2.5 shrink-0" />
+//                             </a>
+//                           )}
+//                         </div>
+//                       </div>
+//                     </div>
+//                   </td>
+
+//                   {tableMetrics.map((key) => <td key={key} className={num}>{postMetric(post, key, post[key as keyof PostFeedItemAnalytics] as number)}</td>)}
+//                   {showEngagementRate ? <td className="px-3 py-3 text-right align-middle">
+//                     <span className={cn("inline-block min-w-[3.25rem] rounded-full px-2 py-0.5 text-center font-medium tabular-nums", hasEngagementRate(post) ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+//                       {postEngagementRate(post)}
+//                     </span>
+//                   </td> : null}
+
+//                   <td className="px-2 py-3 text-right align-middle">
+//                     <DropdownMenu>
+//                       <DropdownMenuTrigger
+//                         render={
+//                           <button
+//                             type="button"
+//                             aria-label="Post actions"
+//                             className="rounded-md p-1 text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[popup-open]:opacity-100"
+//                           >
+//                             <MoreHorizontal className="size-4" />
+//                           </button>
+//                         }
+//                       />
+//                       <DropdownMenuContent align="end" className="w-48 text-xs">
+//                         <DropdownMenuItem
+//                           className="gap-2"
+//                           onClick={async () => {
+//                             await navigator.clipboard.writeText(post.text);
+//                             toast.success("Post text copied");
+//                           }}
+//                         >
+//                           <Copy className="size-3 text-muted-foreground" />
+//                           Copy text
+//                         </DropdownMenuItem>
+//                         {post.post_id && <DropdownMenuItem
+//                           className="gap-2"
+//                           onClick={() =>
+//                             router.push(
+//                               `/dashboard/content?variant=${post.variant_id}`,
+//                             )
+//                           }
+//                         >
+//                           <Sparkles className="size-3 text-muted-foreground" />
+//                           Open in studio
+//                         </DropdownMenuItem>}
+//                         {externalUrl && (
+//                           <DropdownMenuItem
+//                             className="gap-2"
+//                             onClick={() =>
+//                               window.open(
+//                                 externalUrl,
+//                                 "_blank",
+//                                 "noopener,noreferrer",
+//                               )
+//                             }
+//                           >
+//                             <ExternalLink className="size-3 text-muted-foreground" />
+//                             View on {channelName(post.platform)}
+//                           </DropdownMenuItem>
+//                         )}
+//                         {post.external_post_id && (
+//                           <DropdownMenuItem
+//                             className="gap-2"
+//                             onClick={async () => {
+//                               await navigator.clipboard.writeText(
+//                                 post.external_post_id!,
+//                               );
+//                               toast.success("External ID copied");
+//                             }}
+//                           >
+//                             <Copy className="size-3 text-muted-foreground" />
+//                             Copy external ID
+//                           </DropdownMenuItem>
+//                         )}
+//                       </DropdownMenuContent>
+//                     </DropdownMenu>
+//                   </td>
+//                 </tr>
+//               );
+//             })}
+//           </tbody>
+//         </table>
+//       </div>
+//       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+//         <span>
+//           {feedQuery.isFetching
+//             ? "Fetching live posts…"
+//             : totalPublishedPosts === undefined || !dashboardData?.dataset_complete
+//             ? `Showing ${pageStart}–${pageEnd} posts`
+//             : `Showing ${pageStart}–${pageEnd} of ${formatNumber(totalPublishedPosts)} posts`}
+//           {feedPosts.length > 0 && sortBy !== "latest" ? " · Sorted on this page" : ""}
+//         </span>
+//         <div className="flex items-center gap-2">
+//           <Button
+//           className="rounded-md"
+//             variant="outline"
+//             size="sm"
+//             disabled={feedOffset === 0 || feedQuery.isFetching}
+//             onClick={() =>
+//               setPageState({
+//                 scope: feedScope,
+//                 offset: Math.max(0, feedOffset - ANALYTICS_PAGE_SIZE),
+//               })
+//             }
+//           >
+//             Previous
+//           </Button>
+//           <Button
+//            className="rounded-md"
+//             variant="outline"
+//             size="sm"
+//             disabled={!canGoNext || feedQuery.isFetching}
+//             onClick={() =>
+//               setPageState({
+//                 scope: feedScope,
+//                 offset: feedOffset + ANALYTICS_PAGE_SIZE,
+//               })
+//             }
+//           >
+//             Next
+//           </Button>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+
+
+import React, { useEffect, useMemo, useState } from "react";
+
 import Link from "next/link";
-import { useQuery, useMutation } from "@tanstack/react-query";
+
+import { useRouter } from "next/navigation";
+
+import { useQuery } from "@tanstack/react-query";
+
+import { motion } from "framer-motion";
+
 import { toast } from "sonner";
+
 import {
-  Users,
+
+  format,
+
+  subDays,
+
+  startOfDay,
+
+  endOfDay,
+
+  differenceInCalendarDays,
+
+} from "date-fns";
+
+import type { DateRange } from "react-day-picker";
+
+import {
+
   Eye,
+
   Heart,
+
   MessageCircle,
+
   Repeat2,
+
   Bookmark,
-  Share2,
+
   MousePointerClick,
+
   RefreshCw,
+
   TrendingUp,
+
   Download,
+
   Share,
-  Flame,
-  Clock,
+
   MoreHorizontal,
+
   ExternalLink,
+
   ArrowUpDown,
-  Search,
+
   Sparkles,
+
   Percent,
+
   Plus,
+
+  CalendarDays,
+
+  ChevronDown,
+
+  Info,
+
+  Copy,
+
+  AlertCircle,
+
+  Users,
+
+  LucideIcon,
+
+  FileText,
+
+  Check,
+
 } from "lucide-react";
 
-import { useTRPC } from "@/trpc/client";
-import { useComposer } from "@/modules/content/context/ComposerContext";
-import AccountAvatar from "@/modules/channels/component/AccountAvatar";
-import { PlatformMark } from "@/modules/content/studio/AccountSwitcher";
-import { channelName } from "@/modules/studio/types";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import type { Account, PostFeedItemAnalytics } from "@/modules/studio/types";
 
-function formatNumber(num: number): string {
-  if (!num) return "0";
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (num >= 1_000) return (num / 1_000).toFixed(2).replace(/\.00$/, "").replace(/(\.[0-9])0$/, "$1") + "K";
+
+import { currentDashboard, liveAnalyticsOptions, hasMetric, hasEngagementRate, visiblePostMetrics } from "../liveAnalytics";
+
+import { useTRPC } from "@/trpc/client";
+
+import { useComposer } from "@/modules/content/context/ComposerContext";
+
+import { PlatformMark } from "@/modules/content/studio/AccountSwitcher";
+
+import { channelName } from "@/modules/studio/types";
+
+import { Button } from "@/components/ui/button";
+
+import { Skeleton } from "@/components/ui/skeleton";
+
+
+import {
+
+  Popover,
+
+  PopoverContent,
+
+  PopoverTrigger,
+
+} from "@/components/ui/popover";
+
+import { Calendar } from "@/components/ui/calendar";
+
+import {
+
+  DropdownMenu,
+
+  DropdownMenuContent,
+
+  DropdownMenuItem,
+
+  DropdownMenuTrigger,
+
+} from "@/components/ui/dropdown-menu";
+
+import { cn } from "@/lib/utils";
+
+import type { Account, PostFeedItemAnalytics } from "@/modules/studio/types";
+import {  MetricCard, MetricCardSkeleton, MetricsGridSkeleton  } from "../component/MetricCard";
+
+
+
+/* -------------------------------------------------------------------------- */
+
+/*  Helpers                                                                   */
+
+/* -------------------------------------------------------------------------- */
+
+
+
+type SortKey = "latest" | "views" | "impressions" | "likes" | "engagements" | "eng_rate";
+
+type Timeframe = "7d" | "30d" | "90d" | "all" | "custom";
+
+const ANALYTICS_PAGE_SIZE = 50;
+
+const EMPTY_ACCOUNTS: Account[] = [];
+
+const EMPTY_FEED: PostFeedItemAnalytics[] = [];
+
+
+
+const SORT_LABELS: Record<SortKey, string> = {
+
+  latest: "Latest",
+
+  impressions: "Most impressions",
+
+  views: "Most views",
+
+  likes: "Most likes",
+
+  engagements: "Most engagements",
+
+  eng_rate: "Highest engagement rate",
+
+};
+
+
+
+const PRESETS: {
+
+  id: Exclude<Timeframe, "custom">;
+
+  label: string;
+
+  short: string;
+
+}[] = [
+
+  { id: "7d", label: "7 days", short: "7d" },
+
+  { id: "30d", label: "30 days", short: "30d" },
+
+  { id: "90d", label: "90 days", short: "90d" },
+
+  { id: "all", label: "All time", short: "All" },
+
+];
+
+
+
+function formatNumber(num: number | null | undefined): string {
+
+  if (
+
+    num === null ||
+
+    num === undefined ||
+
+    !Number.isFinite(num)
+
+  ) return "–";
+
+  if (num >= 1_000_000)
+
+    return `${(num / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+
+  if (num >= 10_000) return `${Math.round(num / 1_000)}K`;
+
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+
   return num.toLocaleString();
+
 }
+
+
 
 function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return "Just now";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
+
+  if (!dateStr) return "No sync time";
+
+  const timestamp = new Date(dateStr).getTime();
+
+  if (!Number.isFinite(timestamp)) return "Unknown update time";
+
+  const diff = Date.now() - timestamp;
+
+  const minutes = Math.floor(diff / 60_000);
+
   if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}h ago`;
+
+  if (minutes < 60) return `${minutes}m ago`;
+
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hours ago`;
+
+  if (hours < 24) return `${hours}h ago`;
+
   const days = Math.floor(hours / 24);
+
   if (days < 30) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
 
-function Sparkline({ data, height = 36, color = "#10b981" }: { data: number[]; height?: number; color?: string }) {
-  const points = data.length > 1 ? data : [0, 0, 1, 2, 4, 3, 5];
-  const max = Math.max(...points, 1);
-  const min = Math.min(...points, 0);
-  const range = max - min || 1;
-  const width = 120;
+  return new Date(dateStr).toLocaleDateString(undefined, {
 
-  const coords = points.map((val, i) => {
-    const x = (i / (points.length - 1)) * width;
-    const y = height - ((val - min) / range) * (height - 8) - 4;
-    return `${x},${y}`;
+    month: "short",
+
+    day: "numeric",
+
   });
 
-  const path = `M ${coords.join(" L ")}`;
-  const areaPath = `M ${coords[0]} L ${coords.join(" L ")} L ${width},${height} L 0,${height} Z`;
-
-  return (
-    <div className="relative overflow-hidden w-full h-[36px] mt-2">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id={`grad-${color.replace("#", "")}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={color} stopOpacity="0.18" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.0" />
-          </linearGradient>
-        </defs>
-        <path d={areaPath} fill={`url(#grad-${color.replace("#", "")})`} />
-        <path d={path} fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </div>
-  );
 }
 
+
+
+function postMetric(
+
+  post: PostFeedItemAnalytics,
+
+  key: string,
+
+  value: number | null | undefined,
+
+): string {
+
+  if (post.metrics_status === "unavailable" || !hasMetric(post.available_metrics, key)) {
+
+    return "–";
+
+  }
+
+  return formatNumber(value);
+
+}
+
+
+
+function postEngagementRate(post: PostFeedItemAnalytics): string {
+
+  if (!hasEngagementRate(post)) return "–";
+
+  return `${post.engagement_rate}%`;
+
+}
+
+
+
+function getExternalPostUrl(
+
+  platform: string,
+
+  externalId?: string | null,
+
+): string | null {
+
+  if (!externalId) return null;
+
+  if (/^https?:\/\//i.test(externalId)) return externalId;
+
+  if (platform === "x") return `https://x.com/i/status/${externalId}`;
+
+  if (platform === "linkedin") {
+
+    return externalId.includes("urn:")
+
+      ? `https://www.linkedin.com/feed/update/${externalId}`
+
+      : null;
+
+  }
+
+  if (platform === "reddit") {
+
+    const redditId = externalId.startsWith("t3_") ? externalId.slice(3) : externalId;
+
+    return `https://reddit.com/comments/${redditId}`;
+
+  }
+
+  // These networks do not expose a reliably constructible public permalink from
+
+  // the external ID alone. A direct URL is accepted above when one is provided.
+
+  return null;
+
+}
+
+
+
+/* -------------------------------------------------------------------------- */
+
+/*  Small components                                                          */
+
+/* -------------------------------------------------------------------------- */
+
+
+
+function SortableHead({
+
+  children,
+
+  active,
+
+  onClick,
+
+  align = "right",
+
+  className,
+
+}: {
+
+  children: React.ReactNode;
+
+  active?: boolean;
+
+  onClick?: () => void;
+
+  align?: "left" | "right";
+
+  className?: string;
+
+}) {
+
+  return (
+
+    <th
+
+      className={cn(
+
+        "sticky top-0 z-10 bg-card px-3 py-2.5 text-[11px] font-medium whitespace-nowrap",
+
+        align === "right" ? "text-right" : "text-left",
+
+        className,
+
+      )}
+
+    >
+
+      <button
+
+        type="button"
+
+        onClick={onClick}
+
+        disabled={!onClick}
+
+        className={cn(
+
+          "inline-flex items-center gap-1.5 transition-colors",
+
+          align === "right" && "flex-row-reverse",
+
+          onClick ? "cursor-pointer hover:text-foreground" : "cursor-default",
+
+          active && "text-foreground",
+
+        )}
+
+      >
+
+        <span className="inline-flex items-center gap-1.5">{children}</span>
+
+        {/* Reserved width so active/inactive headers never shift */}
+
+        <span
+
+          className={cn(
+
+            "w-2.5 text-[10px] leading-none",
+
+            active ? "opacity-100" : "opacity-0",
+
+          )}
+
+        >
+
+          ↓
+
+        </span>
+
+      </button>
+
+    </th>
+
+  );
+
+}
+
+/* -------------------------------------------------------------------------- */
+
+/*  Main view                                                                 */
+
+/* -------------------------------------------------------------------------- */
+
+
+
 export default function AnalyticsView() {
+
   const trpc = useTRPC();
+
+  const router = useRouter();
+
   const { setStudioNavigation } = useComposer();
 
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-  const [timeframe, setTimeframe] = useState<"7d" | "30d" | "90d">("30d");
-  const [sortBy, setSortBy] = useState<"latest" | "impressions" | "likes" | "engagements" | "eng_rate">("latest");
-  const [postFilter, setPostFilter] = useState<"all" | "replies">("all");
+  const [dateOpen, setDateOpen] = useState(false);
 
-  // 1. Fetch connected accounts
+  const [accountSelection, setSelectedAccountId] = useState<string | "all">(
+
+    "",
+
+  );
+
+  const [timeframe, setTimeframe] = useState<Timeframe>("30d");
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => ({
+
+    from: subDays(new Date(), 29),
+
+    to: new Date(),
+
+  }));
+
+  const [draftDateRange, setDraftDateRange] = useState<DateRange | undefined>(
+
+    () => ({ from: subDays(new Date(), 29), to: new Date() }),
+
+  );
+
+  const [sortBy, setSortBy] = useState<SortKey>("latest");
+
+  const [pageState, setPageState] = useState({ scope: "", offset: 0 });
+
+
+
+  // 1. Accounts
+
   const accountsQuery = useQuery(trpc.studio.accounts.queryOptions());
-  const accounts: Account[] = accountsQuery.data ?? [];
 
-  // 2. Active account
+  const accounts: Account[] = accountsQuery.data ?? EMPTY_ACCOUNTS;
+
+
+
   const activeAccount = useMemo(() => {
-    if (!accounts.length) return null;
-    if (selectedAccountId) {
-      const match = accounts.find((a) => a.id === selectedAccountId);
-      if (match) return match;
-    }
-    return accounts.find((a) => a.status === "active") ?? accounts[0];
-  }, [accounts, selectedAccountId]);
 
-  // 3. Keep studioNavigation in sync with top navigation bar
+    if (!accounts.length) return null;
+
+    if (accountSelection && accountSelection !== "all") {
+
+      const match = accounts.find((a) => a.id === accountSelection);
+
+      if (match) return match;
+
+    }
+
+    return accounts.find((a) => a.status === "active") ?? accounts[0];
+
+  }, [accounts, accountSelection]);
+
+  const selectedAccountId = accountSelection === "all" ? "all" : activeAccount?.id ?? "";
+
+
+
+  // 2. Keep top navigation in sync
+
   useEffect(() => {
+
     if (!activeAccount || !accounts.length) {
+
       setStudioNavigation(null);
+
       return;
+
     }
 
     setStudioNavigation({
+
       account: activeAccount,
+
       accounts,
+
       onSelect: (id: string) => setSelectedAccountId(id),
+
     });
 
     return () => setStudioNavigation(null);
+
   }, [activeAccount, accounts, setStudioNavigation]);
 
-  // 4. Fetch account analytics
-  const accountMetricsQuery = useQuery({
-    ...trpc.studio.accountAnalytics.queryOptions({ id: activeAccount?.id ?? "" }),
-    enabled: !!activeAccount?.id,
-    retry: false,
-  });
 
-  // 5. Fetch posts analytics feed
-  const feedQuery = useQuery({
-    ...trpc.studio.analyticsFeed.queryOptions({
-      account_id: activeAccount?.id,
-      limit: 50,
-    }),
-    enabled: !!activeAccount?.id,
-    retry: false,
-  });
 
-  // 6. Manual sync mutation
-  const syncMutation = useMutation(
-    trpc.studio.syncMetrics.mutationOptions({
-      onSuccess: () => {
-        toast.success("Metrics sync initiated from official APIs.");
-        void accountMetricsQuery.refetch();
-        void feedQuery.refetch();
-      },
-      onError: (err: { message?: string }) => {
-        toast.error(err.message || "Could not trigger sync.");
-      },
-    }),
-  );
+  // 3. Date bounds (full days so "today" isn't cut off mid-day)
 
-  const accountData = accountMetricsQuery.data ?? null;
-  const feedPosts = feedQuery.data ?? [];
+  const startDateStr = useMemo(() => {
 
-  // Filter and sort feed posts
-  const sortedPosts = useMemo(() => {
-    let list = [...feedPosts];
-    if (postFilter === "replies") {
-      list = list.filter((p) => p.text.startsWith("@") || p.comments > 0);
+    if (timeframe === "all") return new Date(0).toISOString();
+
+    if (!dateRange?.from) return undefined;
+
+    return startOfDay(dateRange.from).toISOString();
+
+  }, [timeframe, dateRange]);
+
+
+
+  const endDateStr = useMemo(() => {
+
+    if (timeframe === "all" || !dateRange?.to) return undefined;
+
+    return endOfDay(dateRange.to).toISOString();
+
+  }, [timeframe, dateRange]);
+
+
+
+  const formattedDateLabel = useMemo(() => {
+
+    if (timeframe === "all") return "All time";
+
+    if (dateRange?.from && dateRange?.to) {
+
+      return `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d, yyyy")}`;
+
     }
-    list.sort((a, b) => {
-      if (sortBy === "impressions") return b.impressions - a.impressions;
-      if (sortBy === "likes") return b.likes - a.likes;
-      if (sortBy === "engagements") return b.engagements - a.engagements;
-      if (sortBy === "eng_rate") return b.engagement_rate - a.engagement_rate;
-      return new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime();
-    });
-    return list;
-  }, [feedPosts, sortBy, postFilter]);
 
-  // Calculated totals from posts feed
-  const totalImpressions = useMemo(
-    () => accountData?.impressions || feedPosts.reduce((acc, p) => acc + (p.impressions || 0), 0),
-    [accountData, feedPosts],
-  );
-  const totalEngagements = useMemo(
-    () => feedPosts.reduce((acc, p) => acc + (p.engagements || 0), 0),
-    [feedPosts],
-  );
-  const totalClicks = useMemo(
-    () => accountData?.profile_views || feedPosts.reduce((acc, p) => acc + (p.clicks || 0), 0),
-    [accountData, feedPosts],
-  );
+    if (dateRange?.from) return `From ${format(dateRange.from, "MMM d, yyyy")}`;
 
-  // Sparkline data generators
-  const snapshots = accountData?.historical_snapshots || [];
-  const followersSparkline = snapshots.length > 1 ? snapshots.map((s) => s.followers_count) : [70, 78, 85, 91, 95];
-  const impressionsSparkline = snapshots.length > 1 ? snapshots.map((s) => s.impressions) : [1200, 2400, 4800, 7500, 9090];
-  const postsSparkline = [2, 5, 8, 12, 17];
-  const clicksSparkline = [3, 8, 14, 21, 27];
-  const engagementsSparkline = snapshots.length > 1 ? snapshots.map((s) => s.engagements) : [20, 45, 80, 110, 146];
-  const hourlySparkline = [5, 12, 28, 45, 92, 110, 85, 60, 40, 25, 10];
-  const streakSparkline = [1, 2, 1, 3, 2, 4, 3, 5, 4, 6, 2, 1];
+    return "Select date range";
 
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: `${activeAccount?.display_name ?? "Account"} Analytics`,
-        url: window.location.href,
-      }).catch(() => {});
+  }, [timeframe, dateRange]);
+
+
+
+  const handleSelectPreset = (preset: Exclude<Timeframe, "custom">) => {
+
+    setTimeframe(preset);
+
+    const now = new Date();
+
+    if (preset === "all") {
+
+      setDateRange(undefined);
+
+      setDraftDateRange(undefined);
+
     } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success("Analytics link copied to clipboard");
+
+      const from = subDays(now, parseInt(preset, 10) - 1);
+
+      setDateRange({ from, to: now });
+
+      setDraftDateRange({ from, to: now });
+
     }
+
   };
+
+
+
+  const feedScope = JSON.stringify([
+
+    selectedAccountId,
+
+    startDateStr ?? "",
+
+    endDateStr ?? "",
+
+  ]);
+
+  const feedOffset = pageState.scope === feedScope ? pageState.offset : 0;
+
+
+
+  // One account-scoped response keeps the cards and table consistent.
+
+  const dashboardQuery = useQuery({
+
+    ...trpc.studio.analyticsDashboard.queryOptions({
+
+      account_id: selectedAccountId === "all" ? undefined : activeAccount?.id,
+
+      start_date: startDateStr,
+
+      end_date: endDateStr,
+
+      limit: ANALYTICS_PAGE_SIZE,
+
+      offset: feedOffset,
+
+    }),
+
+    enabled: !!activeAccount?.id,
+
+    ...liveAnalyticsOptions,
+
+  });
+
+  // Never render a previous result during a switch, refresh, or failed request.
+
+  const dashboardData = currentDashboard(
+
+    dashboardQuery.data,
+
+    selectedAccountId === "all" ? null : activeAccount?.id ?? "",
+
+    dashboardQuery.isFetching,
+
+    dashboardQuery.isError,
+
+  );
+
+  const accountData = dashboardData?.accounts.find((a) => a.account_id === activeAccount?.id) ?? null;
+
+  const overviewData = dashboardData?.overview ?? null;
+
+  const feedPosts: PostFeedItemAnalytics[] = dashboardData?.posts ?? EMPTY_FEED;
+
+  const accountMetricsQuery = dashboardQuery;
+
+  const overviewQuery = dashboardQuery;
+
+  const feedQuery = dashboardQuery;
+
+  const refreshMetrics = async () => {
+
+    const result = await dashboardQuery.refetch();
+
+    if (result.error) toast.error("Couldn't refresh analytics");
+
+  };
+
+
+
+  // 5. Sort only the current server-paginated page.
+
+  const sortedPosts = (() => {
+
+    const list = [...feedPosts];
+
+    const effectiveSort = sortBy === "latest" || feedPosts.some((post) => sortBy === "eng_rate" ? hasEngagementRate(post) : hasMetric(post.available_metrics, sortBy)) ? sortBy : "latest";
+
+    list.sort((a, b) => {
+
+      const metricSort = (
+
+        metric: "views" | "impressions" | "likes" | "engagements" | "engagement_rate",
+
+        key: string,
+
+      ) => {
+
+        const aAvailable = hasMetric(a.available_metrics, key);
+
+        const bAvailable = hasMetric(b.available_metrics, key);
+
+        if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+
+        if (!aAvailable) return 0;
+
+        return (b[metric] ?? 0) - (a[metric] ?? 0);
+
+      };
+
+      if (effectiveSort === "views") return metricSort("views", "views");
+
+      if (effectiveSort === "impressions") return metricSort("impressions", "impressions");
+
+      if (effectiveSort === "likes") return metricSort("likes", "likes");
+
+      if (effectiveSort === "engagements") return metricSort("engagements", "engagements");
+
+      if (effectiveSort === "eng_rate") {
+
+        const aAvailable = hasEngagementRate(a);
+
+        const bAvailable = hasEngagementRate(b);
+
+        if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+
+        if (!aAvailable) return 0;
+
+        return b.engagement_rate - a.engagement_rate;
+
+      }
+
+      return (
+
+        new Date(b.published_at || b.created_at).getTime() -
+
+        new Date(a.published_at || a.created_at).getTime()
+
+      );
+
+    });
+
+    return list;
+
+  })();
+
+
+
+  // Never substitute a page of feed rows or account lifetime totals for the
+
+  // selected-range aggregate. Missing coverage stays visibly unavailable.
+
+  const totalPublishedPosts = overviewData?.total_posts_published;
+
+  const summaryMetric = (key: string, value: number | undefined) => {
+
+    if (totalPublishedPosts === 0 && dashboardData?.dataset_complete) return formatNumber(0);
+
+    if (
+
+      !overviewData ||
+
+      overviewData.metrics_status === "unavailable" ||
+
+      !hasMetric(overviewData.available_metrics, key)
+
+    ) {
+
+      return "–";
+
+    }
+
+    return formatNumber(value);
+
+  };
+
+  const overviewNotice =
+
+    overviewData?.metrics_notice ??
+
+    feedPosts.find((post) => post.metrics_notice)?.metrics_notice ??
+
+    null;
+
+  const followerMetrics = (accountData?.extras as Record<string, unknown> | null)
+
+    ?.available_metrics;
+
+  const hasFollowerMetric =
+
+    !!accountData && accountData.metrics_status !== "unavailable" &&
+
+    (hasMetric(
+
+      Array.isArray(followerMetrics) ? followerMetrics : undefined,
+
+      "followers_count",
+
+    ) || accountData?.metrics_status === "available");
+
+
+
+  const tableMetrics = visiblePostMetrics(feedPosts);
+
+  const showEngagementRate = feedPosts.some(hasEngagementRate);
+
+  const metricLabels: Record<string, string> = {
+
+    views: "Views", impressions: "Impressions", likes: "Likes",
+
+    comments: selectedAccountId === "all" ? "Comments / replies" : ["x", "threads", "bluesky", "mastodon"].includes(activeAccount?.platform ?? "") ? "Replies" : "Comments",
+
+    shares: selectedAccountId === "all" ? "Shares / reposts" : activeAccount?.platform === "threads" ? "Reposts & quotes" : ["x", "bluesky", "mastodon"].includes(activeAccount?.platform ?? "") ? "Reposts" : "Shares",
+
+    bookmarks: activeAccount?.platform === "instagram" ? "Saves" : "Bookmarks",
+
+  };
+
+  const metricIcons: Record<string, LucideIcon> = {views: Eye, impressions: Eye, likes: Heart, comments: MessageCircle, shares: Repeat2, bookmarks: Bookmark};
+
+  const sortOptions = (Object.keys(SORT_LABELS) as SortKey[]).filter((key) =>
+
+    key === "latest" || (key === "eng_rate" ? showEngagementRate : feedPosts.some((post) => hasMetric(post.available_metrics, key))),
+
+  );
+
+  const displayedSort = sortOptions.includes(sortBy) ? sortBy : "latest";
+
+
+
+  // 7. Actions
+
+  const handleShare = async () => {
+
+    if (navigator.share) {
+
+      try {
+
+        await navigator.share({
+
+          title: `${selectedAccountId === "all" ? "All accounts" : activeAccount?.display_name ?? "Account"} analytics`,
+
+          url: window.location.href,
+
+        });
+
+      } catch {
+
+        /* user dismissed */
+
+      }
+
+    } else {
+
+      await navigator.clipboard.writeText(window.location.href);
+
+      toast.success("Link copied");
+
+    }
+
+  };
+
+
 
   const handleExportCSV = () => {
+
     if (!sortedPosts.length) {
+
       toast.message("No posts to export");
+
       return;
+
     }
-    const headers = ["Post Text", "Platform", "Published At", "Impressions", "Likes", "Comments", "Shares", "Eng. Rate %"];
+
+    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+
+    const headers = ["Post text", "Platform", "Published at", ...tableMetrics.map((key) => metricLabels[key]), ...(showEngagementRate ? ["Engagement rate %"] : [])];
+
     const rows = sortedPosts.map((p) => [
-      `"${p.text.replace(/"/g, '""')}"`,
-      p.platform,
-      p.published_at || p.created_at,
-      p.impressions,
-      p.likes,
-      p.comments,
-      p.shares,
-      `${p.engagement_rate}%`,
-    ]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${activeAccount?.display_name || "social"}_analytics.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("CSV exported successfully");
+
+      p.text, p.platform, p.published_at || p.created_at,
+
+      ...tableMetrics.map((key) => postMetric(p, key, p[key as keyof PostFeedItemAnalytics] as number)),
+
+      ...(showEngagementRate ? [postEngagementRate(p)] : []),
+
+    ].map(esc).join(","));
+
+    const blob = new Blob(
+
+      ["\uFEFF" + [headers.map(esc).join(","), ...rows].join("\n")],
+
+      {
+
+        type: "text/csv;charset=utf-8;",
+
+      },
+
+    );
+
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+
+    a.href = url;
+
+    const exportName =
+
+      selectedAccountId === "all"
+
+        ? "all_accounts"
+
+        : activeAccount?.display_name || "social";
+
+    const safeExportName = exportName.replace(/[^a-z0-9_-]+/gi, "_");
+
+    a.download = `${safeExportName}_analytics_${format(new Date(), "yyyy-MM-dd")}_page-${feedOffset / ANALYTICS_PAGE_SIZE + 1}.csv`;
+
+    document.body.appendChild(a);
+
+    a.click();
+
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+
+    toast.success("CSV exported");
+
   };
 
+
+
+  /* ------------------------------ Loading state ----------------------------- */
+
+
+
   if (accountsQuery.isLoading) {
+
     return (
+
       <div className="flex h-full flex-col gap-6 p-6 md:p-8">
+
         <div className="flex items-center justify-between">
-          <Skeleton className="h-9 w-48" />
-          <Skeleton className="h-9 w-32" />
+
+          <Skeleton className="h-8 w-44" />
+
+          <Skeleton className="h-8 w-28" />
+
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-7">
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+
           {Array.from({ length: 7 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 rounded-2xl" />
+
+            <MetricCardSkeleton key={i} />
+
           ))}
+
         </div>
+
         <Skeleton className="h-80 w-full rounded-2xl" />
+
       </div>
+
     );
+
   }
+
+
+
+  if (accountsQuery.isError) {
+
+    return (
+
+      <div className="flex h-full min-h-[450px] flex-col items-center justify-center p-8 text-center">
+
+        <AlertCircle className="mb-3 size-6 text-destructive" />
+
+        <h2 className="text-base font-semibold tracking-tight">
+
+          Accounts could not be loaded
+
+        </h2>
+
+        <p className="mt-1.5 max-w-sm text-[13px] text-muted-foreground">
+
+          Check the connection and retry to load analytics.
+
+        </p>
+
+        <Button
+
+          className="mt-5"
+
+          variant="outline"
+
+          onClick={() => void accountsQuery.refetch()}
+
+        >
+
+          Try again
+
+        </Button>
+
+      </div>
+
+    );
+
+  }
+
+
+
+  /* ------------------------------- Empty state ------------------------------ */
+
+
 
   if (!accounts.length) {
+
     return (
+
       <div className="flex h-full min-h-[450px] flex-col items-center justify-center p-8 text-center">
-        <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-border bg-muted/30">
-          <TrendingUp className="size-7 text-muted-foreground" />
+
+        <div className="mb-4 flex size-12 items-center justify-center rounded-xl border-[0.5px] border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+
+          <TrendingUp className="size-5 text-muted-foreground" />
+
         </div>
-        <h2 className="text-xl font-semibold tracking-tight">No social accounts connected</h2>
-        <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
-          Connect your social accounts to view live post analytics, impression trends, and audience engagement.
+
+        <h2 className="text-base font-semibold tracking-tight">
+
+          No accounts connected
+
+        </h2>
+
+        <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-muted-foreground">
+
+          Connect an account to see post analytics, impression trends and
+
+          audience engagement.
+
         </p>
+
         <Link href="/dashboard/channels" className="mt-5">
-          <Button size="sm" className="gap-2">
+
+          <Button size="sm" className="gap-1.5">
+
             <Plus className="size-4" />
-            Connect Channels
+
+            Connect a channel
+
           </Button>
+
         </Link>
+
       </div>
+
     );
+
   }
 
-  const platform = activeAccount?.platform || "x";
-  const handleOrName =
-    activeAccount?.account_metadata?.username ||
-    activeAccount?.account_metadata?.handle ||
-    activeAccount?.display_name ||
-    "account";
-  const displayHandle = String(handleOrName).startsWith("@") ? String(handleOrName) : `@${handleOrName}`;
+
+
+  if (dashboardData && accountData?.metrics_status === "unavailable" &&
+
+      overviewData?.metrics_status === "unavailable") {
+
+    return (
+
+      <div className="flex h-full min-h-[450px] flex-col items-center justify-center p-8 text-center" role="status">
+
+        <PlatformMark platform={activeAccount?.platform ?? ""} className="mb-6 !size-12 !text-3xl" />
+
+        <h2 className="text-xl font-semibold">{channelName(activeAccount?.platform ?? "")} analytics is not available</h2>
+
+        <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">
+
+          {dashboardData.dataset_notice ?? accountData.metrics_notice ?? "This account does not currently provide analytics through its official API."}
+
+        </p>
+
+        <Button className="mt-6" variant="outline" onClick={() => void refreshMetrics()}>
+
+          <RefreshCw className="mr-2 size-4" /> Try again
+
+        </Button>
+
+      </div>
+
+    );
+
+  }
+
+
+
+  const isRefreshing =
+
+    feedQuery.isFetching || overviewQuery.isFetching || accountMetricsQuery.isFetching;
+
+  const latestFeedSyncAt = feedPosts.reduce<string | null>((latest, post) => {
+
+    const fetchedAt = post.metrics_fetched_at;
+
+    if (!fetchedAt) return latest;
+
+    if (!latest || new Date(fetchedAt).getTime() > new Date(latest).getTime()) {
+
+      return fetchedAt;
+
+    }
+
+    return latest;
+
+  }, null);
+
+  const lastSyncedAt =
+
+    selectedAccountId !== "all"
+
+      ? accountData?.last_synced_at ?? latestFeedSyncAt
+
+      : latestFeedSyncAt;
+
+  const syncStatus = isRefreshing
+
+    ? "Updating metrics"
+
+    : lastSyncedAt
+
+      ? `Updated ${formatRelativeTime(lastSyncedAt)}`
+
+      : "Live analytics";
+
+  const pageStart = feedPosts.length > 0 ? feedOffset + 1 : 0;
+
+  const pageEnd = feedOffset + feedPosts.length;
+
+  const canGoNext =
+
+    totalPublishedPosts !== undefined
+
+      ? pageEnd < totalPublishedPosts
+
+      : feedPosts.length === ANALYTICS_PAGE_SIZE;
+
+
+
+  /* --------------------------------- Render --------------------------------- */
+
+
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-background/50 px-4 py-5 md:px-8 md:py-6 space-y-6">
-      {/* 1. TOP BAR: Channels switchers + Account handle + Share button */}
-      <div className="flex items-center justify-between gap-4">
-        
 
-        {/* Center: Account identifier */}
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          {activeAccount && <AccountAvatar account={activeAccount} className="size-6 text-[10px]" />}
-          <span>{displayHandle}</span>
+    <div className="flex h-full flex-col space-y-5 overflow-y-auto bg-background px-4 py-5 md:px-8 md:py-6">
+
+      {/* Page heading and source freshness */}
+
+      <div className="flex flex-wrap items-end justify-between gap-4">
+
+        <div>
+
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+
+            Performance
+
+          </p>
+
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Analytics</h1>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+
+            {selectedAccountId === "all"
+
+              ? "All connected accounts"
+
+              : activeAccount?.display_name ?? "Selected account"}
+
+            <span className="px-1.5">·</span>
+
+            {formattedDateLabel}
+
+          </p>
+
+          <p className="mt-1 text-xs text-muted-foreground/80">
+
+            Date range filters posts by publish date; engagement counts are each post’s latest reported totals.
+
+          </p>
+
         </div>
 
-        {/* Right: Actions (Sync Now & Share) */}
+
+
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-            className="h-8 gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground"
-            title="Refresh metrics from network APIs"
-          >
-            <RefreshCw className={`size-3.5 ${syncMutation.isPending ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">{syncMutation.isPending ? "Syncing…" : "Sync"}</span>
-          </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleShare}
-            className="h-8 gap-1.5 rounded-lg text-xs font-medium"
-          >
-            <Share className="size-3.5" />
-            <span>Share</span>
-          </Button>
-        </div>
-      </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border-[0.5px] border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
 
-      {/* 2. TOP METRICS CARDS ROW (Exact Typefully Style with Curves) */}
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
-        {/* Card 1: Followers */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-3.5 transition-shadow hover:shadow-xs">
-          <div>
-            <p className="text-[11px] font-medium text-muted-foreground">Followers</p>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-xl font-bold tracking-tight text-foreground">
-                {formatNumber(accountData?.followers_count ?? 95)}
-              </span>
-              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                ↑ 1.1%
-              </span>
-            </div>
-          </div>
-          <Sparkline data={followersSparkline} color="#10b981" />
-        </div>
+            <span
 
-        {/* Card 2: Impressions */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-3.5 transition-shadow hover:shadow-xs">
-          <div>
-            <p className="text-[11px] font-medium text-muted-foreground">Impressions</p>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-xl font-bold tracking-tight text-foreground">
-                {formatNumber(totalImpressions || 9090)}
-              </span>
-              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                ↑ 105%
-              </span>
-            </div>
-          </div>
-          <Sparkline data={impressionsSparkline} color="#10b981" />
-        </div>
+              className={cn(
 
-        {/* Card 3: Published Posts */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-3.5 transition-shadow hover:shadow-xs">
-          <div>
-            <p className="text-[11px] font-medium text-muted-foreground">Published Posts</p>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-xl font-bold tracking-tight text-foreground">
-                {feedPosts.length || 17}
-              </span>
-              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                ↑ 21.4%
-              </span>
-            </div>
-          </div>
-          <Sparkline data={postsSparkline} color="#10b981" />
-        </div>
+                "size-1.5 rounded-full",
 
-        {/* Card 4: Profile Clicks */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-3.5 transition-shadow hover:shadow-xs">
-          <div>
-            <p className="text-[11px] font-medium text-muted-foreground">Profile Clicks</p>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-xl font-bold tracking-tight text-foreground">
-                {formatNumber(totalClicks || 27)}
-              </span>
-              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                ↑ 440%
-              </span>
-            </div>
-          </div>
-          <Sparkline data={clicksSparkline} color="#10b981" />
-        </div>
+                isRefreshing
 
-        {/* Card 5: Engagements */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-3.5 transition-shadow hover:shadow-xs">
-          <div>
-            <p className="text-[11px] font-medium text-muted-foreground">Engagements</p>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-xl font-bold tracking-tight text-foreground">
-                {formatNumber(totalEngagements || 146)}
-              </span>
-              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                ↑ 441%
-              </span>
-            </div>
-          </div>
-          <Sparkline data={engagementsSparkline} color="#10b981" />
-        </div>
+                  ? "animate-pulse bg-blue-500"
 
-        {/* Card 6: Hourly Engagement */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-3.5 transition-shadow hover:shadow-xs">
-          <div>
-            <p className="text-[11px] font-medium text-muted-foreground">Hourly Engagement</p>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-xl font-bold tracking-tight text-foreground">10 am</span>
-              <span className="text-[10px] font-medium text-muted-foreground">best time</span>
-            </div>
-          </div>
-          <Sparkline data={hourlySparkline} color="#3b82f6" />
-        </div>
+                  : lastSyncedAt
 
-        {/* Card 7: Posting Streak */}
-        <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-3.5 transition-shadow hover:shadow-xs">
-          <div>
-            <p className="text-[11px] font-medium text-muted-foreground">Posting Streak</p>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-xl font-bold tracking-tight text-foreground">1</span>
-              <span className="text-[10px] font-medium text-muted-foreground">day</span>
-              <span className="text-sm leading-none">🔥</span>
-            </div>
-          </div>
-          <Sparkline data={streakSparkline} color="#f97316" />
-        </div>
-      </div>
+                    ? "bg-emerald-500"
 
-      {/* 3. TIMEFRAME & FILTERS ROW */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-        <div className="flex items-center gap-2">
-          {/* Custom Date Selector */}
-          <div className="flex items-center rounded-xl border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground">
-            <span className="text-muted-foreground mr-1.5">Custom</span>
-            <span className="text-[11px] text-muted-foreground">▾</span>
-          </div>
+                    : "bg-muted-foreground/50",
 
-          <div className="flex items-center gap-1.5 rounded-xl border border-border bg-muted/20 px-3 py-1 text-xs">
-            <span className="text-muted-foreground">From</span>
-            <span className="font-medium text-foreground">Sep 30</span>
-            <span className="text-muted-foreground ml-1">To</span>
-            <span className="font-medium text-foreground">Oct 6</span>
-          </div>
+              )}
 
-          <div className="hidden sm:flex items-center rounded-lg border border-border bg-muted/20 p-0.5 text-xs">
-            {(["7d", "30d", "90d"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTimeframe(t)}
-                className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                  timeframe === t
-                    ? "bg-card text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Right side: Sorting */}
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-xl text-xs font-medium">
-                  <ArrowUpDown className="size-3 text-muted-foreground" />
-                  <span>
-                    {sortBy === "latest"
-                      ? "Latest"
-                      : sortBy === "impressions"
-                        ? "Most Impressions"
-                        : sortBy === "likes"
-                          ? "Most Likes"
-                          : sortBy === "engagements"
-                            ? "Most Engagements"
-                            : "Highest Eng. Rate"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">▾</span>
-                </Button>
-              }
             />
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => setSortBy("latest")}>Latest</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSortBy("impressions")}>Most Impressions</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSortBy("likes")}>Most Likes</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSortBy("engagements")}>Most Engagements</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSortBy("eng_rate")}>Highest Eng. Rate</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+
+            {syncStatus}
+
+          </span>
+
+          <Button
+
+            variant="outline"
+
+            size="sm"
+
+            onClick={() => void refreshMetrics()}
+
+            disabled={isRefreshing}
+
+            className="h-8 cursor-pointer gap-1.5 rounded-lg text-xs"
+
+            title="Refresh metrics"
+
+          >
+
+            <RefreshCw
+
+              className={cn("size-3.5", isRefreshing && "animate-spin")}
+
+            />
+
+            <span>{isRefreshing ? "Refreshing…" : "Refresh"}</span>
+
+          </Button>
+
+          <Button
+
+            variant="ghost"
+
+            size="sm"
+
+            onClick={handleShare}
+
+            className="h-8 cursor-pointer gap-1.5 rounded-lg text-xs font-medium"
+
+          >
+
+            <Share className="size-3.5" />
+
+            Share
+
+          </Button>
+
         </div>
+
       </div>
 
-      {/* 4. POSTS SECTION TABLE (Exact Typefully Design) */}
-      <div className="rounded-2xl border border-border/70 bg-card p-5 space-y-4">
-        {/* Posts Header */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold tracking-tight text-foreground">Posts</h2>
 
-          <div className="flex items-center gap-2">
-            {/* Filter Toggle: All vs Replies */}
-            <div className="flex items-center rounded-xl border border-border/80 bg-muted/30 p-0.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setPostFilter("all")}
-                className={`rounded-lg px-3 py-1 font-medium transition-all ${
-                  postFilter === "all"
-                    ? "bg-card text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setPostFilter("replies")}
-                className={`rounded-lg px-3 py-1 font-medium transition-all ${
-                  postFilter === "replies"
-                    ? "bg-card text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Replies
-              </button>
+
+      {overviewQuery.isError || feedQuery.isError || accountMetricsQuery.isError ? (
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3.5 text-sm" role="alert">
+
+          <div className="flex items-start gap-2.5 text-muted-foreground">
+
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
+
+            <span>Analytics could not be loaded. Try again to refresh this view.</span>
+
+          </div>
+
+          <Button
+
+            variant="outline"
+
+            size="sm"
+
+            onClick={() => {
+
+              void refreshMetrics();
+
+            }}
+
+          >
+
+            Try again
+
+          </Button>
+
+        </div>
+
+      ) : null}
+
+
+
+      {dashboardData?.dataset_notice ? (
+
+        <p className="rounded-xl border border-border p-3 text-sm text-muted-foreground" role="status">{dashboardData.dataset_notice}</p>
+
+      ) : null}
+
+
+
+      {overviewNotice && !overviewQuery.isError ? (
+
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 text-xs text-muted-foreground" role="status">
+
+          <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
+
+          <p className="leading-relaxed">
+
+            {overviewNotice}
+
+          </p>
+
+        </div>
+
+      ) : null}
+
+
+
+      {accountData?.metrics_notice && !hasFollowerMetric ? (
+
+        <p className="text-xs text-muted-foreground" role="status">{accountData.metrics_notice}</p>
+
+      ) : null}
+
+      {/* Only show metrics the selected account actually returns. */}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+
+        {dashboardQuery.isFetching ? <MetricsGridSkeleton count={7} className="col-span-full" /> : null}
+
+        {!dashboardQuery.isFetching && selectedAccountId !== "all" && hasFollowerMetric ? (
+
+          <MetricCard index={0} icon={Users} color="#6366f1" label="Followers" value={formatNumber(accountData?.followers_count)} hint="Current account total" />
+
+        ) : null}
+
+        {[
+
+          {key: "views", total: overviewData?.total_views, label: "Views", icon: Eye, color: "#10b981"},
+
+          {key: "impressions", total: overviewData?.total_impressions, label: activeAccount?.platform === "x" ? "Post impressions" : "Impressions", icon: Eye, color: "#10b981"},
+
+          {key: "reach", total: overviewData?.total_reach, label: "Reach", icon: TrendingUp, color: "#0ea5e9"},
+
+          {key: "profile_clicks", total: overviewData?.total_profile_clicks, label: "Profile clicks", icon: MousePointerClick, color: "#0ea5e9"},
+
+          {key: "engagements", total: overviewData?.total_engagements, label: "Engagements", icon: Heart, color: "#ec4899"},
+
+          {key: "likes", total: overviewData?.total_likes, label: "Likes", icon: Heart, color: "#f97316"},
+
+        ].filter((metric) => !dashboardQuery.isFetching && hasMetric(overviewData?.available_metrics, metric.key)).map((metric, index) => (
+
+          <MetricCard key={metric.key} index={index + 1} icon={metric.icon} color={metric.color} label={metric.label} value={summaryMetric(metric.key, metric.total)} hint="Totals for posts published in this period" />
+
+        ))}
+
+        {activeAccount?.platform === "x" && selectedAccountId !== "all" && !dashboardQuery.isFetching ? (
+
+            <MetricCard
+
+              icon={MessageCircle}
+
+              color="#8b5cf6"
+
+              label="Total impressions"
+
+              value={formatNumber(dashboardData?.inclusive_impressions?.total)}
+
+              hint={dashboardData?.inclusive_impressions?.complete
+
+                ? "Posts + your replies published in this period"
+
+                : dashboardData?.inclusive_impressions?.total != null
+
+                  ? "Partial total · posts + your replies returned by X"
+
+                  : "Posts + your replies · currently unavailable"}
+
+            />
+
+        ) : null}
+
+        {!dashboardQuery.isFetching ? <MetricCard index={6} icon={FileText} color="#8b5cf6" label="Published posts" value={dashboardData?.dataset_complete ? formatNumber(totalPublishedPosts) : "–"} hint="Returned by the platform for this period" /> : null}
+
+      </div>
+
+
+
+      {/* Filters row */}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+
+  <div className="flex flex-wrap items-center gap-2">
+
+    {/* Quick presets (desktop). Same state as the popover list. */}
+
+    <div
+
+      role="tablist"
+
+      aria-label="Timeframe"
+
+      className="hidden items-center gap-0.5 rounded-xl border-[0.5px] border-border bg-muted/50 p-0.5 sm:flex"
+
+    >
+
+      {PRESETS.map((p) => {
+
+        const active = timeframe === p.id;
+
+        return (
+
+          <button
+
+            key={p.id}
+
+            role="tab"
+
+            aria-selected={active}
+
+            type="button"
+
+            onClick={() => handleSelectPreset(p.id)}
+
+            className={cn(
+
+              "h-7 cursor-pointer rounded-[10px] px-3 text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+
+              active
+
+                ? "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.08)] ring-[0.5px] ring-border"
+
+                : "text-muted-foreground hover:text-foreground",
+
+            )}
+
+          >
+
+            {p.short}
+
+          </button>
+
+        );
+
+      })}
+
+    </div>
+
+
+
+    {/* Date range popover */}
+
+    <Popover
+
+      open={dateOpen}
+
+      onOpenChange={(open) => {
+
+        setDateOpen(open);
+
+        if (open) setDraftDateRange(dateRange);
+
+      }}
+
+    >
+
+      <PopoverTrigger
+
+        render={
+
+          <Button
+
+            variant="outline"
+
+            size="sm"
+
+            className={cn(
+
+              "h-8 cursor-pointer gap-2 rounded-xl border-[0.5px] bg-card px-3 text-xs font-medium shadow-[0_1px_1px_rgba(0,0,0,0.03)]",
+
+              timeframe === "custom" && "border-primary/40 text-foreground",
+
+            )}
+
+          >
+
+            <CalendarDays className="size-3.5 text-muted-foreground" />
+
+            <span className="tabular-nums">{formattedDateLabel}</span>
+
+            <ChevronDown
+
+              className={cn(
+
+                "size-3 text-muted-foreground/70 transition-transform duration-200",
+
+                dateOpen && "rotate-180",
+
+              )}
+
+            />
+
+          </Button>
+
+        }
+
+      />
+
+      <PopoverContent
+
+        align="start"
+
+        sideOffset={8}
+
+        className="w-auto overflow-hidden rounded-2xl p-0 shadow-xl"
+
+      >
+
+        <div className="flex flex-col sm:flex-row">
+
+          {/* Presets: sidebar on desktop, scroll row on mobile */}
+
+          <div className="flex gap-1 overflow-x-auto border-b-[0.5px] border-border p-2 sm:w-40 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r-[0.5px] sm:p-2.5">
+
+            <p className="hidden px-2.5 pb-1 pt-1 text-[11px] font-medium text-muted-foreground sm:block">
+
+              Quick ranges
+
+            </p>
+
+            {PRESETS.map((p) => {
+
+              const active = timeframe === p.id;
+
+              return (
+
+                <button
+
+                  key={p.id}
+
+                  type="button"
+
+                  onClick={() => {
+
+                    handleSelectPreset(p.id);
+
+                    setDateOpen(false);
+
+                  }}
+
+                  className={cn(
+
+                    "flex shrink-0 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+
+                    active
+
+                      ? "bg-primary/10 text-foreground"
+
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+
+                  )}
+
+                >
+
+                  {p.id === "all" ? "All time" : `Last ${p.label}`}
+
+                  {active && <Check className="size-3.5 text-primary" />}
+
+                </button>
+
+              );
+
+            })}
+
+            <button
+
+              type="button"
+
+              disabled
+
+              className={cn(
+
+                "flex shrink-0 items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium",
+
+                timeframe === "custom"
+
+                  ? "bg-primary/10 text-foreground"
+
+                  : "hidden text-muted-foreground sm:flex",
+
+              )}
+
+            >
+
+              Custom range
+
+              {timeframe === "custom" && <Check className="size-3.5 text-primary" />}
+
+            </button>
+
+          </div>
+
+
+
+          {/* Calendar + footer */}
+
+          <div className="flex flex-col">
+
+            <Calendar
+
+              mode="range"
+
+              selected={draftDateRange}
+
+              defaultMonth={draftDateRange?.from}
+
+              onSelect={setDraftDateRange}
+
+              disabled={{ after: new Date() }}
+
+              numberOfMonths={1}
+
+              showOutsideDays={false}
+
+              className="p-3"
+
+            />
+
+
+
+            <div className="flex items-center justify-between gap-4 border-t-[0.5px] border-border bg-muted/30 px-4 py-2.5">
+
+              <div className="min-w-0 text-[11px] leading-tight">
+
+                {draftDateRange?.from ? (
+
+                  <>
+
+                    <p className="truncate font-medium text-foreground tabular-nums">
+
+                      {format(draftDateRange.from, "MMM d, yyyy")}
+
+                      {draftDateRange.to && ` – ${format(draftDateRange.to, "MMM d, yyyy")}`}
+
+                    </p>
+
+                    <p className="mt-0.5 text-muted-foreground">
+
+                      {draftDateRange.to
+
+                        ? `${differenceInCalendarDays(draftDateRange.to, draftDateRange.from) + 1} days selected`
+
+                        : "Select an end date"}
+
+                    </p>
+
+                  </>
+
+                ) : (
+
+                  <p className="text-muted-foreground">Choose a date range</p>
+
+                )}
+
+              </div>
+
+
+
+              <div className="flex shrink-0 items-center gap-1.5">
+
+                {timeframe !== "30d" && (
+
+                  <Button
+
+                    variant="ghost"
+
+                    size="sm"
+
+                    className="h-7 cursor-pointer px-2.5 text-xs text-muted-foreground hover:text-foreground"
+
+                    onClick={() => {
+
+                      handleSelectPreset("30d");
+
+                      setDateOpen(false);
+
+                    }}
+
+                  >
+
+                    Reset
+
+                  </Button>
+
+                )}
+
+                <Button
+
+                  size="sm"
+
+                  className="h-7 cursor-pointer px-3 text-xs"
+
+                  disabled={!!draftDateRange?.from && !draftDateRange?.to}
+
+                  onClick={() => {
+
+                    if (draftDateRange?.from && draftDateRange.to) {
+
+                      setDateRange(draftDateRange);
+
+                      setTimeframe("custom");
+
+                    } else if (!draftDateRange) {
+
+                      setTimeframe("all");
+
+                      setDateRange(undefined);
+
+                    }
+
+                    setDateOpen(false);
+
+                  }}
+
+                >
+
+                  Apply
+
+                </Button>
+
+              </div>
+
             </div>
 
-            {/* Export button */}
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={handleExportCSV}
-              className="rounded-xl"
-              title="Export posts analytics as CSV"
-            >
-              <Download className="size-3.5 text-muted-foreground" />
-            </Button>
           </div>
+
         </div>
 
-        {/* Posts Table */}
-        {sortedPosts.length === 0 ? (
-          <div className="py-12 text-center text-xs text-muted-foreground">
-            <p className="text-sm font-medium text-foreground">No published posts found</p>
-            <p className="mt-1 max-w-sm mx-auto">
-              Posts published via Postflow or synced from your account will appear here with live engagement data.
-            </p>
-            <Link href="/dashboard/content/compose" className="mt-4 inline-block">
-              <Button size="sm" variant="outline" className="gap-1.5 text-xs mt-2">
-                <Sparkles className="size-3.5" />
-                Open Composer
-              </Button>
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border/60 text-muted-foreground font-medium">
-                  <th className="pb-3 pt-1 w-2/5 font-medium">
-                    <span className="inline-flex items-center gap-1 cursor-pointer hover:text-foreground">
-                      Post ↓
-                    </span>
-                  </th>
-                  <th className="pb-3 pt-1 font-medium text-right sm:text-left">
-                    <span className="inline-flex items-center gap-1">
-                      <Eye className="size-3 opacity-60" />
-                      Impressions
-                    </span>
-                  </th>
-                  <th className="pb-3 pt-1 font-medium text-right sm:text-left">
-                    <span className="inline-flex items-center gap-1">
-                      <Heart className="size-3 opacity-60" />
-                      Likes
-                    </span>
-                  </th>
-                  <th className="pb-3 pt-1 font-medium text-right sm:text-left">
-                    <span className="inline-flex items-center gap-1">
-                      <MessageCircle className="size-3 opacity-60" />
-                      {platform === "linkedin" || platform === "instagram" ? "Comments" : "Replies"}
-                    </span>
-                  </th>
-                  <th className="pb-3 pt-1 font-medium text-right sm:text-left">
-                    <span className="inline-flex items-center gap-1">
-                      <Repeat2 className="size-3 opacity-60" />
-                      {platform === "linkedin" || platform === "facebook" ? "Shares" : "Reposts"}
-                    </span>
-                  </th>
-                  <th className="pb-3 pt-1 font-medium text-right sm:text-left">
-                    <span className="inline-flex items-center gap-1">
-                      {platform === "linkedin" || platform === "facebook" ? (
-                        <>
-                          <MousePointerClick className="size-3 opacity-60" />
-                          Clicks
-                        </>
-                      ) : (
-                        <>
-                          <Bookmark className="size-3 opacity-60" />
-                          Bookmarks
-                        </>
-                      )}
-                    </span>
-                  </th>
-                  <th className="pb-3 pt-1 font-medium text-right sm:text-left">
-                    <span className="inline-flex items-center gap-1">
-                      <Percent className="size-3 opacity-60" />
-                      % Eng. rate
-                    </span>
-                  </th>
-                  <th className="pb-3 pt-1 w-10 text-right"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40">
-                {sortedPosts.map((post) => {
-                  const mediaThumb = post.media_urls?.[0];
-                  return (
-                    <tr key={post.variant_id} className="group hover:bg-muted/30 transition-colors">
-                      {/* Post column: text preview + media thumbnail + timestamp + link */}
-                      <td className="py-3.5 pr-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <p className="line-clamp-2 text-xs font-normal text-foreground leading-relaxed">
-                              {post.text || "No text content"}
-                            </p>
-                            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                              <span>{formatRelativeTime(post.published_at || post.created_at)}</span>
-                              <Link
-                                href={`/dashboard/content?variant=${post.variant_id}`}
-                                className="text-muted-foreground/80 hover:text-foreground font-medium underline underline-offset-2 flex items-center gap-0.5"
-                              >
-                                Open draft ➔
-                              </Link>
-                            </div>
-                          </div>
+      </PopoverContent>
 
-                          {mediaThumb && (
-                            <div className="size-10 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-muted/40">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={mediaThumb}
-                                alt="Post media"
-                                className="size-full object-cover"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </td>
+    </Popover>
 
-                      {/* Impressions */}
-                      <td className="py-3.5 text-right sm:text-left tabular-nums text-foreground">
-                        {formatNumber(post.impressions)}
-                      </td>
+  </div>
 
-                      {/* Likes */}
-                      <td className="py-3.5 text-right sm:text-left tabular-nums text-foreground">
-                        {formatNumber(post.likes)}
-                      </td>
 
-                      {/* Replies / Comments */}
-                      <td className="py-3.5 text-right sm:text-left tabular-nums text-foreground">
-                        {formatNumber(post.comments)}
-                      </td>
 
-                      {/* Reposts / Shares */}
-                      <td className="py-3.5 text-right sm:text-left tabular-nums text-foreground">
-                        {formatNumber(post.shares)}
-                      </td>
+  {/* Sort */}
 
-                      {/* Bookmarks / Clicks */}
-                      <td className="py-3.5 text-right sm:text-left tabular-nums text-foreground">
-                        {formatNumber(
-                          platform === "linkedin" || platform === "facebook"
-                            ? post.clicks
-                            : post.bookmarks,
-                        )}
-                      </td>
+  <DropdownMenu>
 
-                      {/* % Eng. rate */}
-                      <td className="py-3.5 text-right sm:text-left tabular-nums font-bold text-foreground">
-                        {post.engagement_rate > 0 ? `${post.engagement_rate}%` : "0%"}
-                      </td>
+    <DropdownMenuTrigger
 
-                      {/* Action Menu */}
-                      <td className="py-3.5 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={
-                              <button
-                                type="button"
-                                className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground opacity-60 group-hover:opacity-100 transition-opacity"
-                              >
-                                <MoreHorizontal className="size-4" />
-                              </button>
-                            }
+      render={
+
+        <Button
+
+          variant="outline"
+
+          size="sm"
+
+          className="h-8 cursor-pointer gap-2 rounded-xl border-[0.5px] bg-card px-3 text-xs font-medium shadow-[0_1px_1px_rgba(0,0,0,0.03)]"
+
+        >
+
+          <ArrowUpDown className="size-3 text-muted-foreground" />
+
+          <span className="text-muted-foreground">Sort</span>
+
+          <span>{SORT_LABELS[displayedSort]}</span>
+
+          <ChevronDown className="size-3 text-muted-foreground/70" />
+
+        </Button>
+
+      }
+
+    />
+
+    <DropdownMenuContent align="end" className="w-56 rounded-xl p-1 text-xs">
+
+      <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-muted-foreground">
+
+        Sort posts by
+
+      </p>
+
+      {sortOptions.map((key) => (
+
+        <DropdownMenuItem
+
+          key={key}
+
+          onClick={() => setSortBy(key)}
+
+          className={cn(
+
+            "cursor-pointer justify-between gap-2 rounded-lg py-1.5",
+
+            sortBy === key && "bg-primary/10 font-medium",
+
+          )}
+
+        >
+
+          {SORT_LABELS[key]}
+
+          {sortBy === key && <Check className="size-3.5 text-primary" />}
+
+        </DropdownMenuItem>
+
+      ))}
+
+    </DropdownMenuContent>
+
+  </DropdownMenu>
+
+  <Button
+
+    variant="outline"
+
+    size="sm"
+
+    onClick={handleExportCSV}
+
+    disabled={!sortedPosts.length}
+
+    className="h-8 cursor-pointer gap-2 rounded-xl border-[0.5px] bg-card px-3 text-xs font-medium"
+
+    title="Export the visible page of posts"
+
+  >
+
+    <Download className="size-3.5 text-muted-foreground" />
+
+    Export page
+
+  </Button>
+
+</div>
+
+      {/* Posts table */}
+
+      <div className="max-h-[740px] min-h-[360px] overflow-auto rounded-xl border-[0.5px] border-border">
+
+        <table className="w-full min-w-[760px] table-fixed text-xs">
+
+          <colgroup>
+
+            <col />
+
+            {tableMetrics.map((key) => <col key={key} className={key === "shares" ? "w-[144px]" : "w-[100px]"} />)}
+
+            {showEngagementRate ? <col className="w-[96px]" /> : null}
+
+            <col className="w-12" />
+
+          </colgroup>
+
+          <thead>
+
+            <tr className="border-b-[0.5px] border-border text-muted-foreground">
+
+              <SortableHead align="left" active={displayedSort === "latest"} onClick={() => setSortBy("latest")}>Post</SortableHead>
+
+              {tableMetrics.map((key) => {
+
+                const Icon = metricIcons[key];
+
+                const sortable = ["views", "impressions", "likes"].includes(key);
+
+                return <SortableHead key={key} active={displayedSort === key} onClick={sortable ? () => setSortBy(key as SortKey) : undefined}><Icon className="size-3 opacity-60" />{metricLabels[key]}</SortableHead>;
+
+              })}
+
+              {showEngagementRate ? <SortableHead active={displayedSort === "eng_rate"} onClick={() => setSortBy("eng_rate")}><Percent className="size-3 opacity-60" />Eng. rate</SortableHead> : null}
+
+              <th className="sticky top-0 z-10 bg-card" />
+
+            </tr>
+
+          </thead>
+
+
+
+          <tbody className="divide-y-[0.5px] divide-border">
+
+            {!sortedPosts.length && (
+
+              <tr>
+
+                <td colSpan={tableMetrics.length + (showEngagementRate ? 1 : 0) + 2} className="px-4 py-16 text-center">
+
+                  <p className="text-sm font-medium text-foreground">
+
+                    {feedQuery.isFetching
+
+                      ? "Loading published posts…"
+
+                      : feedQuery.isError || dashboardData?.dataset_complete === false
+
+                        ? "Published posts could not be loaded"
+
+                        : totalPublishedPosts === 0
+
+                          ? `No posts published during ${formattedDateLabel.toLowerCase()}.`
+
+                          : "No posts on this page."}
+
+                  </p>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+
+                    {feedQuery.isError || dashboardData?.dataset_complete === false
+
+                      ? "Retry the request to see post performance."
+
+                      : "Change the date range or account to view another set of posts."}
+
+                  </p>
+
+                </td>
+
+              </tr>
+
+            )}
+
+            {sortedPosts.map((post) => {
+
+              const mediaThumb = post.media_urls?.[0];
+
+              const externalUrl = getExternalPostUrl(
+
+                post.platform,
+
+                post.external_post_id,
+
+              );
+
+              const num =
+
+                "px-3 py-3 text-right align-middle tabular-nums text-foreground";
+
+
+
+              return (
+
+                <tr
+
+                  key={post.variant_id}
+
+                  title={post.metrics_notice ?? undefined}
+
+                  className="group transition-colors hover:bg-muted/40"
+
+                >
+
+                  {/* Post: thumb slot + clamped text + meta */}
+
+                  <td className="min-w-0 px-3 py-3 align-middle">
+
+                    <div className="flex min-w-0 items-center gap-3">
+
+                      <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-[0.5px] border-border bg-muted/40">
+
+                        {mediaThumb ? (
+
+                          // eslint-disable-next-line @next/next/no-img-element
+
+                          <img
+
+                            src={mediaThumb}
+
+                            alt=""
+
+                            loading="lazy"
+
+                            className="size-full object-cover"
+
                           />
-                          <DropdownMenuContent align="end" className="w-40 text-xs">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                navigator.clipboard.writeText(post.text);
-                                toast.success("Post text copied");
-                              }}
-                            >
-                              Copy text
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                window.location.href = `/dashboard/content?variant=${post.variant_id}`;
-                              }}
-                            >
-                              Open in Studio
-                            </DropdownMenuItem>
-                            {post.external_post_id && (
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  toast.info(`External ID: ${post.external_post_id}`);
-                                }}
-                              >
-                                View external ID
-                              </DropdownMenuItem>
+
+                        ) : (
+
+                          <FileText className="size-4 text-muted-foreground/60" />
+
+                        )}
+
+                      </div>
+
+
+
+                      <div className="min-w-0 flex-1 space-y-1">
+
+                        <p
+
+                          title={post.text}
+
+                          className="line-clamp-2 break-words text-[13px] leading-snug text-foreground"
+
+                        >
+
+                          {post.text || "No text content"}
+
+                        </p>
+
+                        <div className="flex min-w-0 items-center gap-3 overflow-hidden whitespace-nowrap text-[11px] text-muted-foreground">
+
+                          <span className="shrink-0">
+
+                            {formatRelativeTime(
+
+                              post.published_at || post.created_at,
+
                             )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+
+                          </span>
+
+                          <span className="shrink-0">
+
+                            {selectedAccountId === "all"
+
+                              ? `${post.account_display_name || channelName(post.platform)} · ${channelName(post.platform)}`
+
+                              : channelName(post.platform)}
+
+                          </span>
+
+                          {post.post_id && <Link
+
+                            href={`/dashboard/content?variant=${post.variant_id}`}
+
+                            className="shrink-0 underline-offset-2 transition-colors hover:text-foreground hover:underline"
+
+                          >
+
+                            Open in studio
+
+                          </Link>}
+
+                          {externalUrl && (
+
+                            <a
+
+                              href={externalUrl}
+
+                              target="_blank"
+
+                              rel="noopener noreferrer"
+
+                              className="inline-flex min-w-0 items-center gap-1 underline-offset-2 transition-colors hover:text-foreground hover:underline"
+
+                            >
+
+                              <span className="truncate">
+
+                                View on {channelName(post.platform)}
+
+                              </span>
+
+                              <ExternalLink className="size-2.5 shrink-0" />
+
+                            </a>
+
+                          )}
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  </td>
+
+
+
+                  {tableMetrics.map((key) => <td key={key} className={num}>{postMetric(post, key, post[key as keyof PostFeedItemAnalytics] as number)}</td>)}
+
+                  {showEngagementRate ? <td className="px-3 py-3 text-right align-middle">
+
+                    <span className={cn("inline-block min-w-[3.25rem] rounded-full px-2 py-0.5 text-center font-medium tabular-nums", hasEngagementRate(post) ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+
+                      {postEngagementRate(post)}
+
+                    </span>
+
+                  </td> : null}
+
+
+
+                  <td className="px-2 py-3 text-right align-middle">
+
+                    <DropdownMenu>
+
+                      <DropdownMenuTrigger
+
+                        render={
+
+                          <button
+
+                            type="button"
+
+                            aria-label="Post actions"
+
+                            className="rounded-md p-1 text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[popup-open]:opacity-100"
+
+                          >
+
+                            <MoreHorizontal className="size-4" />
+
+                          </button>
+
+                        }
+
+                      />
+
+                      <DropdownMenuContent align="end" className="w-48 text-xs">
+
+                        <DropdownMenuItem
+
+                          className="gap-2"
+
+                          onClick={async () => {
+
+                            await navigator.clipboard.writeText(post.text);
+
+                            toast.success("Post text copied");
+
+                          }}
+
+                        >
+
+                          <Copy className="size-3 text-muted-foreground" />
+
+                          Copy text
+
+                        </DropdownMenuItem>
+
+                        {post.post_id && <DropdownMenuItem
+
+                          className="gap-2"
+
+                          onClick={() =>
+
+                            router.push(
+
+                              `/dashboard/content?variant=${post.variant_id}`,
+
+                            )
+
+                          }
+
+                        >
+
+                          <Sparkles className="size-3 text-muted-foreground" />
+
+                          Open in studio
+
+                        </DropdownMenuItem>}
+
+                        {externalUrl && (
+
+                          <DropdownMenuItem
+
+                            className="gap-2"
+
+                            onClick={() =>
+
+                              window.open(
+
+                                externalUrl,
+
+                                "_blank",
+
+                                "noopener,noreferrer",
+
+                              )
+
+                            }
+
+                          >
+
+                            <ExternalLink className="size-3 text-muted-foreground" />
+
+                            View on {channelName(post.platform)}
+
+                          </DropdownMenuItem>
+
+                        )}
+
+                        {post.external_post_id && (
+
+                          <DropdownMenuItem
+
+                            className="gap-2"
+
+                            onClick={async () => {
+
+                              await navigator.clipboard.writeText(
+
+                                post.external_post_id!,
+
+                              );
+
+                              toast.success("External ID copied");
+
+                            }}
+
+                          >
+
+                            <Copy className="size-3 text-muted-foreground" />
+
+                            Copy external ID
+
+                          </DropdownMenuItem>
+
+                        )}
+
+                      </DropdownMenuContent>
+
+                    </DropdownMenu>
+
+                  </td>
+
+                </tr>
+
+              );
+
+            })}
+
+          </tbody>
+
+        </table>
+
       </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+
+        <span>
+
+          {feedQuery.isFetching
+
+            ? "Fetching live posts…"
+
+            : totalPublishedPosts === undefined || !dashboardData?.dataset_complete
+
+            ? `Showing ${pageStart}–${pageEnd} posts`
+
+            : `Showing ${pageStart}–${pageEnd} of ${formatNumber(totalPublishedPosts)} posts`}
+
+          {feedPosts.length > 0 && sortBy !== "latest" ? " · Sorted on this page" : ""}
+
+        </span>
+
+        <div className="flex items-center gap-2">
+
+          <Button
+
+          className="rounded-md"
+
+            variant="outline"
+
+            size="sm"
+
+            disabled={feedOffset === 0 || feedQuery.isFetching}
+
+            onClick={() =>
+
+              setPageState({
+
+                scope: feedScope,
+
+                offset: Math.max(0, feedOffset - ANALYTICS_PAGE_SIZE),
+
+              })
+
+            }
+
+          >
+
+            Previous
+
+          </Button>
+
+          <Button
+
+           className="rounded-md"
+
+            variant="outline"
+
+            size="sm"
+
+            disabled={!canGoNext || feedQuery.isFetching}
+
+            onClick={() =>
+
+              setPageState({
+
+                scope: feedScope,
+
+                offset: feedOffset + ANALYTICS_PAGE_SIZE,
+
+              })
+
+            }
+
+          >
+
+            Next
+
+          </Button>
+
+        </div>
+
+      </div>
+
     </div>
+
   );
+
 }

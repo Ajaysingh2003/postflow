@@ -1,5 +1,9 @@
-import { PostsView } from "@/modules/studio/PostsView";
+import React from 'react'
 
-export default function DashboardPage() {
-  return <PostsView title="Your workspace" />;
+function page() {
+  return (
+    <div>page</div>
+  )
 }
+
+export default page

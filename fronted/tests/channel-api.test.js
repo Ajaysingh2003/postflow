@@ -24,6 +24,32 @@ let request;
 afterEach(() => request?.mockRestore());
 
 describe("social account API wiring", () => {
+  test("loads Postflow posts and counts with one bounded library request", async () => {
+    const data = {items: [], counts: {posts: 0, scheduled: 1, drafts: 2}, total: 0, next_offset: null};
+    request = spyOn(axios, "request").mockResolvedValue({data});
+    expect(await caller.postLibrary({connected_account_id: accountId, category: "posts", offset: 50})).toEqual(data);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      url: "http://backend.test/v1/posts/library",
+      params: {connected_account_id: accountId, category: "posts", offset: 50, limit: 50},
+    }));
+  });
+  test("fetches reply pages and saved-post counts scoped to the selected account", async () => {
+    request = spyOn(axios, "request").mockResolvedValue({data: {}});
+    await caller.postSummary({connected_account_id: accountId});
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({url: "http://backend.test/v1/posts/summary", params: {connected_account_id: accountId}}));
+    await caller.analyticsDashboard({account_id: accountId, content_type: "replies", offset: 50});
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({params: {account_id: accountId, content_type: "replies", offset: 50, limit: 50}}));
+  });
+  test("requests one fresh dashboard for the selected account, interval and page", async () => {
+    const data = { account_id: accountId, accounts: [], overview: {}, posts: [] };
+    request = spyOn(axios, "request").mockResolvedValue({ data });
+    const input = { account_id: accountId, start_date: "2026-10-01T00:00:00Z", end_date: "2026-10-07T23:59:59Z", limit: 50, offset: 100, content_type: "posts" };
+    expect(await caller.analyticsDashboard(input)).toEqual(data);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: "GET", url: "http://backend.test/v1/analytics/dashboard", params: input }));
+  });
+
   test("loads dated calendar entries with the requested interval and pagination", async () => {
     request = spyOn(axios, "request").mockResolvedValue({ data: { items: [], next_cursor: null } });
     const period = { start: "2026-10-05T00:00:00.000Z", end: "2026-10-12T00:00:00.000Z", cursor: 200 };

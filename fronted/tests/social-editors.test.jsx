@@ -21,9 +21,9 @@ describe("social editors", () => {
       const html = renderToStaticMarkup(<Editor {...props(platform)} />);
       expect(html).toContain(`aria-label="${label}"`);
       expect(html).toContain('data-slot="textarea"');
-      expect(html).toContain('data-slot="button"');
-      expect(html).toContain("md:text-[15.5px]");
-      expect(html).toContain('aria-label="Refine post"');
+      expect(html).toContain('data-variant="ghost"');
+      expect(html).toContain(platform === "threads" ? "font-size:15px" : "md:text-[15.5px]");
+      expect(html).toContain(platform === "threads" ? 'aria-label="Refine post 1"' : 'aria-label="Refine post"');
       expect(html).not.toContain("<select");
       expect(html).not.toContain("linear-gradient");
     }

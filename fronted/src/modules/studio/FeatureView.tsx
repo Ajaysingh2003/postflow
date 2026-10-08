@@ -21,7 +21,7 @@ import {
   type Feature,
   type Payload,
 } from "./types";
-import { button, input, panel, Loading, Notice, Status } from "./PostsView";
+import { button, input, panel, Loading, Notice, Status } from "./ui";
 
 function Heading({
   title,

@@ -232,7 +232,7 @@ export default function AccountManager({
                     <div className="mt-2.5 space-y-3 rounded-lg border-[0.5px] border-border bg-primary p-3 text-[12px]">
                       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                         <dt className="text-muted-foreground">Account ID</dt>
-                        <dd className="break-all text-right font-mono text-[11px]">
+                        <dd className="break-all text-right  text-[11px]">
                           {account.external_account_id || account.id}
                         </dd>
                         {created && (
@@ -256,7 +256,7 @@ export default function AccountManager({
                             {account.granted_scopes.map((scope) => (
                               <span
                                 key={scope}
-                                className="break-all rounded-md border-[0.5px] border-border bg-background px-1.5 py-0.5 font-mono text-[10.5px]"
+                                className="break-all rounded-md border-[0.5px] border-border bg-background px-1.5 py-0.5  text-[10.5px]"
                               >
                                 {scope}
                               </span>

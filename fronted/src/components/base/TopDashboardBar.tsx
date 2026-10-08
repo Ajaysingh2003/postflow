@@ -1,9 +1,8 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, ChevronRight, FileText, Plus, Sparkles } from "lucide-react";
+import { Bot, ChevronRight, FileText } from "lucide-react";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useComposer } from "@/modules/content/context/ComposerContext";
@@ -33,7 +32,7 @@ function getPageMetadata(pathname: string): {
     return { title: "AI Assistant", section: "Create" };
   }
   if (pathname.startsWith("/dashboard/posts")) {
-    return { title: "Posts & Replies", section: "Manage" };
+    return { title: "Posts", section: "Manage" };
   }
   if (pathname.startsWith("/dashboard/analytics")) {
     return { title: "Analytics", section: "Manage" };
@@ -61,6 +60,7 @@ export default function TopDashboardBar() {
   const contentStudio = [
     "/dashboard/content",
     "/dashboard/analytics",
+    "/dashboard/posts",
     "/dashboard/content/compose",
     "/dashboard/content/generator",
   ].includes(pathname);

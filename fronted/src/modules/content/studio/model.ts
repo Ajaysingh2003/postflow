@@ -226,6 +226,32 @@ export function updateThread(
   return items.length === 1 ? items[0] : { thread: items };
 }
 
+export function setPostMedia(payload: Payload, mediaIds: string[], index: number, chosen: string[]) {
+  const items = threadItems(payload);
+  if (index < 0 || index >= items.length) return { payload, mediaIds };
+  // Migrate legacy whole-draft attachments to post 1 before assigning a reply.
+  if (!items.some((item) => Array.isArray(item.media_ids))) items[0].media_ids = [...mediaIds];
+  items[index] = { ...items[index], media_ids: [...new Set(chosen)] };
+  return {
+    payload: items.length === 1 ? items[0] : { ...payload, thread: items },
+    mediaIds: [...new Set(items.flatMap((item) => Array.isArray(item.media_ids) ? item.media_ids as string[] : []))],
+  };
+}
+
+export function postMediaIds(payload: Payload, mediaIds: string[], index: number): string[] {
+  const items = threadItems(payload);
+  const selected = items[index]?.media_ids;
+  if (Array.isArray(selected)) return selected as string[];
+  return index === 0 && !items.some((item) => Array.isArray(item.media_ids)) ? mediaIds : [];
+}
+
+export function draftMediaIds(payload: Payload, fallback: string[]): string[] {
+  const items = threadItems(payload);
+  return items.some((item) => Array.isArray(item.media_ids))
+    ? [...new Set(items.flatMap((item) => Array.isArray(item.media_ids) ? item.media_ids as string[] : []))]
+    : fallback;
+}
+
 export function draftText(payload: Payload, platform: string) {
   if (Array.isArray(payload.thread))
     return threadItems(payload)

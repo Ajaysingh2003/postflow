@@ -6,9 +6,9 @@ import { RefObject, useEffect, useRef, useState } from "react";
 
 import {
   BarChart3,
-  BookOpen,
+  Bot,
   Calendar,
-  ChevronUp,
+  ChevronsUpDown,
   CreditCard,
   LayoutDashboard,
   LogOut,
@@ -58,11 +58,17 @@ const ROUTES = {
   posts: "/dashboard/posts",
   channels: "/dashboard/channels",
   analytics: "/dashboard/analytics",
-  docs: "/dashboard/help",
+  agents: "/dashboard/agents",
   settings: "/dashboard/settings",
   profile: "/dashboard/settings/profile",
   billing: "/settings/billing",
 } as const;
+
+const NEW_DRAFT_PATHS = [
+  "/dashboard/content",
+  "/dashboard/content/compose",
+  "/dashboard/content/generator",
+];
 
 /* -------------------------------------------------------------------------- */
 /*                                 NAVIGATION                                 */
@@ -86,158 +92,57 @@ const overviewNavigation: NavItem[] = [
 ];
 
 const createNavigation: NavItem[] = [
-  {
-    label: "Content",
-    href: ROUTES.content,
-    icon: PenTool,
-    exact: true,
-  },
-  {
-    label: "Schedule",
-    href: ROUTES.schedule,
-    icon: Calendar,
-  },
-  // {
-  //   label: "AI Assistant",
-  //   href: ROUTES.assistant,
-  //   icon: Sparkles,
-  // },
+  { label: "Content", href: ROUTES.content, icon: PenTool, exact: true },
+  { label: "Schedule", href: ROUTES.schedule, icon: Calendar },
 ];
 
 const manageNavigation: NavItem[] = [
-  {
-    label: "Posts & Replies",
-    href: ROUTES.posts,
-    icon: MessageSquare,
-  },
-  {
-    label: "Channels",
-    href: ROUTES.channels,
-    icon: Plug,
-  },
-  {
-    label: "Analytics",
-    href: ROUTES.analytics,
-    icon: BarChart3,
-  },
+  { label: "Posts", href: ROUTES.posts, icon: MessageSquare },
+  { label: "Channels", href: ROUTES.channels, icon: Plug },
+  { label: "Analytics", href: ROUTES.analytics, icon: BarChart3 },
 ];
 
-const resourceNavigation: NavItem[] = [
-  {
-    label: "Docs",
-    href: ROUTES.docs,
-    icon: BookOpen,
-  },
-  {
-    label: "Settings",
-    href: ROUTES.settings,
-    icon: Settings,
-  },
+const extraNavigation: NavItem[] = [
+  { label: "Agents", href: ROUTES.agents, icon: Bot, badge: "New" },
 ];
 
 /* -------------------------------------------------------------------------- */
 /*                               SHARED STYLES                                */
 /* -------------------------------------------------------------------------- */
 
-const NAV_BUTTON_BASE = `
-  relative
-  flex
-  h-9
-  w-full
-  items-center
-  gap-2.5
-  overflow-visible
-  rounded-lg
-  px-2.5
-  text-[13px]
-  font-medium
-  text-neutral-600
-  dark:text-[#a3a3a3]
-  transition-all
-  duration-150
-  hover:bg-neutral-200/70
-  hover:text-neutral-900
-  dark:hover:bg-[#222222]
-  dark:hover:text-white
-`;
+/**
+ * One gutter for everything. Header, content and footer all use GUTTER, and
+ * every row inside uses ROW_X, so icons, labels, buttons and the avatar all
+ * share the same left edge.
+ */
+const GUTTER = "px-3";
+const ROW_X = "px-2.5";
+const ACCENT = "#7C5CFC";
 
-const ACTIVE_RAIL = [
-  "secondary-btns",
-  "!text-neutral-900 dark:!text-white",
-  "before:pointer-events-none",
-  "before:absolute",
-  "before:-left-[9px]",
-  "before:top-1/2",
-  "before:z-20",
-  "before:h-[24px]",
-  "before:w-[3px]",
-  "before:-translate-y-1/2",
-  "before:rounded-r-full",
-  "before:bg-[#7C5CFC]",
-  "before:shadow-[0_0_8px_rgba(124,92,252,0.35)]",
-  "before:content-['']",
-];
+const FOCUS_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C5CFC]/40";
 
-const ACCOUNT_MENU_ITEM = `
-  flex
-  w-full
-  cursor-pointer
-  items-center
-  gap-2.5
-  rounded-lg
-  px-2.5
-  py-2
-  text-left
-  text-[13px]
-  text-neutral-700
-  dark:text-[#b7b7b7]
-  transition-colors
-  hover:bg-neutral-100
-  hover:text-neutral-900
-  dark:hover:bg-[#292929]
-  dark:hover:text-white
-`;
+const NAV_BUTTON =
+  "relative flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium " +
+  "text-neutral-600 dark:text-neutral-400 transition-colors duration-150 " +
+  "hover:bg-neutral-900/[0.05] hover:text-neutral-900 " +
+  "dark:hover:bg-white/[0.06] dark:hover:text-white " +
+  FOCUS_RING;
 
-const MORE_MENU_ITEM = `
-  flex
-  h-9
-  w-full
-  items-center
-  gap-2.5
-  rounded-lg
-  px-2.5
-  text-left
-  text-[12px]
-  font-medium
-  text-neutral-700
-  dark:text-[#b5b5b5]
-  transition-colors
-  hover:bg-neutral-100
-  hover:text-neutral-900
-  dark:hover:bg-white/[0.06]
-  dark:hover:text-white
-`;
+const NAV_BUTTON_ACTIVE =
+  "!bg-neutral-900/[0.07] !text-neutral-900 dark:!bg-white/[0.09] dark:!text-white " +
+  "before:absolute before:left-[3px] before:top-1/2 before:h-4 before:w-[2.5px] " +
+  "before:-translate-y-1/2 before:rounded-full before:bg-[#7C5CFC] before:content-['']";
 
-const QUICK_BUTTON = `
-  secondary-btns
-  flex
-  h-9
-  min-w-0
-  flex-1
-  items-center
-  justify-center
-  gap-1.5
-  rounded-lg
-  px-2.5
-  text-[12px]
-  font-medium
-  text-neutral-700
-  dark:text-[#d4d4d4]
-  transition-all
-  duration-150
-  hover:text-neutral-900
-  dark:hover:text-white
-`;
+const MENU_PANEL =
+  "absolute z-50 overflow-hidden rounded-xl border border-neutral-200 bg-white p-1.5 " +
+  "shadow-lg dark:border-white/[0.08] dark:bg-[#1b1b1b] dark:shadow-2xl dark:shadow-black/50";
+
+const MENU_ITEM =
+  "flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] " +
+  "font-medium text-neutral-700 dark:text-neutral-300 transition-colors " +
+  "hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-white/[0.06] dark:hover:text-white " +
+  FOCUS_RING;
 
 /* -------------------------------------------------------------------------- */
 /*                                   HELPERS                                  */
@@ -293,7 +198,7 @@ function NavigationGroup({
   label,
   items,
 }: {
-  label: string;
+  label?: string;
   items: NavItem[];
 }) {
   const pathname = usePathname();
@@ -301,22 +206,12 @@ function NavigationGroup({
   const open = isMobile || desktopOpen;
 
   return (
-    <SidebarGroup className="px-1 py-1.5">
+    <SidebarGroup className="p-0">
       {label && (
         <SidebarGroupLabel
           className={cn(
-            `
-              h-auto
-              px-2.5
-              pb-1.5
-              pt-2
-              text-[10px]
-              font-medium
-              uppercase
-              tracking-[0.12em]
-              text-neutral-500
-              dark:text-neutral-400
-            `,
+            ROW_X,
+            "mb-1 h-6 text-[11px] font-medium tracking-normal text-neutral-400 dark:text-neutral-500",
             !open && "sr-only",
           )}
         >
@@ -325,13 +220,13 @@ function NavigationGroup({
       )}
 
       <SidebarGroupContent>
-        <SidebarMenu className="gap-[2px] overflow-visible">
+        <SidebarMenu className="gap-0.5">
           {items.map((item) => {
             const Icon = item.icon;
             const active = isItemActive(pathname, item);
 
             return (
-              <SidebarMenuItem key={item.href} className="overflow-visible">
+              <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   tooltip={item.label}
                   render={
@@ -343,44 +238,29 @@ function NavigationGroup({
                       }}
                     />
                   }
-                  className={cn(NAV_BUTTON_BASE, active && ACTIVE_RAIL)}
+                  className={cn(NAV_BUTTON, active && NAV_BUTTON_ACTIVE)}
                 >
-                  <span className="flex w-full items-center gap-2.5">
-                    <Icon
-                      className={cn(
-                        "size-[17px] shrink-0 transition-colors",
-                        active
-                          ? "!text-neutral-900 dark:!text-white"
-                          : "!text-neutral-500 dark:!text-[#737373]",
-                      )}
-                    />
-
-                    {open && (
-                      <>
-                        <span
-                          className={cn(
-                            "truncate text-[14px] font-medium transition-colors",
-                            active && "!text-neutral-900 dark:!text-white",
-                          )}
-                        >
-                          {item.label}
-                        </span>
-
-                        {item.badge && (
-                          <span
-                            className={cn(
-                              "ml-auto rounded-md px-1.5 py-0.5 text-[9px]",
-                              active
-                                ? "bg-neutral-300 dark:bg-white/10 text-neutral-900 dark:text-white/70"
-                                : "bg-neutral-200 dark:bg-[#292929] text-neutral-600 dark:text-[#999]",
-                            )}
-                          >
-                            {item.badge}
-                          </span>
-                        )}
-                      </>
+                  <Icon
+                    className={cn(
+                      "size-[18px] shrink-0 transition-colors",
+                      active
+                        ? "text-[#7C5CFC]"
+                        : "text-neutral-400 dark:text-neutral-500",
                     )}
-                  </span>
+                    strokeWidth={active ? 2.2 : 1.9}
+                  />
+
+                  {open && (
+                    <>
+                      <span className="truncate">{item.label}</span>
+
+                      {item.badge && (
+                        <span className="ml-auto rounded-full bg-[#7C5CFC]/10 px-2 py-0.5 text-[10px] font-semibold leading-none text-[#7C5CFC] dark:bg-[#7C5CFC]/20 dark:text-[#a995ff]">
+                          {item.badge}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
@@ -433,70 +313,30 @@ function SidebarUserFooter() {
   return (
     <div ref={dropdownRef} className="relative">
       {isOpen && (
-        <div
-          className="
-            absolute
-            bottom-full
-            left-0
-            z-50
-            mb-2
-            w-60
-            overflow-hidden
-            rounded-xl
-            border
-            border-neutral-200
-            dark:border-[#303030]
-            bg-white
-            dark:bg-[#1d1d1d]
-            p-1.5
-            shadow-xl
-            dark:shadow-2xl
-            dark:shadow-black/50
-          "
-        >
-          <div className="px-2.5 py-2">
-            <p className="text-[11px] font-medium text-neutral-500 dark:text-[#777]">
-              ACCOUNT
-            </p>
-          </div>
-
+        <div className={cn(MENU_PANEL, "bottom-full left-0 right-0 mb-2")}>
           {ACCOUNT_MENU.map(({ label, href, icon: ItemIcon }) => (
             <button
               key={href}
               type="button"
               onClick={() => navigate(href)}
-              className={ACCOUNT_MENU_ITEM}
+              className={MENU_ITEM}
             >
-              <ItemIcon className="size-4 text-neutral-500 dark:text-[#777]" />
+              <ItemIcon className="size-4 text-neutral-400 dark:text-neutral-500" />
               {label}
             </button>
           ))}
 
-          <div className="my-1 h-px bg-neutral-200 dark:bg-[#303030]" />
+          <div className="my-1.5 h-px bg-neutral-200 dark:bg-white/[0.08]" />
 
           <button
             type="button"
             disabled={logout.isPending}
             onClick={() => logout.mutate()}
-            className="
-              flex
-              w-full
-              cursor-pointer
-              items-center
-              gap-2.5
-              rounded-lg
-              px-2.5
-              py-2
-              text-left
-              text-[13px]
-              text-red-600
-              dark:text-red-400
-              transition-colors
-              hover:bg-red-50
-              hover:text-red-700
-              dark:hover:bg-red-500/10
-              dark:hover:text-red-300
-            "
+            className={cn(
+              MENU_ITEM,
+              "text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-60",
+              "dark:text-red-400 dark:hover:bg-red-500/10 dark:hover:text-red-300",
+            )}
           >
             <LogOut className="size-4" />
             Sign out
@@ -507,24 +347,17 @@ function SidebarUserFooter() {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
         className={cn(
-          `
-            flex
-            w-full
-            cursor-pointer
-            items-center
-            gap-2.5
-            rounded-xl
-            p-2
-            text-left
-            transition-colors
-            hover:bg-neutral-200/70
-            dark:hover:bg-[#222222]
-          `,
+          "flex w-full cursor-pointer items-center gap-2.5 rounded-xl p-2 text-left transition-colors",
+          "hover:bg-neutral-900/[0.05] dark:hover:bg-white/[0.06]",
+          isOpen && "bg-neutral-900/[0.05] dark:bg-white/[0.06]",
+          FOCUS_RING,
           !open && "justify-center",
         )}
       >
-        <Avatar className="size-8 shrink-0 border border-neutral-300 dark:border-[#323232]">
+        <Avatar className="size-8 shrink-0 border border-neutral-200 dark:border-white/10">
           <AvatarImage alt={name} />
           <AvatarFallback className="bg-[#7C5CFC]/15 text-[11px] font-semibold text-[#7C5CFC]">
             {initials}
@@ -533,28 +366,16 @@ function SidebarUserFooter() {
 
         {open && (
           <>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium text-neutral-900 dark:text-[#e5e5e5]">
-                {name}
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate text-[13px] font-medium text-neutral-900 dark:text-neutral-100">
+                {name || "Account"}
               </p>
-              <p className="truncate text-[11px] text-neutral-500 dark:text-[#717171]">
+              <p className="mt-0.5 truncate text-[11px] text-neutral-500 dark:text-neutral-500">
                 {email}
               </p>
             </div>
 
-            <ChevronUp
-              className={cn(
-                `
-                  size-4
-                  shrink-0
-                  text-neutral-400
-                  dark:text-[#555]
-                  transition-transform
-                  duration-200
-                `,
-                isOpen && "rotate-180 text-neutral-700 dark:text-[#888]",
-              )}
-            />
+            <ChevronsUpDown className="size-4 shrink-0 text-neutral-400 dark:text-neutral-500" />
           </>
         )}
       </button>
@@ -581,26 +402,22 @@ function CreateActionButton() {
 
   useOutsideClick(moreRef, moreOpen, () => setMoreOpen(false));
 
+  function handleNewPost() {
+    if (NEW_DRAFT_PATHS.includes(window.location.pathname)) {
+      window.dispatchEvent(new Event("postflow:new-draft"));
+    } else {
+      router.push(ROUTES.compose);
+    }
+  }
+
   return (
-    <div className="flex gap-2">
+    <div className="flex items-center gap-2">
       <button
         type="button"
-        onClick={() => {
-          if (["/dashboard/content", "/dashboard/content/compose", "/dashboard/content/generator"].includes(window.location.pathname)) window.dispatchEvent(new Event("postflow:new-draft"));
-          else router.push(ROUTES.compose);
-        }}
+        onClick={handleNewPost}
         className={cn(
-          `
-            primary-btn
-            flex
-            !h-9
-            items-center
-            justify-center
-            rounded-lg
-            text-[13px]
-            font-medium
-          `,
-          open ? "w-full gap-2" : "size-9 !px-3",
+          "primary-btn flex !h-9 items-center justify-center rounded-lg text-[13px] font-medium",
+          open ? "min-w-0 flex-1 gap-2" : "size-9 !px-0",
         )}
       >
         <Plus className="size-4 shrink-0" strokeWidth={2.2} />
@@ -614,50 +431,20 @@ function CreateActionButton() {
             onClick={() => setMoreOpen((prev) => !prev)}
             aria-label="More create options"
             aria-expanded={moreOpen}
+            aria-haspopup="menu"
             className={cn(
-              `
-                secondary-btns
-                flex
-                size-9
-                shrink-0
-                items-center
-                justify-center
-                rounded-lg
-                !px-0
-                text-neutral-600
-                dark:text-[#a3a3a3]
-                transition-all
-                duration-150
-                hover:text-neutral-900
-                dark:hover:text-white
-              `,
+              "secondary-btns flex size-9 shrink-0 items-center justify-center rounded-lg !px-0",
+              "text-neutral-600 transition-colors hover:text-neutral-900",
+              "dark:text-neutral-400 dark:hover:text-white",
               moreOpen && "!text-neutral-900 dark:!text-white",
+              FOCUS_RING,
             )}
           >
             <MoreHorizontal className="size-4" strokeWidth={2} />
           </button>
 
           {moreOpen && (
-            <div
-              className="
-                absolute
-                left-0
-                top-[calc(100%+6px)]
-                z-50
-                w-48
-                overflow-hidden
-                rounded-xl
-                border
-                border-neutral-200
-                dark:border-white/[0.07]
-                bg-white
-                dark:bg-[#1d1d1d]
-                p-1.5
-                shadow-xl
-                dark:shadow-2xl
-                dark:shadow-black/50
-              "
-            >
+            <div className={cn(MENU_PANEL, "right-0 top-[calc(100%+6px)] w-52")}>
               {MORE_CREATE_OPTIONS.map(({ label, href, icon: OptionIcon }) => (
                 <button
                   key={href}
@@ -666,9 +453,9 @@ function CreateActionButton() {
                     setMoreOpen(false);
                     router.push(href);
                   }}
-                  className={MORE_MENU_ITEM}
+                  className={MENU_ITEM}
                 >
-                  <OptionIcon className="size-3.5 text-neutral-500 dark:text-[#777]" />
+                  <OptionIcon className="size-4 text-neutral-400 dark:text-neutral-500" />
                   {label}
                 </button>
               ))}
@@ -676,65 +463,6 @@ function CreateActionButton() {
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function QuickCreateActions() {
-  const router = useRouter();
-  const { open } = useSidebar();
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => router.push(ROUTES.assistant)}
-        className="
-          secondary-btns
-          flex
-          size-9
-          items-center
-          justify-center
-          rounded-lg
-          !px-0
-          text-neutral-700
-          dark:text-[#d4d4d4]
-          transition-colors
-          hover:text-neutral-900
-          dark:hover:text-white
-        "
-        aria-label="AI assistant"
-      >
-        <Sparkles className="size-4 shrink-0" strokeWidth={2} />
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex w-full items-center gap-1.5">
-      <button
-        type="button"
-        onClick={() => router.push(ROUTES.assistant)}
-        className={QUICK_BUTTON}
-      >
-        <Sparkles
-          className="size-3.5 shrink-0 text-neutral-600 dark:text-[#d4d4d4]"
-          strokeWidth={2}
-        />
-        <span className="truncate">AI Assist</span>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => router.push(ROUTES.schedule)}
-        className={QUICK_BUTTON}
-      >
-        <Calendar
-          className="size-3.5 shrink-0 text-neutral-600 dark:text-[#d4d4d4]"
-          strokeWidth={2}
-        />
-        <span className="truncate">Schedule</span>
-      </button>
     </div>
   );
 }
@@ -747,61 +475,33 @@ export function AppSidebar() {
   return (
     <Sidebar
       collapsible="offcanvas"
-      className="
-        border-r
-        border-border
-        w-[var(--sidebar-width)]
-        bg-primary
-        text-foreground
-      "
+      className="w-[var(--sidebar-width)] border-r border-border bg-primary text-foreground"
     >
       {/* HEADER */}
-      <SidebarHeader className="border-b border-border bg-primary px-3 py-2.5">
+      <SidebarHeader
+        className={cn(GUTTER, "gap-3 border-b border-border bg-primary py-3")}
+      >
         <ProfileMenu />
-
-        <div className="mt-2 flex flex-col gap-2.5">
-          <CreateActionButton />
-          <QuickCreateActions />
-        </div>
+        <CreateActionButton />
       </SidebarHeader>
 
       {/* CONTENT */}
       <SidebarContent
-        className="
-          custom-scrollbar
-          flex-1
-          overflow-y-auto
-          bg-primary
-          px-1
-          py-2
-        "
+        className={cn(
+          GUTTER,
+          "custom-scrollbar flex-1 gap-5 overflow-y-auto bg-primary py-4",
+        )}
       >
         <NavigationGroup label="Overview" items={overviewNavigation} />
         <NavigationGroup label="Create" items={createNavigation} />
         <NavigationGroup label="Manage" items={manageNavigation} />
+        <NavigationGroup label="Extra" items={extraNavigation} />
       </SidebarContent>
 
       {/* FOOTER */}
       <SidebarFooter
-        className="
-          border-t
-          border-border
-          bg-primary
-          p-2
-        "
+        className={cn(GUTTER, "border-t border-border bg-primary py-3")}
       >
-        <NavigationGroup label="" items={resourceNavigation} />
-
-        <div
-          className="
-            mx-1
-            my-1
-            h-px
-            bg-neutral-200
-            dark:bg-white/[0.055]
-          "
-        />
-
         <SidebarUserFooter />
       </SidebarFooter>
     </Sidebar>

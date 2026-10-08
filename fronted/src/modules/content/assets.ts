@@ -32,6 +32,15 @@ export function fileType(file: File) {
     EXTENSIONS[file.name.split(".").pop()?.toLowerCase() ?? ""] ?? file.type
   );
 }
+export function validatePostAsset(file: File, supported: string[]) {
+  const type = fileType(file);
+  if (!type || (supported.length && !supported.includes(type)))
+    throw new Error(`${file.name}: choose a file type supported by this channel.`);
+  if (!file.size) throw new Error(`${file.name} is empty.`);
+  const limit = type === "video/mp4" ? 100 : 20;
+  if (file.size > limit * 1024 * 1024)
+    throw new Error(`${file.name} exceeds ${limit} MB.`);
+}
 export function validateSource(file: File) {
   if (!Object.values(EXTENSIONS).includes(fileType(file)))
     throw new Error(

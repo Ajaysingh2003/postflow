@@ -11,6 +11,7 @@ import type {
   Feature,
   Payload,
   Post,
+  PostLibraryPage,
   PostActions,
   RepliesPage,
   Variant,
@@ -18,6 +19,7 @@ import type {
   VariantMetrics,
   ValidationResult,
   AccountAnalytics,
+  AnalyticsDashboard,
   WorkspaceOverview,
   PostFeedItemAnalytics,
 } from "./types";
@@ -57,6 +59,14 @@ const resources = {
 } as const;
 
 export const studioRouter = createTRPCRouter({
+  postLibrary: authedProcedure
+    .input(z.object({
+      connected_account_id: id,
+      category: z.enum(["posts", "scheduled", "drafts"]).default("posts"),
+      offset: z.number().int().min(0).default(0),
+      limit: z.number().int().min(1).max(100).default(50),
+    }))
+    .query(({input}) => backend<PostLibraryPage>("GET", "/posts/library", undefined, input)),
   calendar: authedProcedure
     .input(z.object({ start: z.string().datetime(), end: z.string().datetime(), cursor: z.number().int().min(0).optional() }))
     .query(({ input }) => backend<CalendarPage>("GET", "/publishing/calendar", undefined, input)),
@@ -76,6 +86,9 @@ export const studioRouter = createTRPCRouter({
         connected_account_id: input.connected_account_id,
       }),
     ),
+  postSummary: authedProcedure
+    .input(z.object({ connected_account_id: id.optional() }))
+    .query(({ input }) => backend<Record<string, number>>("GET", "/posts/summary", undefined, input)),
   post: authedProcedure
     .input(z.object({ id }))
     .query(({ input }) => backend<Post>("GET", `/posts/${input.id}`)),
@@ -114,6 +127,16 @@ export const studioRouter = createTRPCRouter({
     .query(({ input }) =>
       backend<VariantMetrics>("GET", `/analytics/variants/${input.id}`),
     ),
+  analyticsDashboard: authedProcedure
+    .input(z.object({
+      account_id: id.optional(),
+      start_date: z.string().optional(),
+      end_date: z.string().optional(),
+      limit: z.number().int().min(1).max(100).default(50),
+      offset: z.number().int().min(0).default(0),
+      content_type: z.enum(["posts", "replies", "all"]).default("posts"),
+    }))
+    .query(({ input }) => backend<AnalyticsDashboard>("GET", "/analytics/dashboard", undefined, input)),
   analyticsOverview: authedProcedure
     .input(
       z
@@ -145,10 +168,20 @@ export const studioRouter = createTRPCRouter({
       }),
     )
     .query(({ input }) =>
-      backend<AccountAnalytics>("GET", `/analytics/accounts/${input.id}`),
+      backend<AccountAnalytics>(
+        "GET",
+        `/analytics/accounts/${input.id}`,
+        undefined,
+        { live: "true" },
+      ),
     ),
   allAccountsAnalytics: authedProcedure.query(() =>
-    backend<AccountAnalytics[]>("GET", "/analytics/accounts"),
+    backend<AccountAnalytics[]>(
+      "GET",
+      "/analytics/accounts",
+      undefined,
+      { live: "true" },
+    ),
   ),
   analyticsFeed: authedProcedure
     .input(
@@ -173,6 +206,7 @@ export const studioRouter = createTRPCRouter({
           end_date: input?.end_date,
           limit: input?.limit ?? 50,
           offset: input?.offset ?? 0,
+          live: "true",
         },
       ),
     ),

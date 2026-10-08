@@ -3,7 +3,7 @@
 /* Workspace images use the authenticated same-origin media proxy. */
 /* eslint-disable @next/next/no-img-element */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImagePlus, RefreshCw, Check, X, FileText } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import { useTRPC } from "@/trpc/client";
 import type { Payload } from "@/modules/studio/types";
 
 import { cn } from "@/lib/utils";
+import { uploadAsset, validatePostAsset } from "../assets";
 
 export function MediaPreview({
   assets,
@@ -92,7 +93,6 @@ export default function MediaPicker({
   assets,
   ids,
   capabilities,
-  platform,
   onChange,
   onRefresh,
 }: {
@@ -107,6 +107,13 @@ export default function MediaPicker({
 }) {
   const trpc = useTRPC();
   const [uploading, setUploading] = useState(false);
+  const [uploadLabel, setUploadLabel] = useState("");
+  const [uploadError, setUploadError] = useState("");
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => {
+    if (!open) controller.current?.abort();
+  }, [open]);
   const [altAsset, setAltAsset] = useState<Payload | null>(null);
   const [altText, setAltText] = useState("");
   const update = useMutation(
@@ -124,49 +131,65 @@ export default function MediaPicker({
   const supported = Array.isArray(capabilities.supported_media_types)
     ? (capabilities.supported_media_types as string[])
     : [];
-  async function upload(file: File) {
-    setUploading(true);
+  async function upload(files: File[]) {
+    if (controller.current) return;
+    const maximum = Number(capabilities.max_media_count ?? 4);
+    if (files.length + ids.length > maximum) {
+      setUploadError(`Choose up to ${Math.max(0, maximum - ids.length)} more attachments.`);
+      return;
+    }
     try {
-      const data = new FormData();
-      data.set("file", file);
-      data.set("content_type", file.type || "application/octet-stream");
-      data.set("purpose", "post");
-      const response = await fetch("/api/media/attachments", {
-        method: "POST",
-        body: data,
-      });
-      const asset = await response.json();
-      if (!response.ok)
-        throw new Error(
-          typeof asset.detail === "string"
-            ? asset.detail
-            : "The upload failed. Please try again.",
-        );
-      onRefresh();
-      if (
-        asset.status === "ready" &&
-        ids.length < Number(capabilities.max_media_count ?? 4)
-      )
-        onChange([...ids, asset.id]);
-      else
-        toast.message(
-          "Upload received. Refresh the library when processing finishes.",
-        );
+      files.forEach((file) => validatePostAsset(file, supported));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Upload failed");
+      setUploadError(error instanceof Error ? error.message : "Choose a supported file.");
+      return;
+    }
+    const operation = new AbortController();
+    controller.current = operation;
+    setUploading(true);
+    setUploadError("");
+    let chosen = [...ids];
+    try {
+      for (const file of files) {
+        const asset = await uploadAsset(
+          file,
+          "post",
+          (stage) => setUploadLabel(
+            `${stage === "uploading" ? "Uploading" : "Checking"} ${file.name}…`,
+          ),
+          operation.signal,
+        );
+        if (operation.signal.aborted) return;
+        chosen = [...new Set([...chosen, asset.asset_id])];
+        onChange(chosen);
+        onRefresh();
+      }
+      toast.success(files.length === 1 ? "File uploaded and attached" : "Files uploaded and attached");
+    } catch (error) {
+      if (!operation.signal.aborted) {
+        const message = error instanceof Error ? error.message : "Upload failed";
+        setUploadError(message);
+        toast.error(message);
+      }
     } finally {
       setUploading(false);
+      setUploadLabel("");
+      controller.current = null;
     }
   }
   return (
-    <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
+    <Dialog open={open} onOpenChange={(value) => {
+      if (!value) {
+        controller.current?.abort();
+        setUploading(false);
+        onClose();
+      }
+    }}>
       <DialogContent className="sm:max-w-2xl p-6 max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add media</DialogTitle>
           <DialogDescription>
-            {platform === "x"
-              ? "Attachments go on the first post of your thread."
-              : "Choose scanned files from your workspace or upload a new file."}{" "}
+            Choose files for this post, or upload new photos and videos.{" "}
             Up to {Number(capabilities.max_media_count ?? 4)} attachments.
           </DialogDescription>
         </DialogHeader>
@@ -178,10 +201,11 @@ export default function MediaPicker({
               type="file"
               className="sr-only"
               accept={supported.join(",")}
+              multiple
               disabled={uploading}
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void upload(file);
+                const files = Array.from(e.target.files ?? []);
+                if (files.length) void upload(files);
                 e.target.value = "";
               }}
             />
@@ -194,6 +218,8 @@ export default function MediaPicker({
             Refresh library
           </button>
         </div>
+        {uploading && <p role="status" className="text-xs text-muted-foreground">{uploadLabel || "Preparing upload…"}</p>}
+        {uploadError && <p role="alert" className="text-xs text-destructive">{uploadError}</p>}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 my-3">
           {assets
             .filter(
@@ -213,7 +239,7 @@ export default function MediaPicker({
                     aria-label={`Attach ${String(asset.original_filename)}`}
                     aria-pressed={selected}
                     disabled={
-                      asset.status !== "ready" ||
+                      uploading || asset.status !== "ready" ||
                       (!selected &&
                         ids.length >= Number(capabilities.max_media_count ?? 4))
                     }
@@ -292,6 +318,7 @@ export default function MediaPicker({
         )}
         <button
           className="inline-flex items-center justify-center gap-1.5 text-xs font-medium rounded-md px-3.5 py-2.5 bg-[#239a7d] hover:bg-[#198268] text-white cursor-pointer whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed w-full mt-3"
+          disabled={uploading}
           onClick={onClose}
         >
           Done · {ids.length} attached

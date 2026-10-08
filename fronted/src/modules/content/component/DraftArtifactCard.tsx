@@ -329,7 +329,7 @@ export function DraftArtifactCard({
         <div className="flex shrink-0 items-center gap-2.5">
           {nearLimit && (
             <span
-              className={`font-mono text-[12px] tabular-nums ${length > limit ? "font-medium text-rose-600" : "text-[#8a929c]"}`}
+              className={` text-[12px] tabular-nums ${length > limit ? "font-medium text-rose-600" : "text-[#8a929c]"}`}
             >
               {length}/{limit}
             </span>
@@ -349,7 +349,7 @@ export function DraftArtifactCard({
             )}
             {diff.removed.length > 0 && (
               <del className="flex gap-2.5 whitespace-pre-wrap break-words rounded-lg bg-rose-50 px-2.5 py-1.5 text-rose-900 no-underline">
-                <span aria-hidden className="select-none font-mono text-rose-400">
+                <span aria-hidden className="select-none  text-rose-400">
                   −
                 </span>
                 <span>{diff.removed.join("\n") || "(empty line)"}</span>
@@ -359,7 +359,7 @@ export function DraftArtifactCard({
               <ins className="flex gap-2.5 whitespace-pre-wrap break-words rounded-lg bg-emerald-50 px-2.5 py-1.5 text-emerald-900 no-underline">
                 <span
                   aria-hidden
-                  className="select-none font-mono text-emerald-500"
+                  className="select-none  text-emerald-500"
                 >
                   +
                 </span>

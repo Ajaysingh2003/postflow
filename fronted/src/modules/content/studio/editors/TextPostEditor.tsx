@@ -4,6 +4,7 @@ import type { Payload } from "@/modules/studio/types";
 import { Globe2, Plus, ImagePlus, Sparkles } from "lucide-react";
 import { profileFor, threadItems } from "../model";
 import { Author, GrowingText, Counter, refineCurrentPost } from "./shared";
+import { MediaPreview } from "../MediaPicker";
 import type { EditorProps } from "./types";
 
 export default function TextPostEditor({
@@ -16,6 +17,8 @@ export default function TextPostEditor({
   onRefine,
   onMedia,
   media,
+  mediaIds,
+  mediaAssets,
   beforeText,
 }: EditorProps & {
   beforeText?: (
@@ -48,8 +51,31 @@ export default function TextPostEditor({
             onRefine={(text, _, start, end, anchor) =>
               onRefine(text, index, start, end, anchor)
             }
-            onMedia={onMedia}
-            media={index === 0 ? media : null}
+            onMedia={() => onMedia(index)}
+            media={
+              Array.isArray(item.media_ids) ? (
+                <MediaPreview
+                  assets={mediaAssets ?? []}
+                  ids={item.media_ids as string[]}
+                  readOnly={readOnly || preview}
+                  onRemove={(id) => {
+                    const next = items.map((post, i) =>
+                      i === index
+                        ? {
+                            ...post,
+                            media_ids: (item.media_ids as string[]).filter(
+                              (value) => value !== id,
+                            ),
+                          }
+                        : post,
+                    );
+                    onChange({ thread: next });
+                  }}
+                />
+              ) : index === 0 ? media : null
+            }
+            mediaIds={mediaIds}
+            mediaAssets={mediaAssets}
             beforeText={beforeText}
           />
         ))}

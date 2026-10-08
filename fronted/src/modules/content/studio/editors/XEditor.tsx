@@ -22,7 +22,6 @@ import {
   Sparkles,
   Trash2,
   Users,
-  X as CloseIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -60,15 +59,15 @@ import {
 import { getAccountAvatarUrl } from "@/modules/channels/component/AccountAvatar";
 import { MediaPreview } from "../MediaPicker";
 import {
-  getOrdinal,
   getOverflowSplit,
   profileFor,
   splitPostText,
   threadItems,
   updateThread,
   xLength,
+  textLength,
 } from "../model";
-import { Author, Counter, GrowingText, refineCurrentPost } from "./shared";
+import { Author, Counter, refineCurrentPost } from "./shared";
 import type { EditorProps } from "./types";
 import XPoll from "./XPoll";
 
@@ -114,7 +113,9 @@ function XPostTextarea({
   ariaLabel,
   onChange,
   onKeyDown,
+  platform = "x",
 }: {
+  platform?: string;
   value: string;
   limit: number;
   placeholder?: string;
@@ -123,8 +124,8 @@ function XPostTextarea({
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isOver = xLength(value) > limit;
-  const split = getOverflowSplit(value, limit);
+  const isOver = textLength(value, platform) > limit;
+  const split = platform === "x" ? getOverflowSplit(value, limit) : {valid: [...value].slice(0, limit).join(""), overflow: [...value].slice(limit).join("")};
 
   useLayoutEffect(() => {
     const el = textareaRef.current;
@@ -209,11 +210,15 @@ export default function XEditor({
   media,
   mediaAssets,
 }: EditorProps) {
+  const isThreads = account.platform === "threads";
+  const platform = isThreads ? "threads" : "x";
+  const platformName = isThreads ? "Threads" : "X";
+  const canThread = !isThreads || capabilities.supports_threads === true;
   const items = threadItems(payload);
   const [disclosure, setDisclosure] = useState<number | null>(null);
   const [audience, setAudience] = useState<number | null>(null);
   const labelId = useId();
-  const limit = Number(capabilities.max_text_length ?? 280);
+  const limit = Number(capabilities.max_text_length ?? (isThreads ? 500 : 280));
   const avatar = getAccountAvatarUrl(account);
 
   function reorder(index: number, delta: number) {
@@ -245,8 +250,8 @@ export default function XEditor({
       <div className="flex flex-col">
         {items.map((item, index) => {
           const itemText = String(item.text ?? "");
-          const isOver = xLength(itemText) > limit;
-          const split = getOverflowSplit(itemText, limit);
+          const isOver = textLength(itemText, platform) > limit;
+          const split = isThreads ? {valid: [...itemText].slice(0, limit).join(""), overflow: [...itemText].slice(limit).join("")} : getOverflowSplit(itemText, limit);
 
           return (
             <article className="relative pb-6" key={index}>
@@ -307,8 +312,9 @@ export default function XEditor({
                   </div>
                 ) : (
                   <XPostTextarea
-                    ariaLabel={`X post ${index + 1}`}
-                    placeholder={profileFor("x").placeholder}
+                    platform={platform}
+                    ariaLabel={`${platformName} post ${index + 1}`}
+                    placeholder={profileFor(platform).placeholder}
                     value={itemText}
                     limit={limit}
                     onChange={(val) =>
@@ -317,9 +323,11 @@ export default function XEditor({
                       )
                     }
                     onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                      if (canThread && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
                         e.preventDefault();
-                        onChange({ thread: [...items, { text: "" }] });
+                        const next = [...items];
+                        next.splice(index + 1, 0, { text: "" });
+                        onChange({ thread: next });
                       }
                       if ((e.metaKey || e.ctrlKey) && e.key === "i") {
                         e.preventDefault();
@@ -377,6 +385,7 @@ export default function XEditor({
                 {item.poll != null && (
                   <div className="mt-2.5">
                     <XPoll
+                      platform={platform}
                       payload={item}
                       readOnly={readOnly || preview}
                       onChange={(value) => {
@@ -408,20 +417,21 @@ export default function XEditor({
                   <div className="mt-3 flex h-8 items-center justify-between gap-2 border-t border-border/40 pt-2">
                     <div className="flex items-center gap-2">
                       {items.length > 1 && (
-                        <span className="font-mono text-[11px] text-muted-foreground/70">
+                        <span className=" text-[11px] text-muted-foreground/70">
                           #{index + 1}
                         </span>
                       )}
                       <Counter
                         text={itemText}
-                        platform="x"
+                        platform={platform}
                         limit={limit}
                       />
                     </div>
 
                     <div className="flex items-center gap-0.5">
                       <ToolButton
-                        help="Add a post"
+                        help="Add post below · ⌘↵"
+                        disabled={!canThread || items.length >= 25}
                         aria-label={`Add a post after ${index + 1}`}
                         onClick={() => {
                           const next = [...items];
@@ -431,14 +441,14 @@ export default function XEditor({
                       >
                         <ListPlus />
                       </ToolButton>
-                      <ToolButton
+                      {!isThreads && <ToolButton
                         help="Disclosures"
                         aria-label={`Disclosures for post ${index + 1}`}
                         onClick={() => setDisclosure(index)}
                       >
                         <Flag />
-                      </ToolButton>
-                      {capabilities.supports_media === true && (
+                      </ToolButton>}
+                      {capabilities.supports_media === true && !item.poll && (
                         <ToolButton
                           help="Attach media"
                           aria-label={`Attach media for post ${index + 1}`}
@@ -471,7 +481,7 @@ export default function XEditor({
                           }
                         />
                         <DropdownMenuContent align="end" className="w-56">
-                          <DropdownMenuItem onClick={() => setAudience(index)}>
+                          {!isThreads && <DropdownMenuItem onClick={() => setAudience(index)}>
                             <Users className="size-4" />
                             Who can reply
                             <span className="ml-auto text-xs focus-within:bg-transparent text-muted-foreground">
@@ -483,7 +493,7 @@ export default function XEditor({
                                 )?.label
                               }
                             </span>
-                          </DropdownMenuItem>
+                          </DropdownMenuItem>}
                           {index > 0 && (
                             <DropdownMenuItem onClick={() => reorder(index, -1)}>
                               <ArrowUp className="size-4" />
@@ -497,7 +507,7 @@ export default function XEditor({
                             </DropdownMenuItem>
                           )}
                           {!item.poll &&
-                            index === 0 &&
+                            (isThreads || index === 0) &&
                             capabilities.supports_polls === true && (
                               <DropdownMenuItem
                                 onClick={() =>
@@ -505,7 +515,7 @@ export default function XEditor({
                                     updateThread(payload, index, {
                                       poll: {
                                         options: ["", ""],
-                                        duration_minutes: 1440,
+                                        ...(!isThreads ? {duration_minutes: 1440} : {}),
                                       },
                                     }),
                                   )
@@ -539,7 +549,7 @@ export default function XEditor({
                 )}
 
                 {/* Inline Split automatically button if this post overflows */}
-                {!readOnly && !preview && isOver && (
+                {!isThreads && !readOnly && !preview && isOver && (
                   <div className="mt-3 flex justify-center">
                     <button
                       type="button"
@@ -557,16 +567,17 @@ export default function XEditor({
         })}
 
         {/* Add To Thread Button */}
-        {!readOnly && !preview && (
+        {!readOnly && !preview && canThread && (
           <div className="pl-0 sm:pl-[55px] pt-1">
             <Button
               variant="ghost"
               className="h-9 w-full sm:w-auto justify-start gap-2 rounded-xl px-3 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              disabled={items.length >= 25}
               onClick={() => onChange({ thread: [...items, { text: "" }] })}
             >
               <Plus className="size-3.5" />
               <span>Add to thread</span>
-              <kbd className="ml-2 rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/70">
+              <kbd className="ml-2 rounded border border-border/60 bg-muted/40 px-1.5 py-0.5  text-[10px] text-muted-foreground/70">
                 ⌘↵
               </kbd>
             </Button>

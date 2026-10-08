@@ -1791,6 +1791,7 @@ function TimeList({
   datePart: string;
   onPick: (time: string) => void;
 }) {
+  const [now] = useState(Date.now);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const container = ref.current;
@@ -1803,7 +1804,7 @@ function TimeList({
   return (
     <div ref={ref} className="relative max-h-56 space-y-0.5 overflow-y-auto">
       {slots.map((slot) => {
-        const past = new Date(`${datePart}T${slot}`).getTime() < Date.now();
+        const past = new Date(`${datePart}T${slot}`).getTime() < now;
         return (
           <button
             key={slot}
@@ -2049,6 +2050,7 @@ function CalendarPostDialog({
       await Promise.all([
         client.invalidateQueries({ queryKey: trpc.studio.calendar.queryKey() }),
         client.invalidateQueries({ queryKey: trpc.studio.posts.queryKey() }),
+        client.invalidateQueries({ queryKey: trpc.studio.postLibrary.queryKey() }),
         client.invalidateQueries({ queryKey: trpc.studio.post.queryKey() }),
       ]);
     }

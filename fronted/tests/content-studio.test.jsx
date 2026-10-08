@@ -12,6 +12,9 @@ import {
   readDraft,
   textLength,
   updateThread,
+  setPostMedia,
+  postMediaIds,
+  draftMediaIds,
   xLength,
 } from "../src/modules/content/studio/model";
 import RedditEditor from "../src/modules/content/studio/editors/RedditEditor";
@@ -379,3 +382,48 @@ describe("platform editors", () => {
     expect(locked).not.toContain("Remove poll");
   });
 });
+
+describe("per-post workspace attachments", () => {
+  test("Bluesky and Mastodon display each attachment on its own post", () => {
+    for (const [platform, Editor] of [["bluesky", BlueskyEditor], ["mastodon", MastodonEditor]]) {
+      const html = renderToStaticMarkup(<Editor {...props(platform, {
+        thread: [{text: "Root", media_ids: ["root-image"]}, {text: "Reply", media_ids: ["reply-image"]}],
+      })} mediaAssets={[
+        {id: "root-image", content_type: "image/png", original_filename: "Root image"},
+        {id: "reply-image", content_type: "image/png", original_filename: "Reply image"},
+      ]} />);
+      expect(html.match(/src="\/api\/media\/root-image\/content"/g)).toHaveLength(1);
+      expect(html.match(/src="\/api\/media\/reply-image\/content"/g)).toHaveLength(1);
+      expect(html.indexOf('src="/api/media/root-image/content"')).toBeLessThan(html.indexOf("Reply"));
+      expect(html.indexOf('src="/api/media/reply-image/content"')).toBeGreaterThan(html.indexOf("Reply"));
+    }
+  });
+  test("assigning reply media preserves the root's legacy attachments", () => {
+    const draft = { thread: [{text: "Root"}, {text: "Reply"}] };
+    const next = setPostMedia(draft, ["root-image"], 1, ["reply-image"]);
+    expect(next.payload.thread[0].media_ids).toEqual(["root-image"]);
+    expect(next.payload.thread[1].media_ids).toEqual(["reply-image"]);
+    expect(next.mediaIds).toEqual(["root-image", "reply-image"]);
+    expect(draft.thread[0].media_ids).toBeUndefined();
+  });
+  test("removal and reselection keep the linked asset list consistent", () => {
+    const next = setPostMedia({text: "Post", media_ids: ["image"]}, ["image"], 0, []);
+    expect(next.mediaIds).toEqual([]);
+    expect(next.payload.media_ids).toEqual([]);
+    const repeated = setPostMedia(next.payload, [], 0, ["image", "image"]);
+    expect(repeated.mediaIds).toEqual(["image"]);
+  });
+  test("Threads reuses X poll controls without an unsupported duration option", () => {
+    const html = renderToStaticMarkup(<XPoll platform="threads" payload={{poll: {options: ["Yes", "No"]}}} onChange={() => {}} readOnly={false} />);
+    expect(html).toContain('aria-label="Threads poll"');
+    expect(html).toContain('aria-label="Poll option 2"');
+    expect(html).toContain("Add option");
+    expect(html).not.toContain("Poll duration");
+  });
+});
+
+ test("explicitly removing root media never restores legacy attachments", () => {
+   const payload = {thread: [{text: "Root", media_ids: []}, {text: "Reply", media_ids: ["reply-image"]}]};
+   expect(postMediaIds(payload, ["legacy", "reply-image"], 0)).toEqual([]);
+   expect(draftMediaIds(payload, ["legacy", "reply-image"])).toEqual(["reply-image"]);
+ });

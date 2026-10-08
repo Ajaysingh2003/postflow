@@ -75,7 +75,7 @@ export default function MarkdownPreview({ text }: { text: string }) {
       );
   }
   return (
-    <div className="whitespace-normal text-[15px] leading-[1.85] [&_p]:whitespace-pre-wrap [&_h2]:text-[21px] [&_h2]:font-semibold [&_h2]:mt-[18px] [&_h2]:mb-[9px] [&_h3]:text-[18px] [&_h3]:font-semibold [&_h3]:mt-[15px] [&_h3]:mb-2 [&_ul]:pl-[23px] [&_ul]:my-2 [&_ul]:list-disc [&_ol]:pl-[23px] [&_ol]:my-2 [&_ol]:list-decimal [&_li]:my-[3px] [&_blockquote]:border-l-[3px] [&_blockquote]:border-border [&_blockquote]:pl-3.5 [&_blockquote]:text-muted-foreground [&_blockquote]:my-2.5 [&_code]:font-mono [&_code]:text-xs [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_pre]:whitespace-pre-wrap [&_pre]:bg-muted [&_pre]:p-3.5 [&_pre]:rounded-md [&_pre]:my-3 [&_a]:text-[#287cad] [&_a]:underline [&_a]:break-all">
+    <div className="whitespace-normal text-[15px] leading-[1.85] [&_p]:whitespace-pre-wrap [&_h2]:text-[21px] [&_h2]:font-semibold [&_h2]:mt-[18px] [&_h2]:mb-[9px] [&_h3]:text-[18px] [&_h3]:font-semibold [&_h3]:mt-[15px] [&_h3]:mb-2 [&_ul]:pl-[23px] [&_ul]:my-2 [&_ul]:list-disc [&_ol]:pl-[23px] [&_ol]:my-2 [&_ol]:list-decimal [&_li]:my-[3px] [&_blockquote]:border-l-[3px] [&_blockquote]:border-border [&_blockquote]:pl-3.5 [&_blockquote]:text-muted-foreground [&_blockquote]:my-2.5 [&_code]: [&_code]:text-xs [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_pre]:whitespace-pre-wrap [&_pre]:bg-muted [&_pre]:p-3.5 [&_pre]:rounded-md [&_pre]:my-3 [&_a]:text-[#287cad] [&_a]:underline [&_a]:break-all">
       {nodes}
     </div>
   );

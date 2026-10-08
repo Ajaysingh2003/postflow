@@ -26,6 +26,18 @@ export interface Post {
   variants: Variant[];
 }
 
+export interface PostLibraryItem extends Variant {
+  title: string;
+  base_text: string;
+}
+
+export interface PostLibraryPage {
+  items: PostLibraryItem[];
+  counts: Record<"posts" | "scheduled" | "drafts", number>;
+  total: number;
+  next_offset: number | null;
+}
+
 export interface Account {
   id: string;
   platform: string;
@@ -101,6 +113,7 @@ export interface VariantMetrics {
   comments: number;
   shares: number;
   impressions: number;
+  views: number;
   engagements: number;
   reach: number;
   clicks: number;
@@ -113,6 +126,7 @@ export interface MetricSnapshotSummary {
   followers_count: number;
   profile_views: number;
   impressions: number;
+  views: number;
   reach: number;
   engagements: number;
   likes: number;
@@ -120,6 +134,26 @@ export interface MetricSnapshotSummary {
   shares_reposts: number;
   clicks: number;
   extras: Payload;
+}
+
+export interface AnalyticsDashboard {
+  account_id: string | null;
+  accounts: AccountAnalytics[];
+  overview: WorkspaceOverview;
+  posts: PostFeedItemAnalytics[];
+  fetched_at: string;
+  dataset_complete: boolean;
+  dataset_notice: string | null;
+  inclusive_impressions?: {
+    total: number | null;
+    post_impressions: number | null;
+    reply_impressions: number | null;
+    replies_count: number;
+    complete: boolean;
+  } | null;
+  replies_supported?: boolean;
+  replies_count?: number;
+  feed_total?: number;
 }
 
 export interface AccountAnalytics {
@@ -130,6 +164,7 @@ export interface AccountAnalytics {
   followers_count: number;
   profile_views: number;
   impressions: number;
+  views: number;
   reach: number;
   last_synced_at: string | null;
   historical_snapshots: MetricSnapshotSummary[];
@@ -141,6 +176,7 @@ export interface AccountAnalytics {
 export interface PlatformMetricsSummary {
   platform: string;
   impressions: number;
+  views: number;
   reach: number;
   engagements: number;
   likes: number;
@@ -152,12 +188,15 @@ export interface PlatformMetricsSummary {
 
 export interface WorkspaceOverview {
   total_impressions: number;
+  total_views: number;
   total_reach: number;
   total_engagements: number;
   total_likes: number;
   total_comments: number;
   total_shares: number;
   total_clicks: number;
+  total_profile_clicks: number;
+  total_bookmarks: number;
   total_posts_published: number;
   by_platform: Record<string, PlatformMetricsSummary>;
   timeframe_days: number;
@@ -170,7 +209,7 @@ export interface WorkspaceOverview {
 
 export interface PostFeedItemAnalytics {
   variant_id: string;
-  post_id: string;
+  post_id: string | null;
   platform: string;
   connected_account_id: string | null;
   account_display_name: string | null;
@@ -180,12 +219,16 @@ export interface PostFeedItemAnalytics {
   created_at: string;
   status: string;
   external_post_id: string | null;
+  external_url?: string | null;
+  is_reply?: boolean;
   impressions: number;
+  views: number;
   reach: number;
   likes: number;
   comments: number;
   shares: number;
   clicks: number;
+  profile_clicks: number;
   bookmarks: number;
   engagements: number;
   engagement_rate: number;

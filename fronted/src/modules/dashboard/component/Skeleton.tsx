@@ -1,0 +1,1 @@
+export { ChannelSkeleton, default } from "@/modules/channels/component/ChannelSkeleton";

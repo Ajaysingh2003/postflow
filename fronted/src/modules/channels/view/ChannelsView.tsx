@@ -2,10 +2,11 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient,useSuspenseQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
+
 import {
   Dialog,
   DialogContent,
@@ -26,13 +27,14 @@ import ChannelsPanel from "../component/ChannelsPanel";
 import AccountManager from "../component/AccountManager";
 import ChannelIcon from "../component/ChannelIcon";
 import ConnectChannelDialog from "../component/ConnectChannelDialog";
+import ChannelSkeleton from "../component/ChannelSkeleton";
 
 export { CHANNELS } from "../channel-config";
 export type { ChannelConfig } from "../channel-config";
 
 function AccountTargets({ account }: { account: Account }) {
   const trpc = useTRPC();
-  const targets = useQuery(
+  const targets = useSuspenseQuery(
     trpc.studio.targets.queryOptions({ id: account.id }),
   );
   return (
@@ -81,7 +83,7 @@ function ChannelsViewContent() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const accountQuery = useQuery(trpc.studio.accounts.queryOptions());
+  const accountQuery = useSuspenseQuery(trpc.studio.accounts.queryOptions());
   const accounts = accountQuery.data ?? [];
   const [manageChannel, setManageChannel] = useState<ChannelConfig | null>(
     null,
@@ -227,7 +229,6 @@ function ChannelsViewContent() {
     <>
       <ChannelsPanel
         accounts={accounts}
-        loading={accountQuery.isPending}
         error={accountQuery.error?.message}
         refreshing={accountQuery.isFetching}
         connectingPlatform={connectingPlatform}
@@ -296,19 +297,7 @@ function ChannelsViewContent() {
 
 export default function ChannelsView() {
   return (
-    <Suspense
-      fallback={
-        <ChannelsPanel
-          accounts={[]}
-          loading
-          connectingPlatform={null}
-          onRefresh={() => {}}
-          onConnect={() => {}}
-          onManage={() => {}}
-          onAdd={() => {}}
-        />
-      }
-    >
+    <Suspense fallback={<ChannelSkeleton />}>
       <ChannelsViewContent />
     </Suspense>
   );

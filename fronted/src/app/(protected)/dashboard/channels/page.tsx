@@ -1,11 +1,23 @@
+import React, { Suspense } from "react";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { getQueryClient, trpc } from "@/trpc/server";
+import ChannelsView from "@/modules/channels/view/ChannelsView";
+import ChannelSkeleton from "@/modules/channels/component/ChannelSkeleton";
 
-import ChannelsView from '@/modules/channels/view/ChannelsView'
-import React from 'react'
-
-function page() {
+async function PreloadedChannels() {
+  const queryClient = getQueryClient();
+  await queryClient.prefetchQuery(trpc.studio.accounts.queryOptions());
   return (
-    <ChannelsView />
-  )
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <ChannelsView />
+    </HydrationBoundary>
+  );
 }
 
-export default page
+export default function Page() {
+  return (
+    <Suspense fallback={<ChannelSkeleton />}>
+      <PreloadedChannels />
+    </Suspense>
+  );
+}

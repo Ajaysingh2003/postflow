@@ -2,7 +2,7 @@
 
 import React from "react";
 import { usePathname } from "next/navigation";
-import { Bot, ChevronRight, FileText } from "lucide-react";
+import { Bot, ChevronRight, FileText, Plus } from "lucide-react";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useComposer } from "@/modules/content/context/ComposerContext";
@@ -57,6 +57,9 @@ export default function TopDashboardBar() {
   const pathname = usePathname();
   const { title, section } = getPageMetadata(pathname);
   const { isComposerOpen, setIsComposerOpen, studioNavigation } = useComposer();
+  const isContentPage =
+    pathname === "/dashboard/content" ||
+    pathname.startsWith("/dashboard/content/");
   const contentStudio = [
     "/dashboard/content",
     "/dashboard/analytics",
@@ -64,6 +67,10 @@ export default function TopDashboardBar() {
     "/dashboard/content/compose",
     "/dashboard/content/generator",
   ].includes(pathname);
+
+  function handleNewDraft() {
+    window.dispatchEvent(new Event("postflow:new-draft"));
+  }
 
   return (
     <header className="flex h-14 min-w-0 w-full items-center justify-between zborder-b border-border bg-background/95 px-4 md:px-6 backdrop-blur-sm">
@@ -127,42 +134,38 @@ export default function TopDashboardBar() {
       <div className="flex shrink-0 items-center gap-2.5">
         {/* Workspace Pill */}
 
-        {/* AI Writing Assistant Toggle */}
-        <button
-          type="button"
-          onClick={() => setIsComposerOpen((prev) => !prev)}
-          aria-label="Toggle AI writing assistant"
-          title="Toggle AI writing assistant"
-          className={cn(
-            "flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-all duration-150",
-            isComposerOpen
-              ? "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300 shadow-xs"
-              : "border-border/80 bg-neutral-50/80 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 dark:bg-white/[0.04] dark:text-neutral-300 dark:hover:bg-white/[0.08] dark:hover:text-white",
-          )}
-        >
-          <Bot className="size-3.5 text-violet-500" strokeWidth={2} />
-        </button>
+        {isContentPage && (
+          <>
+            {/* AI Writing Assistant Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsComposerOpen((prev) => !prev)}
+              aria-label="Toggle AI writing assistant"
+              title="Toggle AI writing assistant"
+              className={cn(
+                "flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-all duration-150",
+                isComposerOpen
+                  ? "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300 shadow-xs"
+                  : "border-border/80 bg-neutral-50/80 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 dark:bg-white/[0.04] dark:text-neutral-300 dark:hover:bg-white/[0.08] dark:hover:text-white",
+              )}
+            >
+              <Bot className="size-3.5 text-violet-500" strokeWidth={2} />
+            </button>
 
-        {/* Quick New Post */}
-        {/* <Link
-          href="/dashboard/content/compose"
-          onClick={(event) => {
-            if (
-              [
-                "/dashboard/content",
-                "/dashboard/content/compose",
-                "/dashboard/content/generator",
-              ].includes(pathname)
-            ) {
-              event.preventDefault();
-              window.dispatchEvent(new Event("postflow:new-draft"));
-            }
-          }}
-          className="primary-btn flex !h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium"
-        >
-          <Plus className="size-3.5" strokeWidth={2.2} />
-          <span className="hidden sm:inline">New Post</span>
-        </Link> */}
+            {/* New Draft Action */}
+            <button
+              type="button"
+              onClick={handleNewDraft}
+              aria-label="New draft"
+              title="New draft"
+              className="primary-btn flex !h-8 !min-h-0 items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-medium"
+            >
+              <Plus className="size-3.5" strokeWidth={2.2} />
+              <span>New draft</span>
+            </button>
+          </>
+        )}
+
       </div>
     </header>
   );

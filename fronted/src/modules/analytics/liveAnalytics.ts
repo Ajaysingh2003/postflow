@@ -39,7 +39,6 @@ export function hasEngagementRate(post: PostFeedItemAnalytics): boolean {
 export const liveAnalyticsOptions = {
   staleTime: 0,
   gcTime: 0,
-  placeholderData: undefined,
   refetchOnMount: "always" as const,
   refetchOnWindowFocus: true,
   retry: false,

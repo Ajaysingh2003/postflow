@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { PlatformMark } from "./AccountSwitcher";
 import FloatingPostActions from "./FloatingPostActions";
+import ContentStudioSkeleton from "./ContentStudioSkeleton";
 import { useComposer } from "@/modules/content/context/ComposerContext";
 import type { Account, Payload, Post, Variant } from "@/modules/studio/types";
 import {
@@ -130,13 +131,7 @@ const PLATFORM_EDITORS: Record<string, typeof TextPostEditor> = {
 
 export default function ContentStudio() {
   return (
-    <Suspense
-      fallback={
-        <div role="status" className="p-8 text-sm text-muted-foreground">
-          Opening editor…
-        </div>
-      }
-    >
+    <Suspense fallback={<ContentStudioSkeleton />}>
       <ContentStudioWorkspace />
     </Suspense>
   );
@@ -144,8 +139,8 @@ export default function ContentStudio() {
 
 function ContentStudioWorkspace() {
   const trpc = useTRPC();
-  const workspace = useQuery(trpc.workspace.current.queryOptions());
-  const accounts = useQuery(trpc.studio.accounts.queryOptions());
+  const workspace = useSuspenseQuery(trpc.workspace.current.queryOptions());
+  const accounts = useSuspenseQuery(trpc.studio.accounts.queryOptions());
   const searchParams = useSearchParams();
   const requestedPost = searchParams.get("post");
   const requestedVariant = searchParams.get("variant");
@@ -169,19 +164,9 @@ function ContentStudioWorkspace() {
   );
   if (
     !hydrated ||
-    workspace.isPending ||
-    accounts.isPending ||
     (requestedPost && linkedPost.isPending && linkedPost.fetchStatus !== "idle")
   )
-    return (
-      <div
-        className="flex items-center justify-center flex-col gap-4 h-full min-h-[350px] text-center text-muted-foreground p-8 text-xs"
-        role="status"
-      >
-        <Loader2 className="animate-spin" size={20} />
-        Opening your writing workspace…
-      </div>
-    );
+    return <ContentStudioSkeleton />;
   if (workspace.error || accounts.error || linkedPost.error)
     return (
       <div className="flex items-center justify-center flex-col gap-4 h-full min-h-[350px] text-center text-muted-foreground p-8 text-xs [&_h1]:font-serif [&_h1]:text-[30px] [&_h1]:tracking-tight [&_h1]:text-foreground [&_p]:max-w-[350px] [&_p]:leading-relaxed [&>a]:mt-1.5">

@@ -8,13 +8,14 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  Suspense,
   type ReactNode,
 } from "react";
 import {
-  useInfiniteQuery,
   useMutation,
-  useQuery,
   useQueryClient,
+  useSuspenseInfiniteQuery,
+  useSuspenseQuery,
 } from "@tanstack/react-query";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import {
@@ -67,6 +68,7 @@ import {
   type CalendarEntry,
   type CalendarView,
 } from "../calendarModel";
+import ScheduleSkeleton from "../component/ScheduleSkeleton";
 
 /* -------------------------------------------------------------------------- */
 /*  Constants & helpers                                                       */
@@ -358,16 +360,13 @@ export default function ScheduleView() {
     () => true,
     () => false,
   );
-  return hydrated ? (
-    <CalendarWorkspace />
-  ) : (
-    <div
-      role="status"
-      className="flex h-full min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground"
-    >
-      <Loader2 className="size-4 animate-spin" />
-      Opening calendar…
-    </div>
+  if (!hydrated) {
+    return <ScheduleSkeleton />;
+  }
+  return (
+    <Suspense fallback={<ScheduleSkeleton />}>
+      <CalendarWorkspace />
+    </Suspense>
   );
 }
 
@@ -380,7 +379,10 @@ function CalendarWorkspace() {
   const isMobile = useMediaQuery("(max-width: 767px)");
   const [date, setDate] = useState(() => new Date());
   const [view, setView] = useState<CalendarView>(() =>
-    window.matchMedia("(max-width: 640px)").matches ? "day" : "week",
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 640px)").matches
+      ? "day"
+      : "week",
   );
   const [accountFilter, setAccountFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -388,9 +390,9 @@ function CalendarWorkspace() {
     entry: CalendarEntry;
     action?: DialogAction;
   } | null>(null);
-  const accounts = useQuery(trpc.studio.accounts.queryOptions());
+  const accounts = useSuspenseQuery(trpc.studio.accounts.queryOptions());
   const range = calendarRange(date, view);
-  const calendar = useInfiniteQuery(
+  const calendar = useSuspenseInfiniteQuery(
     trpc.studio.calendar.infiniteQueryOptions(
       { start: range.start.toISOString(), end: range.end.toISOString() },
       {
@@ -481,14 +483,6 @@ function CalendarWorkspace() {
             >
               Try again
             </Button>
-          </div>
-        ) : calendar.isPending || accounts.isPending ? (
-          <div
-            role="status"
-            className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground"
-          >
-            <Loader2 className="size-4 animate-spin" />
-            Loading posts…
           </div>
         ) : (
           <>

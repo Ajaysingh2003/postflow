@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import PostsSkeleton from "../component/PostsSkeleton";
 import { useComposer } from "@/modules/content/context/ComposerContext";
 import { PlatformMark } from "@/modules/content/studio/AccountSwitcher";
 import { type Account, type PostLibraryItem } from "@/modules/studio/types";
@@ -61,20 +62,7 @@ const subscribe = () => () => {};
 const clientSnapshot = () => true;
 const serverSnapshot = () => false;
 
-export function PostsLoading() {
-  return (
-    <div className="space-y-5 p-5" role="status" aria-label="Loading posts">
-      <div className="grid grid-cols-3 gap-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-28 rounded-2xl" />
-        ))}
-      </div>
-      {[0, 1, 2].map((i) => (
-        <Skeleton key={i} className="h-40 rounded-2xl" />
-      ))}
-    </div>
-  );
-}
+export { PostsSkeleton as PostsLoading };
 
 class PostsErrorBoundary extends Component<
   { children: ReactNode; onReset: () => void },
@@ -116,7 +104,7 @@ function QueryBoundary({ children }: { children: ReactNode }) {
     <QueryErrorResetBoundary>
       {({ reset }) => (
         <PostsErrorBoundary onReset={reset}>
-          <Suspense fallback={<PostsLoading />}>{children}</Suspense>
+          <Suspense fallback={<PostsSkeleton />}>{children}</Suspense>
         </PostsErrorBoundary>
       )}
     </QueryErrorResetBoundary>
@@ -130,7 +118,7 @@ export default function PostsView() {
     clientSnapshot,
     serverSnapshot,
   );
-  if (!hydrated) return <PostsLoading />;
+  if (!hydrated) return <PostsSkeleton />;
   return (
     <QueryBoundary>
       <PostsWorkspace />

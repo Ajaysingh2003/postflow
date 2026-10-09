@@ -1,5 +1,6 @@
 """Import all models so SQLAlchemy sees the complete metadata graph."""
 
+from app.modules.agents.models import AgentAuthorization, AgentClient, AgentConnection
 from app.modules.analytics.models import MetricSnapshot
 from app.modules.assistant.models import AssistantRun, VoiceProfile
 from app.modules.billing.models import (
@@ -39,6 +40,9 @@ from app.modules.workspaces.models import (
 )
 
 __all__ = [
+    "AgentAuthorization",
+    "AgentClient",
+    "AgentConnection",
     "AssistantRun",
     "AuthIdentity",
     "BillingCustomer",

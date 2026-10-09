@@ -13,6 +13,9 @@ from app.core.rate_limit import RateLimiter
 from app.db import models as _models  # noqa: F401
 from app.db.base import Base
 from app.db.session import engine
+from app.modules.agents.router import oauth_router as agent_oauth_router
+from app.modules.agents.router import router as agents_router
+from app.modules.agents.server import AgentTransport, create_mcp_application
 from app.modules.analytics.router import router as analytics_router
 from app.modules.assistant.router import router as assistant_router
 from app.modules.billing.router import router as billing_router
@@ -31,10 +34,12 @@ rate_limiter = RateLimiter(settings)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
     if settings.debug:
         Base.metadata.create_all(bind=engine)
-    yield
+    mcp, app.state.agent_transport = create_mcp_application()
+    async with mcp.session_manager.run():
+        yield
 
 
 app = FastAPI(
@@ -49,7 +54,15 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Workspace-ID"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Idempotency-Key",
+        "X-Workspace-ID",
+        "MCP-Protocol-Version",
+        "Mcp-Session-Id",
+    ],
+    expose_headers=["WWW-Authenticate", "Mcp-Session-Id"],
 )
 
 
@@ -102,6 +115,7 @@ def readiness() -> dict[str, str]:
 
 
 for module_router in (
+    agents_router,
     identity_router,
     workspaces_router,
     billing_router,
@@ -115,3 +129,23 @@ for module_router in (
     analytics_router,
 ):
     app.include_router(module_router, prefix="/api/v1")
+
+app.include_router(agent_oauth_router)
+
+
+@app.get("/.well-known/oauth-protected-resource")
+@app.get("/.well-known/oauth-protected-resource/mcp")
+def agent_resource_metadata():
+    from app.modules.agents.security import SCOPES
+
+    return {
+        "resource": settings.mcp_url,
+        "authorization_servers": [settings.mcp_url.removesuffix("/mcp")],
+        "scopes_supported": list(SCOPES),
+        "bearer_methods_supported": ["header"],
+        "resource_name": "Postflow",
+    }
+
+
+# Keep this last: the MCP transport shares the backend origin, while API routes remain explicit.
+app.mount("/", AgentTransport())

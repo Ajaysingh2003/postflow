@@ -7,6 +7,9 @@ from redis.asyncio import Redis
 from app.core.config import Settings
 
 POLICIES = (
+    ("/oauth/", 30, 60),
+    ("/mcp", 120, 60),
+    ("/api/v1/agents/", 30, 60),
     ("/api/v1/auth/login", 20, 60),
     ("/api/v1/auth/register", 20, 60),
     ("/api/v1/auth/password", 20, 60),

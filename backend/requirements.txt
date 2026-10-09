@@ -15,3 +15,4 @@ sqlalchemy==2.0.52
 uvicorn[standard]==0.52.4
 regex==2026.9.29
 Pillow==12.3.0
+mcp==1.30.0

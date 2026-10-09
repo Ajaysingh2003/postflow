@@ -5,6 +5,7 @@ import { billingRouter } from "@/modules/billing/server/procedures";
 import { contentRouter } from "@/modules/content/server/procedures";
 import { personaRouter } from "@/modules/content/server/personaProcedures";
 import { studioRouter } from "@/modules/studio/server";
+import { agentsRouter } from "@/modules/agents/server";
 
 export const appRouter = createTRPCRouter({
   user: userRouter,
@@ -13,6 +14,7 @@ export const appRouter = createTRPCRouter({
   content: contentRouter,
   persona: personaRouter,
   studio: studioRouter,
+  agents: agentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

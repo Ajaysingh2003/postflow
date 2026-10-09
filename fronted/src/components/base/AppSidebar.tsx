@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { RefObject, useEffect, useRef, useState } from "react";
 
@@ -40,9 +41,13 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import ProfileMenu from "./ProfileMenu";
+
+const AgentsDialog = dynamic(() => import("@/modules/agents/AgentsDialog"), {
+  ssr: false,
+});
 
 /* -------------------------------------------------------------------------- */
 /*                                   ROUTES                                   */
@@ -117,7 +122,6 @@ const extraNavigation: NavItem[] = [
  */
 const GUTTER = "px-3";
 const ROW_X = "px-2.5";
-const ACCENT = "#7C5CFC";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C5CFC]/40";
@@ -197,9 +201,13 @@ function getInitials(name: string, email: string) {
 function NavigationGroup({
   label,
   items,
+  onAgentsOpen,
+  onAgentsIntent,
 }: {
   label?: string;
   items: NavItem[];
+  onAgentsOpen?: () => void;
+  onAgentsIntent?: () => void;
 }) {
   const pathname = usePathname();
   const { open: desktopOpen, isMobile, setOpenMobile } = useSidebar();
@@ -224,19 +232,34 @@ function NavigationGroup({
           {items.map((item) => {
             const Icon = item.icon;
             const active = isItemActive(pathname, item);
+            const opensAgents =
+              item.href === ROUTES.agents && Boolean(onAgentsOpen);
 
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   tooltip={item.label}
+                  onClick={
+                    opensAgents
+                      ? () => {
+                          if (isMobile) setOpenMobile(false);
+                          onAgentsOpen?.();
+                        }
+                      : undefined
+                  }
+                  onPointerEnter={opensAgents ? onAgentsIntent : undefined}
+                  onFocus={opensAgents ? onAgentsIntent : undefined}
+                  aria-haspopup={opensAgents ? "dialog" : undefined}
                   render={
-                    <Link
-                      href={item.href}
-                      aria-current={active ? "page" : undefined}
-                      onClick={() => {
-                        if (isMobile) setOpenMobile(false);
-                      }}
-                    />
+                    opensAgents ? undefined : (
+                      <Link
+                        href={item.href}
+                        aria-current={active ? "page" : undefined}
+                        onClick={() => {
+                          if (isMobile) setOpenMobile(false);
+                        }}
+                      />
+                    )
                   }
                   className={cn(NAV_BUTTON, active && NAV_BUTTON_ACTIVE)}
                 >
@@ -444,7 +467,9 @@ function CreateActionButton() {
           </button>
 
           {moreOpen && (
-            <div className={cn(MENU_PANEL, "right-0 top-[calc(100%+6px)] w-52")}>
+            <div
+              className={cn(MENU_PANEL, "right-0 top-[calc(100%+6px)] w-52")}
+            >
               {MORE_CREATE_OPTIONS.map(({ label, href, icon: OptionIcon }) => (
                 <button
                   key={href}
@@ -472,38 +497,65 @@ function CreateActionButton() {
 /* -------------------------------------------------------------------------- */
 
 export function AppSidebar() {
+  const [agentsOpen, setAgentsOpen] = useState(false);
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  function preloadAgents() {
+    void import("@/modules/agents/AgentsDialog");
+    void queryClient
+      .fetchQuery(
+        trpc.workspace.current.queryOptions(undefined, { staleTime: 30000 }),
+      )
+      .then((workspace) =>
+        queryClient.prefetchQuery(
+          trpc.agents.settings.queryOptions(
+            { workspace_id: workspace.id },
+            { staleTime: 30000 },
+          ),
+        ),
+      )
+      .catch(() => undefined);
+  }
   return (
-    <Sidebar
-      collapsible="offcanvas"
-      className="w-[var(--sidebar-width)] border-r border-border bg-primary text-foreground"
-    >
-      {/* HEADER */}
-      <SidebarHeader
-        className={cn(GUTTER, "gap-3 border-b border-border bg-primary py-3")}
+    <>
+      <Sidebar
+        collapsible="offcanvas"
+        className="w-[var(--sidebar-width)] border-r border-border bg-primary text-foreground"
       >
-        <ProfileMenu />
-        <CreateActionButton />
-      </SidebarHeader>
+        {/* HEADER */}
+        <SidebarHeader
+          className={cn(GUTTER, "gap-3 border-b border-border bg-primary py-3")}
+        >
+          <ProfileMenu />
+          <CreateActionButton />
+        </SidebarHeader>
 
-      {/* CONTENT */}
-      <SidebarContent
-        className={cn(
-          GUTTER,
-          "custom-scrollbar flex-1 gap-5 overflow-y-auto bg-primary py-4",
-        )}
-      >
-        <NavigationGroup label="Overview" items={overviewNavigation} />
-        <NavigationGroup label="Create" items={createNavigation} />
-        <NavigationGroup label="Manage" items={manageNavigation} />
-        <NavigationGroup label="Extra" items={extraNavigation} />
-      </SidebarContent>
+        {/* CONTENT */}
+        <SidebarContent
+          className={cn(
+            GUTTER,
+            "custom-scrollbar flex-1 gap-5 overflow-y-auto bg-primary py-4",
+          )}
+        >
+          <NavigationGroup label="Overview" items={overviewNavigation} />
+          <NavigationGroup label="Create" items={createNavigation} />
+          <NavigationGroup label="Manage" items={manageNavigation} />
+          <NavigationGroup
+            label="Extra"
+            items={extraNavigation}
+            onAgentsOpen={() => setAgentsOpen(true)}
+            onAgentsIntent={preloadAgents}
+          />
+        </SidebarContent>
 
-      {/* FOOTER */}
-      <SidebarFooter
-        className={cn(GUTTER, "border-t border-border bg-primary py-3")}
-      >
-        <SidebarUserFooter />
-      </SidebarFooter>
-    </Sidebar>
+        {/* FOOTER */}
+        <SidebarFooter
+          className={cn(GUTTER, "border-t border-border bg-primary py-3")}
+        >
+          <SidebarUserFooter />
+        </SidebarFooter>
+      </Sidebar>
+      {agentsOpen && <AgentsDialog open onOpenChange={setAgentsOpen} />}
+    </>
   );
 }

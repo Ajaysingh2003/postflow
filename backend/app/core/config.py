@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,6 +25,8 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     mail_from: str = "postflow <noreply@postflow.ai>"
     frontend_url: str = "http://localhost:3000"
+    public_backend_url: str | None = None
+
     linkedin_api_version: str = "202609"
     graph_api_version: str = "v23.0"
     graph_insights_api_version: str = "v26.0"
@@ -87,6 +90,28 @@ class Settings(BaseSettings):
     clamav_port: int = 3310
     rate_limit_enabled: bool = True
     billing_grace_days: int = 3
+
+    @property
+    def mcp_url(self) -> str:
+        # Reuse the public backend origin already configured for social OAuth unless overridden.
+        parts = urlsplit(self.public_backend_url or self.oauth_redirect_base_url)
+        return urlunsplit((parts.scheme, parts.netloc, "/mcp", "", ""))
+
+    @model_validator(mode="after")
+    def agent_backend_url(self):
+        parts = urlsplit(self.public_backend_url or self.oauth_redirect_base_url)
+        if (
+            parts.scheme not in {"http", "https"}
+            or not parts.hostname
+            or parts.username
+            or parts.password
+            or parts.query
+            or parts.fragment
+        ):
+            raise ValueError(
+                "PUBLIC_BACKEND_URL must be an HTTP(S) backend URL without credentials or query parameters"
+            )
+        return self
 
     @property
     def debug(self) -> bool:

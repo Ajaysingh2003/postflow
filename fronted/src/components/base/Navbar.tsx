@@ -599,7 +599,7 @@ export default function Navbar() {
             
             className="secondary-btn h-9 rounded-xl px-3.5 text-xs font-semibold"
           >
-            <Link href="/sign-in">Sign in</Link>
+            <Link href="/login">Sign in</Link>
           </Button>
 
           <Button
@@ -678,7 +678,7 @@ export default function Navbar() {
                         
                         className="secondary-btn h-11 rounded-xl text-sm font-semibold"
                       >
-                        <Link href="/sign-in">Sign in</Link>
+                        <Link href="/login">Sign in</Link>
                       </Button>
                     </SheetClose>
 

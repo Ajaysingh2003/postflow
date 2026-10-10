@@ -135,7 +135,7 @@ async def test_official_reply_request_formats(adapter_cls):
             assert body["reply"]["in_reply_to_tweet_id"] == "comment"
             return httpx.Response(201, json={"data": {"id": "answer"}})
         if adapter_cls is RedditAdapter:
-            assert request.headers["User-Agent"].startswith("postflow")
+            assert request.headers["User-Agent"].startswith("draftva")
             assert body["thing_id"] == ["comment"]
             return httpx.Response(200, json={"json": {"errors": [], "data": {"things": [{"data": {"name": "answer"}}]}}})
         if adapter_cls is LinkedInAdapter:

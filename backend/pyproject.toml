@@ -1,7 +1,7 @@
 [project]
-name = "postflow-backend"
+name = "draftva-backend"
 version = "0.1.0"
-description = "FastAPI backend for postflow multi-channel publishing platform"
+description = "FastAPI backend for draftva multi-channel publishing platform"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.116,<1",

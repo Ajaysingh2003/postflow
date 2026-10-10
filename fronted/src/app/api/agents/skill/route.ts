@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { caller } from "@/trpc/server";
-import { postflowSkill } from "@/modules/agents/model";
+import { draftvaSkill } from "@/modules/agents/model";
 
 export async function GET() {
   try {
@@ -8,7 +8,7 @@ export async function GET() {
     const settings = await caller.agents.settings({
       workspace_id: workspace.id,
     });
-    return new Response(postflowSkill(settings.mcp_url), {
+    return new Response(draftvaSkill(settings.mcp_url), {
       headers: {
         "Content-Type": "text/markdown; charset=utf-8",
         "Content-Disposition": 'attachment; filename="SKILL.md"',

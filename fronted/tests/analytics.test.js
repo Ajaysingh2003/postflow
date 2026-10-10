@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { analyticsPostUrl, currentDashboard, liveAnalyticsOptions } from "../src/modules/analytics/liveAnalytics";
 
-test("account analytics retains native posts without a Postflow record and opens their official permalink", () => {
+test("account analytics retains native posts without a draftva record and opens their official permalink", () => {
   const native = {post_id: null, variant_id: "external:threads:native", platform: "threads", external_post_id: "native", external_url: "https://www.threads.com/@writer/post/Native"};
   const local = {post_id: "saved", variant_id: "local", platform: "x", external_post_id: "123"};
   const dashboard = {account_id: "account", posts: [native, local]};

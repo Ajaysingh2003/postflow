@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { LibraryPostCard } from "../src/modules/dashboard/view/PostsView";
 import { editorLink, libraryLink, libraryPostDate, libraryPostText, newPostLink, POST_TABS, postStatus, postTab } from "../src/modules/dashboard/postsModel";
 
-const post = {id: "variant", post_id: "post", platform: "x", connected_account_id: "account", title: "Untitled", base_text: "Fallback", payload: {text: "Published through Postflow"}, status: "published", media_asset_ids: ["asset"], published_at: "2026-10-07T12:00:00Z", updated_at: "2026-10-08T00:00:00Z"};
+const post = {id: "variant", post_id: "post", platform: "x", connected_account_id: "account", title: "Untitled", base_text: "Fallback", payload: {text: "Published through draftva"}, status: "published", media_asset_ids: ["asset"], published_at: "2026-10-07T12:00:00Z", updated_at: "2026-10-08T00:00:00Z"};
 
 test("the library has only published, scheduled and drafts; old reply links resolve to published", () => {
   expect(POST_TABS).toEqual(["posts", "scheduled", "drafts"]);
@@ -17,10 +17,10 @@ test("the library has only published, scheduled and drafts; old reply links reso
   expect(url.searchParams.has("start_date")).toBeFalse();
 });
 
-test("cards open the saved Postflow variant, using its publication or scheduled date", () => {
+test("cards open the saved draftva variant, using its publication or scheduled date", () => {
   const html = renderToStaticMarkup(<LibraryPostCard post={post} account={{display_name: "Writer"}} />);
   expect(html).toContain('href="/dashboard/content?post=post&amp;variant=variant"');
-  expect(html).toContain("Published through Postflow");
+  expect(html).toContain("Published through draftva");
   expect(html).toContain("View post");
   expect(html).not.toContain("Impressions");
   expect(html).not.toContain("Reply");

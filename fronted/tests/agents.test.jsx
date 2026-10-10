@@ -5,7 +5,7 @@ import {
   AGENTS,
   clientConfiguration,
   isLocalEndpoint,
-  postflowSkill,
+  draftvaSkill,
 } from "../src/modules/agents/model";
 import {
   AgentsOverview,
@@ -54,15 +54,15 @@ test("Setup uses configured backend URLs, client instructions and design-system 
 test("Copyable client configuration and downloaded skill contain no credentials", () => {
   const url = "https://backend.example/mcp";
   expect(JSON.parse(clientConfiguration("cursor", url))).toEqual({
-    mcpServers: { postflow: { url } },
+    mcpServers: { draftva: { url } },
   });
   expect(clientConfiguration("codex", url)).toContain(
-    '[mcp_servers.postflow]\nurl = "https://backend.example/mcp"',
+    '[mcp_servers.draftva]\nurl = "https://backend.example/mcp"',
   );
-  const skill = postflowSkill(url);
+  const skill = draftvaSkill(url);
   expect(skill).toContain(url);
   expect(skill).toContain("confirmed=true after that approval");
-  expect(skill).toContain("run_ai_feature uses Postflow AI credits");
+  expect(skill).toContain("run_ai_feature uses draftva AI credits");
   expect(skill).not.toContain("Bearer");
   expect(isLocalEndpoint("http://[::1]:18000/mcp")).toBe(true);
   expect(isLocalEndpoint(url)).toBe(false);

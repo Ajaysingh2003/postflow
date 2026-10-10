@@ -1,4 +1,4 @@
-"""postflow_initial_schema
+"""draftva_initial_schema
 
 Revision ID: ceb2b91baf53
 Revises: 

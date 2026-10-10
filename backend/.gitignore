@@ -1,5 +1,5 @@
 # ==========================================
-# postflow: Backend .gitignore
+# draftva: Backend .gitignore
 # ==========================================
 
 # Environment variables & secrets
@@ -25,7 +25,7 @@ env/
 *.db
 *.sqlite
 *.sqlite3
-postflow.db
+draftva.db
 
 # Test & coverage caches
 .pytest_cache/

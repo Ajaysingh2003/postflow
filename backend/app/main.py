@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="postflow API",
+    title="draftva API",
     version="0.1.0",
     lifespan=lifespan,
     docs_url="/docs" if settings.debug else None,
@@ -143,7 +143,7 @@ def agent_resource_metadata():
         "authorization_servers": [settings.mcp_url.removesuffix("/mcp")],
         "scopes_supported": list(SCOPES),
         "bearer_methods_supported": ["header"],
-        "resource_name": "Postflow",
+        "resource_name": "draftva",
     }
 
 

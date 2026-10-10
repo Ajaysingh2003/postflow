@@ -83,7 +83,7 @@ async def test_get_or_register_app():
         app_record = await adapter.get_or_register_app(
             db=db,
             instance_domain="https://fosstodon.org/",
-            redirect_uri="https://postflow.ai/callback",
+            redirect_uri="https://draftva.com/callback",
         )
         assert app_record.instance_domain == "fosstodon.org"
         assert app_record.client_id == "dynamic_client_id_777"
@@ -93,7 +93,7 @@ async def test_get_or_register_app():
         cached_app = await adapter.get_or_register_app(
             db=db,
             instance_domain="fosstodon.org",
-            redirect_uri="https://postflow.ai/callback",
+            redirect_uri="https://draftva.com/callback",
         )
         assert cached_app.id == app_record.id
 
@@ -141,7 +141,7 @@ async def test_build_auth_url():
                 instance_domain="mastodon.social",
                 client_id="masto_app_id_123",
                 encrypted_client_secret=encrypt_token("sec"),
-                redirect_uri="https://postflow.ai/callback",
+                redirect_uri="https://draftva.com/callback",
                 scopes="read write push",
             )
         )
@@ -151,7 +151,7 @@ async def test_build_auth_url():
             workspace_id="ws_1",
             state="state_xyz",
             instance_domain="mastodon.social",
-            redirect_uri="https://postflow.ai/callback",
+            redirect_uri="https://draftva.com/callback",
             db=db,
         )
         assert "https://mastodon.social/oauth/authorize" in res.auth_url
@@ -207,7 +207,7 @@ async def test_handle_callback_success():
                     instance_domain="mastodon.social",
                     client_id="masto_app_id_123",
                     encrypted_client_secret=encrypt_token("sec"),
-                    redirect_uri="https://postflow.ai/callback",
+                    redirect_uri="https://draftva.com/callback",
                 )
             )
             db.commit()

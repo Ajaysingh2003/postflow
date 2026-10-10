@@ -93,7 +93,7 @@ def test_grapheme_counting():
 
 def test_rich_text_facets_exact_byte_ranges():
     # Multi-byte emoji at start tests UTF-8 byte offsets
-    text = "🚀 Check https://postflow.ai and #launch with @alice.bsky.social!"
+    text = "🚀 Check https://draftva.com and #launch with @alice.bsky.social!"
     text_bytes = text.encode("utf-8")
     facets = extract_facets(text, {"alice.bsky.social": "did:plc:alice123456"})
 
@@ -103,8 +103,8 @@ def test_rich_text_facets_exact_byte_ranges():
     url_facet = next(f for f in facets if f["features"][0]["$type"] == "app.bsky.feed.post#link")
     b_start = url_facet["index"]["byteStart"]
     b_end = url_facet["index"]["byteEnd"]
-    assert text_bytes[b_start:b_end].decode("utf-8") == "https://postflow.ai"
-    assert url_facet["features"][0]["uri"] == "https://postflow.ai"
+    assert text_bytes[b_start:b_end].decode("utf-8") == "https://draftva.com"
+    assert url_facet["features"][0]["uri"] == "https://draftva.com"
 
     # 2. Tag facet
     tag_facet = next(f for f in facets if f["features"][0]["$type"] == "app.bsky.feed.post#tag")
@@ -305,7 +305,7 @@ async def test_publish_success(mock_bsky_account):
     mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     adapter = BlueskyAdapter(http_client=mock_client)
 
-    text = "Building the future of publishing with #postflow at https://postflow.ai"
+    text = "Building the future of publishing with #draftva at https://draftva.com"
     result = await adapter.publish(
         mock_bsky_account,
         MockVariant({"text": text}),

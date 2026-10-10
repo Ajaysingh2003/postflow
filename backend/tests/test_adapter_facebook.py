@@ -66,7 +66,7 @@ async def test_build_auth_url():
     res = await adapter.build_auth_url(
         workspace_id="ws_1",
         state="fb_state_xyz",
-        redirect_uri="https://postflow.ai/callback",
+        redirect_uri="https://draftva.com/callback",
     )
     assert "https://www.facebook.com/v23.0/dialog/oauth" in res.auth_url
     assert "client_id=fb_app_id_999" in res.auth_url
@@ -225,7 +225,7 @@ async def test_publish_to_page_feed(mock_facebook_account):
             {
                 "page_id": "page_111",
                 "text": "Announcing our major spring release!",
-                "link": "https://postflow.ai/release",
+                "link": "https://draftva.com/release",
             }
         ),
     )
@@ -237,7 +237,7 @@ async def test_publish_to_page_feed(mock_facebook_account):
     # Crucial security verification: published using dedicated Page Access Token!
     assert recorded_post_data[0]["access_token"] == "page_access_token_111"
     assert recorded_post_data[0]["message"] == "Announcing our major spring release!"
-    assert recorded_post_data[0]["link"] == "https://postflow.ai/release"
+    assert recorded_post_data[0]["link"] == "https://draftva.com/release"
 
 
 @pytest.mark.anyio

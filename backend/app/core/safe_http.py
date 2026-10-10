@@ -57,7 +57,7 @@ async def public_text(url: str, max_bytes: int = 256_000) -> str:
             max_redirects=5,
             trust_env=False,
         ) as client,
-        client.stream("GET", url, headers={"User-Agent": "postflow/1.0"}) as response,
+        client.stream("GET", url, headers={"User-Agent": "draftva/1.0"}) as response,
     ):
         response.raise_for_status()
         if not any(

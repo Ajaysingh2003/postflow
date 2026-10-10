@@ -1,6 +1,7 @@
 """Threads official OAuth and container publishing API."""
 
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
 from typing import Any
@@ -8,6 +9,8 @@ from urllib.parse import urlencode, urlsplit
 
 import httpx
 from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.modules.channels.adapters.management import ThreadsManagement
@@ -197,14 +200,32 @@ class ThreadsAdapter(ThreadsManagement):
             if self._http_client is None:
                 await client.aclose()
 
-    async def revoke(self, account):
+    async def revoke(self, account: ConnectedAccount) -> None:
+        """
+        Revoke permissions via DELETE /v1.0/me/permissions if supported by the provider.
+        Threads tokens (graph.threads.net) do not expose an official programmatic revocation
+        endpoint (permissions are managed in Meta/Instagram accounts settings) and return 400 Bad Request
+        or 404 Not Found. Treat 400, 401, 403, 404, 405 as already revoked or unsupported.
+        """
+        raw_access = decrypt_token(account.encrypted_access_token)
+        if not raw_access:
+            return
+
         client = await self._get_client()
         try:
             response = await client.delete(
-                API + "/v1.0/me/permissions",
-                params={"access_token": decrypt_token(account.encrypted_access_token)},
+                f"{API}/v1.0/me/permissions",
+                params={"access_token": raw_access},
             )
-            response.raise_for_status()
+            if response.status_code not in (200, 400, 401, 403, 404, 405):
+                response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code not in (400, 401, 403, 404, 405):
+                logger.warning("Error revoking Threads permissions for %s: %s", account.id, exc)
+                raise
+        except Exception as exc:
+            logger.warning("Error revoking Threads permissions for %s: %s", account.id, exc)
+            raise
         finally:
             if self._http_client is None:
                 await client.aclose()

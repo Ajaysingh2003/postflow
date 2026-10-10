@@ -1,4 +1,4 @@
-name: postflow
+name: draftva
 
 services:
   migrate:
@@ -12,7 +12,7 @@ services:
         required: false
     environment: &app_environment
       APP_ENV: ${APP_ENV:-development}
-      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:-change-me}@postgres:5432/postflow
+      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:-change-me}@postgres:5432/draftva
       REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
@@ -100,7 +100,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: postflow
+      POSTGRES_DB: draftva
       POSTGRES_USER: app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     ports:
@@ -108,7 +108,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d postflow"]
+      test: ["CMD-SHELL", "pg_isready -U app -d draftva"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -148,5 +148,5 @@ volumes:
 
 networks:
   default:
-    name: postflow_default
+    name: draftva_default
 

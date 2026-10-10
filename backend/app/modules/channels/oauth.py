@@ -316,11 +316,12 @@ async def disconnect_account(
                 account.platform,
                 str(exc),
             )
-            account.status = "needs_reauth"
-            db.commit()
-            raise HTTPException(
-                502, "Provider revocation failed; account requires reauthentication"
-            ) from exc
+            if account.status != "needs_reauth":
+                account.status = "needs_reauth"
+                db.commit()
+                raise HTTPException(
+                    502, "Provider revocation failed; account requires reauthentication"
+                ) from exc
 
     db.delete(account)
     db.commit()

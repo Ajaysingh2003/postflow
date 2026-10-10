@@ -218,7 +218,7 @@ def test_oauth_state_lifecycle_and_replay_protection():
             user_id=user_id,
             platform="mock_social",
             code_verifier="test_code_verifier",
-            redirect_uri="https://app.postflow.ai/callback",
+            redirect_uri="https://app.draftva.ai/callback",
             instance_domain="mastodon.example.org",
             ttl_minutes=10,
         )

@@ -1,4 +1,4 @@
-# postflow: Backend Rewrite Spec
+# draftva: Backend Rewrite Spec
 
 This replaces any earlier spec. Read all of it before writing code.
 
@@ -14,7 +14,7 @@ This replaces any earlier spec. Read all of it before writing code.
 
 ## 1. What we are building
 
-**postflow** is a multi-channel social media scheduling and writing platform (think Typefully, but across many networks). It was previously a LinkedIn automation product (internally named "Outify"). That product is being retired.
+**draftva** is a multi-channel social media scheduling and writing platform (think Typefully, but across many networks). It was previously a LinkedIn automation product (internally named "Outify"). That product is being retired.
 
 Supported channels:
 
@@ -43,10 +43,10 @@ Hard rules:
 - `profiles` and `operations`: audit them. If they are LinkedIn-specific or unused, delete them. If something inside is generally useful (e.g. admin tooling), move only that into the right new module and tell me.
 - Dead code, unused dependencies, unused env vars, unused scheduled jobs, stale caches and committed build artifacts.
 
-### 2.2 Rename everything to postflow
+### 2.2 Rename everything to draftva
 
 - Python package/project names, config names, Docker service/container names, compose files, env var prefixes, log names, README text, comments and docstrings that mention Outify or LinkedIn automation.
-- **Database name becomes `postflow`.** Table names must be clean, plural snake_case, and reflect this product. No table may carry a `linkedin_` or `outify_` prefix.
+- **Database name becomes `draftva`.** Table names must be clean, plural snake_case, and reflect this product. No table may carry a `linkedin_` or `outify_` prefix.
 - Do not rename the frontend folder or its contents in this spec. List what needs renaming there in your report instead.
 
 ### 2.3 Database: fresh start
@@ -174,7 +174,7 @@ Requirements:
 Deliver a report: the full list of tables with keep/drop and a reason for each; modules and files to delete; modules to keep and what to change; all places mentioning Outify/LinkedIn automation that need renaming; env vars and dependencies to remove; and your answer to "does any production data need preserving" (ask me). Wait for approval.
 
 ### Phase 1: Cleanup, rename, fresh database
-Delete what was approved, rename everything to postflow, create the `postflow` database config, replace the migration history with a fresh initial migration for the new schema skeleton. The app must boot and the remaining tests must pass.
+Delete what was approved, rename everything to draftva, create the `draftva` database config, replace the migration history with a fresh initial migration for the new schema skeleton. The app must boot and the remaining tests must pass.
 
 ### Phase 2: Core schema
 Implement the section 4 tables and models with migrations and tests.

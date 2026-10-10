@@ -117,7 +117,7 @@ def authorize(
     code_challenge: str,
     response_type: str = "code",
     code_challenge_method: str = "S256",
-    scope: str = "postflow:read",
+    scope: str = "draftva:read",
     resource: str | None = None,
     state: str | None = Query(default=None, max_length=2048),
     db: Session = Depends(get_db),
@@ -132,12 +132,12 @@ def authorize(
     ):
         return oauth_error("PKCE with S256 is required")
     scopes = list(dict.fromkeys(scope.split()))
-    if not scopes or set(scopes) - SCOPES.keys() or "postflow:read" not in scopes:
+    if not scopes or set(scopes) - SCOPES.keys() or "draftva:read" not in scopes:
         return oauth_error(
-            "Choose supported Postflow scopes, including postflow:read", "invalid_scope"
+            "Choose supported draftva scopes, including draftva:read", "invalid_scope"
         )
     if resource is not None and resource != get_settings().mcp_url:
-        return oauth_error("Resource must match the Postflow MCP URL", "invalid_target")
+        return oauth_error("Resource must match the draftva MCP URL", "invalid_target")
     nonce = secret()
     db.add(
         AgentAuthorization(
@@ -220,7 +220,7 @@ def decide_authorization(
             }
         )
     member = membership_for(db, workspace.id, user.id)
-    if set(authorization.scopes) - {"postflow:read"} and member.role not in EDIT_ROLES:
+    if set(authorization.scopes) - {"draftva:read"} and member.role not in EDIT_ROLES:
         raise HTTPException(403, "Editor role required for the requested permissions")
     code = secret()
     authorization.code_hash = token_hash(code)
@@ -319,7 +319,7 @@ async def exchange_token(request: Request, db: Session = Depends(get_db)):
             return oauth_error("User access revoked", "invalid_grant")
         requested = str(form.get("scope", "")).split()
         if requested and (
-            "postflow:read" not in requested or not set(requested).issubset(connection.scopes)
+            "draftva:read" not in requested or not set(requested).issubset(connection.scopes)
         ):
             return oauth_error("Refresh cannot expand permissions", "invalid_scope")
         if requested:
@@ -391,7 +391,7 @@ def connections(
 
 class TokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
-    scopes: list[str] = Field(default_factory=lambda: ["postflow:read"], min_length=1, max_length=4)
+    scopes: list[str] = Field(default_factory=lambda: ["draftva:read"], min_length=1, max_length=4)
 
 
 @router.post("/connections", status_code=201)
@@ -402,10 +402,10 @@ def create_connection(
     db: Session = Depends(get_db),
 ):
     scopes = list(dict.fromkeys(payload.scopes))
-    if set(scopes) - SCOPES.keys() or "postflow:read" not in scopes:
-        raise HTTPException(422, "Choose supported scopes, including postflow:read")
+    if set(scopes) - SCOPES.keys() or "draftva:read" not in scopes:
+        raise HTTPException(422, "Choose supported scopes, including draftva:read")
     membership = membership_for(db, workspace.id, user.id)
-    if set(scopes) - {"postflow:read"} and membership.role not in EDIT_ROLES:
+    if set(scopes) - {"draftva:read"} and membership.role not in EDIT_ROLES:
         raise HTTPException(403, "Editor role required")
     count = db.scalar(
         select(func.count())

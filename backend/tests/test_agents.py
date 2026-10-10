@@ -69,7 +69,7 @@ def account(client, auth):
         return account.id
 
 
-def oauth_request(client, scopes="postflow:read", state="test-state"):
+def oauth_request(client, scopes="draftva:read", state="test-state"):
     registered = client.post(
         "/oauth/register",
         json={
@@ -123,11 +123,11 @@ def test_discovery_initialize_and_real_sdk_tools(client, auth, connection):
         {
             "protocolVersion": "2025-11-25",
             "capabilities": {},
-            "clientInfo": {"name": "postflow-test", "version": "1"},
+            "clientInfo": {"name": "draftva-test", "version": "1"},
         },
     )
     assert initialized.status_code == 200, initialized.text
-    assert initialized.json()["result"]["serverInfo"]["name"] == "Postflow"
+    assert initialized.json()["result"]["serverInfo"]["name"] == "draftva"
     tools = rpc(client, token, "tools/list").json()["result"]["tools"]
     names = {tool["name"] for tool in tools}
     assert {
@@ -432,7 +432,7 @@ def test_expired_connection_and_refresh_scope_expansion_are_rejected(client, aut
         "grant_type": "refresh_token",
         "client_id": exchange["client_id"],
         "refresh_token": tokens["refresh_token"],
-        "scope": "postflow:read postflow:write",
+        "scope": "draftva:read draftva:write",
     }
     assert client.post("/oauth/token", data=refresh).json()["error"] == "invalid_scope"
     with SessionLocal.begin() as db:
@@ -482,10 +482,10 @@ def test_mcp_url_uses_existing_backend_origin_and_rejects_secret_urls():
 
     config = Settings(
         _env_file=None,
-        oauth_redirect_base_url="https://api.postflow.ai/api/v1/channels/{platform}/callback",
+        oauth_redirect_base_url="https://api.draftva.ai/api/v1/channels/{platform}/callback",
         public_backend_url=None,
     )
-    assert config.mcp_url == "https://api.postflow.ai/mcp"
+    assert config.mcp_url == "https://api.draftva.ai/mcp"
     assert (
         Settings(_env_file=None, public_backend_url="https://backend.example/api/v1/").mcp_url
         == "https://backend.example/mcp"

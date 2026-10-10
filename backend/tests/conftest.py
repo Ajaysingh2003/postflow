@@ -10,11 +10,11 @@ from fastapi.testclient import TestClient
 database_fd, database_path = tempfile.mkstemp(suffix=".db")
 os.close(database_fd)
 os.environ["APP_ENV"] = "test"
-test_database = os.environ.get("POSTFLOW_TEST_DATABASE_URL")
+test_database = os.environ.get("draftva_TEST_DATABASE_URL")
 from sqlalchemy.engine import make_url
 
-if test_database and make_url(test_database).database != "postflow_test":
-    raise RuntimeError("The external test database must be named postflow_test")
+if test_database and make_url(test_database).database != "draftva_test":
+    raise RuntimeError("The external test database must be named draftva_test")
 os.environ["DATABASE_URL"] = test_database or f"sqlite:///{database_path}"
 os.environ["APP_SECRET"] = "test-secret-that-is-long-enough-for-tests"
 os.environ["RATE_LIMIT_ENABLED"] = "false"

@@ -1,5 +1,5 @@
 # ==========================================
-# postflow: Root .gitignore
+# draftva: Root .gitignore
 # ==========================================
 
 # ------------------------------------------
@@ -52,7 +52,7 @@ venv.bak/
 *.db-shm
 *.sqlite
 *.sqlite3
-postflow.db
+draftva.db
 
 # Testing, Coverage & Linters
 .pytest_cache/

@@ -10,7 +10,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
 from app.modules.channels.adapters.threads import ThreadsAdapter
 from app.modules.channels.models import ConnectedAccount
-from app.modules.channels.oauth import decrypt_token
+from app.modules.channels.oauth import decrypt_token, disconnect_account, encrypt_token
 from app.modules.channels.registry import channel_registry
 
 URI = "https://callback.example/api/v1/channels/threads/callback/?source=a%2Fb"
@@ -146,3 +146,131 @@ def test_threads_insecure_configuration_returns_actionable_error(client, auth, m
     assert response.status_code == 422
     assert "HTTPS" in response.json()["detail"]
     assert "THREADS_REDIRECT_URI" in response.json()["detail"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "status_code,body",
+    [
+        (400, {"error": {"message": "(#100) Tried accessing nonexisting field (permissions) on node type (User)", "type": "OAuthException", "code": 100}}),
+        (401, {"error": {"message": "Invalid OAuth access token", "type": "OAuthException", "code": 190}}),
+        (404, {"error": {"message": "Unknown path", "type": "OAuthException", "code": 803}}),
+        (200, {"success": True}),
+    ],
+)
+async def test_threads_revoke_handles_unsupported_meta_responses(status_code, body):
+    account = ConnectedAccount(
+        workspace_id="ws_1",
+        platform="threads",
+        external_account_id="user_123",
+        display_name="Test User",
+        encrypted_access_token=encrypt_token("valid_token"),
+    )
+
+    def handler(request: httpx.Request):
+        assert request.method == "DELETE"
+        assert request.url.path == "/v1.0/me/permissions"
+        assert request.url.params["access_token"] == "valid_token"
+        return httpx.Response(status_code, json=body)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        adapter = ThreadsAdapter(app_id="app", app_secret="secret", http_client=http)
+        # Should complete gracefully without raising any exception
+        await adapter.revoke(account)
+
+
+@pytest.mark.anyio
+async def test_threads_revoke_raises_on_server_error():
+    account = ConnectedAccount(
+        workspace_id="ws_1",
+        platform="threads",
+        external_account_id="user_123",
+        display_name="Test User",
+        encrypted_access_token=encrypt_token("valid_token"),
+    )
+
+    def handler(request: httpx.Request):
+        return httpx.Response(500, json={"error": "Internal server error"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        adapter = ThreadsAdapter(app_id="app", app_secret="secret", http_client=http)
+        with pytest.raises(httpx.HTTPStatusError):
+            await adapter.revoke(account)
+
+
+def test_threads_disconnect_success_via_api(client, auth, monkeypatch):
+    """Disconnecting a Threads account must succeed even when Meta returns 400 for permissions deletion."""
+    account_id = None
+    with SessionLocal() as db:
+        # Get workspace id from current user
+        from app.modules.workspaces.models import Workspace
+        ws = db.scalar(select(Workspace))
+        account = ConnectedAccount(
+            workspace_id=ws.id,
+            platform="threads",
+            external_account_id="threads_del_test",
+            display_name="Threads User",
+            status="active",
+            encrypted_access_token=encrypt_token("threads_tok"),
+        )
+        db.add(account)
+        db.commit()
+        db.refresh(account)
+        account_id = account.id
+
+    def handler(request: httpx.Request):
+        assert request.method == "DELETE"
+        # Meta returns 400 OAuthException when deleting permissions on graph.threads.net
+        return httpx.Response(
+            400,
+            json={"error": {"message": "(#100) Tried accessing nonexisting field (permissions) on node type (User)", "code": 100}},
+        )
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = ThreadsAdapter(app_id="app", app_secret="secret", http_client=http)
+    monkeypatch.setitem(channel_registry._adapters, "threads", adapter)
+
+    resp = client.delete(f"/api/v1/channels/accounts/{account_id}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "disconnected"
+    assert data["account_id"] == account_id
+
+    # Verify deleted from db
+    with SessionLocal() as db:
+        assert db.get(ConnectedAccount, account_id) is None
+
+
+@pytest.mark.anyio
+async def test_disconnect_account_already_in_needs_reauth_deletes_account(client, auth):
+    """If an account was already marked needs_reauth, failing revocation must still allow deleting."""
+    from types import SimpleNamespace
+
+    account_id = None
+    with SessionLocal() as db:
+        from app.modules.workspaces.models import Workspace
+        ws = db.scalar(select(Workspace))
+        account = ConnectedAccount(
+            workspace_id=ws.id,
+            platform="threads",
+            external_account_id="reauth_test_user",
+            display_name="Broken Account",
+            status="needs_reauth",
+            encrypted_access_token=encrypt_token("expired_tok"),
+        )
+        db.add(account)
+        db.commit()
+        db.refresh(account)
+        account_id = account.id
+
+    async def fail_revoke(acc):
+        raise RuntimeError("Provider offline or token invalid")
+
+    fake_adapter = SimpleNamespace(revoke=fail_revoke)
+    with SessionLocal() as db:
+        acc_row = db.get(ConnectedAccount, account_id)
+        assert acc_row.status == "needs_reauth"
+        # Must not raise 502; must delete the account
+        await disconnect_account(db, acc_row, fake_adapter)
+        assert db.get(ConnectedAccount, account_id) is None
+

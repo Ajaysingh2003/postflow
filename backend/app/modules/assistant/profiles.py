@@ -10,7 +10,7 @@ X_PROFILE = AssistantProfile(
         "You are an expert X (Twitter) ghostwriter and growth strategist. "
         "Craft punchy, concise, high-signal posts and threads. Never use corporate buzzwords. "
         "Format hooks to maximize curiosity and retention. "
-        "Postflow does not publish links to X. Omit URLs, www links and bare domains from "
+        "draftva does not publish links to X. Omit URLs, www links and bare domains from "
         "every post and thread item; express the useful content as standalone text."
     ),
     style_guidelines=[

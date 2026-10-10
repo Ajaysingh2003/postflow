@@ -48,7 +48,7 @@ import {
   SCOPE_LABELS,
   clientConfiguration,
   isLocalEndpoint,
-  postflowSkill,
+  draftvaSkill,
   type AgentId,
   type AgentScope,
   type AgentSection,
@@ -325,7 +325,7 @@ export function AgentSetup({
         <Step number={2} title="Download the skill">
           <p>
             Save this file as{" "}
-            <code className="font-mono text-xs">postflow/SKILL.md</code> in your
+            <code className="font-mono text-xs">draftva/SKILL.md</code> in your
             agent’s skills folder. It contains your configured Draftva server
             URL and no credentials.
           </p>
@@ -345,7 +345,7 @@ export function AgentSetup({
         </Step>
         <div className="mt-5">
           <CopyField
-            value={postflowSkill(url)}
+            value={draftvaSkill(url)}
             label="Draftva skill"
             multiline
           />
@@ -421,7 +421,7 @@ export function AgentSetup({
             <p>
               Add this to your Codex MCP configuration, then sign in with{" "}
               <code className="font-mono text-xs">
-                codex mcp login postflow
+                codex mcp login draftva
               </code>
               .
             </p>
@@ -550,7 +550,7 @@ function ConnectionAccess({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<AgentScope[]>(["postflow:read"]);
+  const [scopes, setScopes] = useState<AgentScope[]>(["draftva:read"]);
   const [token, setToken] = useState<string | null>(null);
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -712,7 +712,7 @@ function ConnectionAccess({
                 <Switch
                   className="primary-switch"
                   checked={scopes.includes(scope)}
-                  disabled={scope === "postflow:read" || !settings.can_write}
+                  disabled={scope === "draftva:read" || !settings.can_write}
                   onCheckedChange={(checked) =>
                     setScopes((current) =>
                       checked

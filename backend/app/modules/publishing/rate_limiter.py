@@ -1,6 +1,6 @@
 """Platform rate limiting for outbound publishing calls.
 
-Ensures postflow adheres to official social network rate limits using
+Ensures draftva adheres to official social network rate limits using
 a shared Redis backend when available, or an in-memory fallback.
 """
 

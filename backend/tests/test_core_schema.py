@@ -48,7 +48,7 @@ def test_channels_models_crud():
             instance_domain="mastodon.social",
             client_id="masto_client_id_123",
             encrypted_client_secret="masto_enc_secret",
-            redirect_uri="https://app.postflow.ai/api/v1/channels/oauth/callback",
+            redirect_uri="https://app.draftva.ai/api/v1/channels/oauth/callback",
             scopes="read write push",
         )
         db.add(masto_app)
@@ -73,7 +73,7 @@ def test_channels_models_crud():
             platform="reddit",
             state_hash="state_hash_abc123",
             code_verifier="verifier_random_string",
-            redirect_uri="https://app.postflow.ai/callback",
+            redirect_uri="https://app.draftva.ai/callback",
             expires_at=datetime.now(UTC) + timedelta(minutes=15),
         )
         db.add(oauth_state)

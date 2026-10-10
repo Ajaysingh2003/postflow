@@ -3,13 +3,13 @@ services:
     environment:
       APP_ENV: production
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in backend/.env}
-      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}@postgres:5432/postflow
+      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}@postgres:5432/draftva
 
   api:
     environment:
       APP_ENV: production
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in backend/.env}
-      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}@postgres:5432/postflow
+      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}@postgres:5432/draftva
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
     deploy:
@@ -23,7 +23,7 @@ services:
     environment:
       APP_ENV: production
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in backend/.env}
-      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}@postgres:5432/postflow
+      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}@postgres:5432/draftva
     deploy:
       resources:
         limits:
@@ -35,7 +35,7 @@ services:
     environment:
       APP_ENV: production
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in backend/.env}
-      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}@postgres:5432/postflow
+      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}@postgres:5432/draftva
     deploy:
       resources:
         limits:

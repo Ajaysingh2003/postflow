@@ -456,7 +456,7 @@ function CreateActionButton() {
   function handleNewPost() {
     if (NEW_DRAFT_PATHS.includes(window.location.pathname)) {
       window.dispatchEvent(new Event("draftva:new-draft"));
-      window.dispatchEvent(new Event("postflow:new-draft"));
+      window.dispatchEvent(new Event("draftva:new-draft"));
     } else {
       router.push(ROUTES.compose);
     }

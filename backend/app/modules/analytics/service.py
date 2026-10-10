@@ -264,7 +264,7 @@ async def _account_posts(db, workspace_id, account, start, end, semaphore):
         ]
         complete, notice = (
             False,
-            "This integration can retrieve live metrics only for posts published through Postflow.",
+            "This integration can retrieve live metrics only for posts published through draftva.",
         )
         reply_items, supported = [], False
     unique = {

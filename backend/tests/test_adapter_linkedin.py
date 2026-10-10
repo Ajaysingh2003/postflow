@@ -60,7 +60,7 @@ async def test_build_auth_url():
     res = await adapter.build_auth_url(
         workspace_id="ws_1",
         state="li_csrf_state",
-        redirect_uri="https://postflow.ai/api/v1/channels/oauth/callback",
+        redirect_uri="https://draftva.com/api/v1/channels/oauth/callback",
     )
     assert "https://www.linkedin.com/oauth/v2/authorization" in res.auth_url
     assert "client_id=my_li_client_id" in res.auth_url

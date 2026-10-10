@@ -918,7 +918,7 @@ export function HelpView() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-5 md:p-8">
       <Heading
-        title="Using postflow"
+        title="Using draftva"
         description="Create, publish and manage your content across channels."
       />
       <div className={panel + " space-y-4"}>

@@ -15,7 +15,7 @@ export type WritingSession = {
 };
 
 export function sessionKey(workspaceId: string) {
-  return `postflow:current-writing-draft:${workspaceId}`;
+  return `draftva:current-writing-draft:${workspaceId}`;
 }
 
 export function readWritingSession(
@@ -52,7 +52,7 @@ export function readWritingSession(
   let selected = "";
   try {
     selected =
-      localStorage.getItem(`postflow:active-writing-account:${workspaceId}`) ??
+      localStorage.getItem(`draftva:active-writing-account:${workspaceId}`) ??
       "";
   } catch {
     /* Storage is optional. */
@@ -65,7 +65,7 @@ export function readWritingSession(
     activeAccountId: account.id,
     drafts: {
       [account.id]: readDraft(
-        `postflow:editor:${workspaceId}:${account.id}`,
+        `draftva:editor:${workspaceId}:${account.id}`,
         account,
       ),
     },

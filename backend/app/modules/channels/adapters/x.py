@@ -76,7 +76,7 @@ class XAdapter(XManagement):
             supports_polls=True,
             supports_alt_text=False,
             max_alt_text_length=1000,
-            supports_links=False,  # Postflow publishing policy; X itself supports links.
+            supports_links=False,  # draftva publishing policy; X itself supports links.
             supports_tags=True,
             visibility_options=["public"],
             requires_target=False,
@@ -327,7 +327,7 @@ class XAdapter(XManagement):
                 issues.append(
                     Issue(
                         field=f"thread.{index}.text" if "thread" in payload else "text",
-                        message="Postflow doesn't publish links to X. Remove links from this version before publishing or scheduling.",
+                        message="draftva doesn't publish links to X. Remove links from this version before publishing or scheduling.",
                         code="links_disabled",
                     )
                 )

@@ -1,4 +1,4 @@
-# postflow backend
+# draftva backend
 
 FastAPI, SQLAlchemy 2, Alembic and Pydantic Settings, with a database-backed polling publisher and Redis for shared outbound limits. PostgreSQL is used by Compose; SQLite supports local development.
 
@@ -43,6 +43,6 @@ docker compose up --build -d
 
 The regression suite checks workspace isolation, publication claims and uncertain outcomes, media processing and resume, OAuth replay/DPoP, quota and AI usage accounting, analytics coverage, and an additive migration with existing records. `GET /health` and `GET /ready` provide basic health/database checks.
 
-The backend CI workflow runs SQLite checks on Python 3.12 and 3.14 and a separate PostgreSQL/Redis job. Optional service tests use an explicitly isolated database named `postflow_test` through `POSTFLOW_TEST_DATABASE_URL`; never point the test suite at application data.
+The backend CI workflow runs SQLite checks on Python 3.12 and 3.14 and a separate PostgreSQL/Redis job. Optional service tests use an explicitly isolated database named `draftva_test` through `draftva_TEST_DATABASE_URL`; never point the test suite at application data.
 
 The new migration is additive. Existing application/production databases have not been reset or migrated by this repair task; run `alembic upgrade head` against the intended database before starting the updated application.

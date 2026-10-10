@@ -100,7 +100,7 @@ export type RefinePreferences = {
   commands: Record<string, string>;
 };
 export function refinePreferencesKey(workspace: string, account: string) {
-  return `postflow:refine:${workspace}:${account}`;
+  return `draftva:refine:${workspace}:${account}`;
 }
 export function readRefinePreferences(raw: string | null): RefinePreferences {
   try {

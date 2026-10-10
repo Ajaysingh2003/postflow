@@ -47,7 +47,7 @@ def library(client, auth):
             workspace_id=seed["workspace_id"],
             author_id=seed["author_id"],
             title="Saved post",
-            base_text="Postflow copy",
+            base_text="draftva copy",
         )
         hidden = Post(workspace_id=private.id, author_id=seed["author_id"], title="Private post")
         db.add_all([post, hidden])

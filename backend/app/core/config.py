@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     app_secret: str = "development-only-secret-change-me"
-    database_url: str = "sqlite:///./postflow.db"
+    database_url: str = "sqlite:///./draftva.db"
     cors_origins: str = "http://localhost:3000"
     session_ttl_days: int = 30
     redis_url: str = "redis://localhost:6379/0"
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_username: str | None = None
     smtp_password: str | None = None
-    mail_from: str = "postflow <noreply@postflow.ai>"
+    mail_from: str = "draftva <noreply@draftva.ai>"
     frontend_url: str = "http://localhost:3000"
     public_backend_url: str | None = None
 
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     threads_app_secret: str | None = None
     threads_redirect_uri: str | None = None
     bluesky_private_key: str | None = None
-    bluesky_key_id: str = "postflow-1"
+    bluesky_key_id: str = "draftva-1"
     llm_mock_enabled: bool = False
     llm_max_output_tokens: int = 4096
     llm_cost_micros_per_token: int = 5
@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     linkedin_scopes: str = "openid,profile,email,w_member_social"
     reddit_client_id: str | None = None
     reddit_client_secret: str | None = None
-    reddit_user_agent: str = "postflow:v0.1.0"
+    reddit_user_agent: str = "draftva:v0.1.0"
     bluesky_client_id: str | None = None
     facebook_app_id: str | None = None
     facebook_app_secret: str | None = None

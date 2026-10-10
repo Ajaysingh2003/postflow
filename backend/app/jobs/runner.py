@@ -119,7 +119,7 @@ def run(kind: str) -> None:
         settings.scheduler_poll_seconds if kind == "scheduler" else settings.worker_poll_seconds
     )
     action = (lambda: 0) if kind == "scheduler" else process_queue
-    logger.info("postflow %s started", kind)
+    logger.info("draftva %s started", kind)
     last_reconciliation = 0.0
     last_subreddit_refresh = 0.0
     last_token_refresh = 0.0

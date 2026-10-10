@@ -154,7 +154,7 @@ export default function WritingAssistant({
   const [textEdited, setTextEdited] = useState(false);
   const [search, setSearch] = useState("");
   const [settings, setSettings] = useState(false);
-  const prefKey = `postflow:writing-preferences:${workspaceId}:${account.id}`;
+  const prefKey = `draftva:writing-preferences:${workspaceId}:${account.id}`;
   const [preferences, setPreferences] = useState(() =>
     loadPreferences(prefKey),
   );

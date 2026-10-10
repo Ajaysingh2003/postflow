@@ -297,7 +297,7 @@ function WorkspaceStudio({
       try {
         localStorage.setItem(sessionKey(workspaceId), JSON.stringify(next));
         localStorage.setItem(
-          `postflow:active-writing-account:${workspaceId}`,
+          `draftva:active-writing-account:${workspaceId}`,
           next.activeAccountId,
         );
       } catch {
@@ -368,7 +368,7 @@ function AccountStudio({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { setSidecarBridge, setStudioNavigation } = useComposer();
-  const storageKey = `postflow:editor:${workspaceId}:${account.id}`;
+  const storageKey = `draftva:editor:${workspaceId}:${account.id}`;
   const [draft, setDraft] = useState<WritingDraft>(initialDraft);
   const current = useRef(draft);
   const saving = useRef(false);
@@ -871,10 +871,10 @@ function AccountStudio({
   useEffect(() => {
     const listener = () => requestFresh();
     window.addEventListener("draftva:new-draft", listener);
-    window.addEventListener("postflow:new-draft", listener);
+    window.addEventListener("draftva:new-draft", listener);
     return () => {
       window.removeEventListener("draftva:new-draft", listener);
-      window.removeEventListener("postflow:new-draft", listener);
+      window.removeEventListener("draftva:new-draft", listener);
     };
   }, []);
   function duplicate() {

@@ -320,10 +320,10 @@ class InstagramAdapter(InstagramManagement):
                 f"{GRAPH_API_BASE}/me/permissions",
                 params={"access_token": raw_user_token},
             )
-            if resp.status_code not in (200, 400, 404):
+            if resp.status_code not in (200, 400, 401, 403, 404, 405):
                 resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code not in (400, 404):
+            if exc.response.status_code not in (400, 401, 403, 404, 405):
                 logger.warning("Error revoking Instagram permissions for %s: %s", account.id, exc)
                 raise
         except Exception as exc:

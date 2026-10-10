@@ -20,9 +20,9 @@ def deliver_token(email: str, token: str, purpose: str):
     message["From"] = settings.mail_from
     message["To"] = email
     message["Subject"] = {
-        "verify-email": "Verify your postflow email",
-        "reset-password": "Reset your postflow password",
-        "invitations/accept": "Join a postflow workspace",
+        "verify-email": "Verify your draftva email",
+        "reset-password": "Reset your draftva password",
+        "invitations/accept": "Join a draftva workspace",
     }[purpose]
     url = settings.frontend_url.rstrip("/") + "/" + purpose + "?" + urlencode({"token": token})
     message.set_content(

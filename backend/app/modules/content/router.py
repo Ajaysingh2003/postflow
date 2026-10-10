@@ -194,7 +194,7 @@ def post_library(
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ) -> PostLibraryPage:
-    """Postflow's own variants only; browsing never reads a platform timeline."""
+    """draftva's own variants only; browsing never reads a platform timeline."""
     categories = {
         "posts": ("published",),
         "scheduled": ("scheduled", "publishing"),

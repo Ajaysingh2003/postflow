@@ -97,7 +97,7 @@ async def test_build_auth_url():
         workspace_id="ws_1",
         state="my_state",
         code_challenge="challenge_s256_hash",
-        redirect_uri="https://postflow.ai/callback",
+        redirect_uri="https://draftva.com/callback",
     )
     assert "https://twitter.com/i/oauth2/authorize" in res.auth_url
     assert "client_id=test_x_client_id" in res.auth_url
@@ -127,8 +127,8 @@ async def test_handle_callback_success():
                 json={
                     "data": {
                         "id": "2244994945",
-                        "name": "Postflow AI",
-                        "username": "postflow_ai",
+                        "name": "draftva AI",
+                        "username": "draftva_ai",
                         "profile_image_url": "https://pbs.twimg.com/profile_images/pic.png",
                         "public_metrics": {
                             "followers_count": 8500,
@@ -148,15 +148,15 @@ async def test_handle_callback_success():
         params={"code": "auth_code_from_x"},
         state="state_123",
         code_verifier="pkce_verifier_secret",
-        redirect_uri="https://postflow.ai/callback",
+        redirect_uri="https://draftva.com/callback",
     )
 
     assert account.platform == "x"
     assert account.external_account_id == "2244994945"
-    assert account.display_name == "Postflow AI (@postflow_ai)"
+    assert account.display_name == "draftva AI (@draftva_ai)"
     assert decrypt_token(account.encrypted_access_token) == "new_access_token_123"
     assert decrypt_token(account.encrypted_refresh_token) == "new_refresh_token_456"
-    assert account.account_metadata["username"] == "postflow_ai"
+    assert account.account_metadata["username"] == "draftva_ai"
     assert "public_metrics" not in account.account_metadata
 
 
@@ -200,7 +200,7 @@ async def test_validate():
     adapter = XAdapter()
 
     # Valid tweet
-    issues = await adapter.validate(MockVariant({"text": "Hello world from postflow!"}))
+    issues = await adapter.validate(MockVariant({"text": "Hello world from draftva!"}))
     assert len(issues) == 0
 
     # Over character limit (> 280 characters)
@@ -230,7 +230,7 @@ async def test_publish_success(mock_account):
             json={
                 "data": {
                     "id": "1445880548472328192",
-                    "text": "Postflow scheduled tweet",
+                    "text": "draftva scheduled tweet",
                 }
             },
         )
@@ -240,7 +240,7 @@ async def test_publish_success(mock_account):
 
     result = await adapter.publish(
         mock_account,
-        MockVariant({"text": "Postflow scheduled tweet", "media_ids": ["media_1"]}),
+        MockVariant({"text": "draftva scheduled tweet", "media_ids": ["media_1"]}),
     )
     assert result.success is True
     assert result.external_post_id == "1445880548472328192"

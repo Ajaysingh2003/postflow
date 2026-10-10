@@ -18,7 +18,7 @@ Home includes the same usage summary in its existing server preload. Its four su
 
 Both composer assistants display the allowance and an exhausted-credit message with the reset date and a link to Billing. New generation is blocked while exhausted or while usage cannot be verified; editing and publishing remain available subject to their own permissions and quotas. Usage refreshes after requests and periodically while visible. Pricing features use the backend's configured allowances rather than video-service placeholder copy.
 
-There is no paid overage, daily credit allowance, or credit rollover. X's developer API balance is separate from Postflow AI credits; this change does not purchase or grant platform API credits.
+There is no paid overage, daily credit allowance, or credit rollover. X's developer API balance is separate from draftva AI credits; this change does not purchase or grant platform API credits.
 
 ## Verification
 

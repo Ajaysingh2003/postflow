@@ -34,7 +34,7 @@ describe("social account API wiring", () => {
       headers: {Authorization: "Bearer test-only-token", "X-Workspace-ID": accountId},
     }));
   });
-  test("loads Postflow posts and counts with one bounded library request", async () => {
+  test("loads draftva posts and counts with one bounded library request", async () => {
     const data = {items: [], counts: {posts: 0, scheduled: 1, drafts: 2}, total: 0, next_offset: null};
     request = spyOn(axios, "request").mockResolvedValue({data});
     expect(await caller.postLibrary({connected_account_id: accountId, category: "posts", offset: 50})).toEqual(data);
@@ -60,7 +60,7 @@ describe("social account API wiring", () => {
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: "GET", url: "http://backend.test/v1/analytics/dashboard", params: input }));
   });
 
-  test("analytics returns account-native posts without filtering for a saved Postflow id", async () => {
+  test("analytics returns account-native posts without filtering for a saved draftva id", async () => {
     const native = {post_id: null, variant_id: "external:native", text: "Published in the native app"};
     const data = {account_id: accountId, posts: [native], feed_total: 1};
     request = spyOn(axios, "request").mockResolvedValue({data});

@@ -45,7 +45,7 @@ Updated 2 October 2026. This implements the backend repairs requested after the 
 
 Production-data preservation was not explicitly confirmed. This repair therefore keeps existing data and history. No database was dropped, reset or upgraded outside isolated tests.
 
-The original `ceb2b91baf53_postflow_initial_schema.py` remains. The additive `20261002_backend_reliability.py` adds `plans`, `content_templates`, OAuth protocol metadata, publication state/start/success timestamps, and usage-entry uniqueness. It contains a frozen initial plan seed rather than importing mutable application settings. The models now contain 28 application tables; the audit's existing identity and billing support tables remain.
+The original `ceb2b91baf53_draftva_initial_schema.py` remains. The additive `20261002_backend_reliability.py` adds `plans`, `content_templates`, OAuth protocol metadata, publication state/start/success timestamps, and usage-entry uniqueness. It contains a frozen initial plan seed rather than importing mutable application settings. The models now contain 28 application tables; the audit's existing identity and billing support tables remain.
 
 There were no remaining extension/prospect/profile/operation modules or legacy-prefixed tables to delete. Removed the unused `publishing/token_crypto.py`, unused draft attachment/mention schemas and an unused author compatibility property. Removed unused `STORAGE_DRIVER` and `TOKEN_DELIVERY_MODE` configuration; `R2_PUBLIC_URL` now serves remote media. Existing dependencies were retained where used; added `regex` for Unicode and `Pillow` for image processing. README and implementation status now describe actual behavior and limits. No private `.env` values were copied into source files.
 
@@ -59,7 +59,7 @@ Frontend renaming and API contracts remain a separate task. The [audit's fronten
 - `/health`, `/ready` and the eight-channel capabilities endpoint pass through the test client. Regression tests cover foreign-workspace requests, atomic claims, uncertain-outcome recovery, media polling/resume, OAuth replay/DPoP, Unicode, assistant failure accounting, quotas, analytics collection and SMTP TLS.
 - Provider HTTP is mocked. PostgreSQL/Redis services, CI execution, live OAuth, platform approval, actual posting/media processing, email/storage/payment delivery and deployment have **not** been verified locally.
 
-Added `.github/workflows/backend.yml`: SQLite on Python 3.12/3.14, plus PostgreSQL 16/Redis 7 migration and reliability checks. Optional service tests require `POSTFLOW_TEST_DATABASE_URL` with database name exactly `postflow_test`, and `POSTFLOW_TEST_REDIS_URL` for isolated Redis. The workflow is checked in as a working-tree change, not yet run by GitHub.
+Added `.github/workflows/backend.yml`: SQLite on Python 3.12/3.14, plus PostgreSQL 16/Redis 7 migration and reliability checks. Optional service tests require `draftva_TEST_DATABASE_URL` with database name exactly `draftva_test`, and `draftva_TEST_REDIS_URL` for isolated Redis. The workflow is checked in as a working-tree change, not yet run by GitHub.
 
 ## Provider approval and supported API limits
 

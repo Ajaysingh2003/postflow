@@ -410,7 +410,7 @@ def test_dashboard_reads_external_posts_and_full_aggregate(
     "platform",
     ["x", "linkedin", "reddit", "bluesky", "mastodon", "facebook", "instagram", "threads"],
 )
-def test_account_feed_keeps_native_posts_alongside_postflow_posts(
+def test_account_feed_keeps_native_posts_alongside_draftva_posts(
     platform, analytics_adapter, test_setup, monkeypatch
 ):
     from app.modules.channels.base import AnalyticsPost, AnalyticsPosts
@@ -422,7 +422,7 @@ def test_account_feed_keeps_native_posts_alongside_postflow_posts(
     account = analytics_account(test_setup, platform=platform)
     other = analytics_account(test_setup, "other", platform=platform)
     local_variant, local_post = analytics_variant(
-        test_setup, account, "from-postflow", platform=platform
+        test_setup, account, "from-draftva", platform=platform
     )
     analytics_variant(test_setup, account, "missing-from-api", platform=platform)
     analytics_variant(test_setup, other, "native-post", platform=platform)
@@ -444,7 +444,7 @@ def test_account_feed_keeps_native_posts_alongside_postflow_posts(
         assert acc.id == account
         return AnalyticsPosts(
             posts=[
-                api_post("from-postflow", 1, 10),
+                api_post("from-draftva", 1, 10),
                 api_post("native-post", 2, 20),
                 api_post("another-native", 3, 30),
                 api_post("native-post", 2, 20),  # Provider duplicate, counted once.
@@ -458,7 +458,7 @@ def test_account_feed_keeps_native_posts_alongside_postflow_posts(
     first = client.get("/api/v1/analytics/dashboard", params=params, headers=headers).json()
     assert first["posts"][0]["variant_id"] == local_variant
     assert first["posts"][0]["post_id"] == local_post
-    assert first["posts"][0]["text"] == "Official copy of from-postflow"
+    assert first["posts"][0]["text"] == "Official copy of from-draftva"
     second = client.get(
         "/api/v1/analytics/dashboard", params={**params, "offset": 1}, headers=headers
     ).json()
@@ -472,14 +472,14 @@ def test_account_feed_keeps_native_posts_alongside_postflow_posts(
         assert data["overview"]["total_posts_published"] == 3
         assert data["overview"]["total_impressions"] == 60
         assert data["dataset_complete"]
-    # The Postflow library remains local-only and native API posts are not imported.
+    # The draftva library remains local-only and native API posts are not imported.
     library = client.get(
         "/api/v1/posts/library",
         params={"connected_account_id": account, "category": "posts"},
         headers=headers,
     ).json()
     assert {item["external_post_id"] for item in library["items"]} == {
-        "from-postflow",
+        "from-draftva",
         "missing-from-api",
     }
     with SessionLocal() as db:
@@ -918,7 +918,7 @@ async def test_linkedin_company_dashboard_reads_official_feed_and_metrics(
                     "elements": [
                         {
                             "id": post_id,
-                            "commentary": "Company launch outside Postflow",
+                            "commentary": "Company launch outside draftva",
                             "publishedAt": int(
                                 (datetime.now(UTC) - timedelta(hours=1)).timestamp() * 1000
                             ),
@@ -987,7 +987,7 @@ async def test_linkedin_company_dashboard_reads_official_feed_and_metrics(
     assert result["overview"]["metrics_status"] == "available"
     assert result["overview"]["total_impressions"] == 800
     assert result["overview"]["total_engagements"] == 20
-    assert result["posts"][0]["text"] == "Company launch outside Postflow"
+    assert result["posts"][0]["text"] == "Company launch outside draftva"
     assert result["posts"][0]["post_id"] is None
     assert result["dataset_complete"]
     assert len(calls) == 5

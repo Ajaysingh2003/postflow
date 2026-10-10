@@ -59,8 +59,8 @@ class MastodonAdapter(MastodonManagement):
 
     def __init__(
         self,
-        client_name: str = "postflow",
-        website: str = "https://postflow.ai",
+        client_name: str = "draftva",
+        website: str = "https://draftva.com",
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         settings = get_settings()

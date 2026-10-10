@@ -69,8 +69,8 @@ class BlueskyOAuth:
             raise HTTPException(503, "Configure BLUESKY_PRIVATE_KEY for confidential OAuth")
         metadata = {
             "client_id": self.client_id,
-            "client_name": "postflow",
-            "client_uri": "https://postflow.ai",
+            "client_name": "draftva",
+            "client_uri": "https://draftva.com",
             "redirect_uris": [self.redirect_base_url],
             "scope": "atproto transition:generic",
             "grant_types": ["authorization_code", "refresh_token"],

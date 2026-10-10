@@ -350,7 +350,7 @@ async def test_reddit_features_with_cached_profile(test_setup):
             validation_context={"subreddit": "python", "flair_id": "flair_proj"},
             input_data={
                 "draft": "Buy our social media software now at discount!",
-                "product_name": "postflow",
+                "product_name": "draftva",
             },
             db=db,
         )
@@ -374,7 +374,7 @@ async def test_bluesky_and_mastodon_features(test_setup):
             user_id=user_id,
             feature_id="bluesky_short_post",
             input_data={
-                "text": "Exploring the open AT Protocol and decentralized social media networks with #postflow."
+                "text": "Exploring the open AT Protocol and decentralized social media networks with #draftva."
             },
             db=db,
         )

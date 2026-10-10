@@ -16,7 +16,7 @@ Updated 2 October 2026 after the backend audit and repair pass.
 
 ## Schema and migration
 
-The existing initial migration is `ceb2b91baf53_postflow_initial_schema.py`. The additive `20261002_backend_reliability.py` adds plans, templates, OAuth metadata, publication state/timestamps and usage uniqueness. Existing migration history and application data remain intact. The current models have 28 application tables, including existing identity/billing support tables; there is no legacy extension or prospect module to remove.
+The existing initial migration is `ceb2b91baf53_draftva_initial_schema.py`. The additive `20261002_backend_reliability.py` adds plans, templates, OAuth metadata, publication state/timestamps and usage uniqueness. Existing migration history and application data remain intact. The current models have 28 application tables, including existing identity/billing support tables; there is no legacy extension or prospect module to remove.
 
 ## Verification and limits
 

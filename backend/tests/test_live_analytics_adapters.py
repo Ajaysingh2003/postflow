@@ -66,7 +66,7 @@ async def test_x_reads_all_pages_and_enriches_private_metrics_without_per_post_c
                     "data": [
                         {
                             "id": "2" if second else "1",
-                            "text": "Published outside Postflow",
+                            "text": "Published outside draftva",
                             "created_at": (now - timedelta(days=1)).isoformat(),
                             "public_metrics": {
                                 "like_count": 10,

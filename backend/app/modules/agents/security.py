@@ -17,10 +17,10 @@ from app.modules.identity.models import User
 from app.modules.workspaces.models import Workspace
 
 SCOPES = {
-    "postflow:read": "Read accounts, posts, schedules and analytics",
-    "postflow:write": "Create and edit drafts",
-    "postflow:publish": "Schedule and publish when requested",
-    "postflow:assistant": "Use Postflow AI within your plan's allowance",
+    "draftva:read": "Read accounts, posts, schedules and analytics",
+    "draftva:write": "Create and edit drafts",
+    "draftva:publish": "Schedule and publish when requested",
+    "draftva:assistant": "Use draftva AI within your plan's allowance",
 }
 EDIT_ROLES = {"owner", "admin", "editor"}
 
@@ -68,10 +68,10 @@ class AgentTokenVerifier:
 
 
 @contextmanager
-def agent_context(scope: str = "postflow:read"):
+def agent_context(scope: str = "draftva:read"):
     token = get_access_token()
     if not token:
-        raise HTTPException(401, "Connect your Postflow account first")
+        raise HTTPException(401, "Connect your draftva account first")
     with SessionLocal() as db:
         connection = live_connection(db, token.token)
         if not connection or scope not in connection.scopes:
@@ -80,7 +80,7 @@ def agent_context(scope: str = "postflow:read"):
         if not user or not user.is_active:
             raise HTTPException(401, "This connection is no longer active")
         membership = membership_for(db, connection.workspace_id, user.id)
-        if scope != "postflow:read" and membership.role not in EDIT_ROLES:
+        if scope != "draftva:read" and membership.role not in EDIT_ROLES:
             raise HTTPException(403, "Editor role required")
         workspace = db.get(Workspace, connection.workspace_id)
         connection.last_used_at = datetime.now(UTC)

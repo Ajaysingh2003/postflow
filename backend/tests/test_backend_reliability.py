@@ -625,7 +625,7 @@ async def test_threads_oauth_refresh_publish_delete():
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         adapter = ThreadsAdapter(app_id="app", app_secret="secret", http_client=client)
-        adapter.redirect_base_url = "https://postflow.example/api/v1/channels/threads/callback"
+        adapter.redirect_base_url = "https://draftva.example/api/v1/channels/threads/callback"
         start = await adapter.build_auth_url("ws", "state")
         assert "state=state" in start.auth_url
         account = await adapter.handle_callback("ws", {"code": "code"}, "state")
@@ -839,7 +839,7 @@ async def test_reddit_paginates_and_preserves_cache_on_failure():
             db.refresh(profile)
             assert profile.rules == [{"short_name": "Keep useful rules"}]
             assert profile.fetched_at.replace(tzinfo=UTC) == prior.replace(tzinfo=UTC)
-    assert all(request.headers["User-Agent"].startswith("postflow") for request in calls)
+    assert all(request.headers["User-Agent"].startswith("draftva") for request in calls)
 
 
 def test_email_delivery_uses_tls_and_configured_links(monkeypatch):
@@ -847,7 +847,7 @@ def test_email_delivery_uses_tls_and_configured_links(monkeypatch):
 
     settings = get_settings()
     monkeypatch.setattr(settings, "smtp_host", "smtp.example")
-    monkeypatch.setattr(settings, "frontend_url", "https://app.postflow.example")
+    monkeypatch.setattr(settings, "frontend_url", "https://app.draftva.example")
     sent = []
 
     class SMTP:
@@ -873,7 +873,7 @@ def test_email_delivery_uses_tls_and_configured_links(monkeypatch):
     deliver_token("member@example.com", "one-time-token", "invitations/accept")
     assert sent[0] == "tls"
     assert (
-        "https://app.postflow.example/invitations/accept?token=one-time-token"
+        "https://app.draftva.example/invitations/accept?token=one-time-token"
         in sent[1].get_content()
     )
 
@@ -1214,7 +1214,7 @@ async def test_real_redis_reservations_are_shared_when_ci_service_is_available()
 
     from redis.asyncio import Redis
 
-    url = os.environ.get("POSTFLOW_TEST_REDIS_URL")
+    url = os.environ.get("draftva_TEST_REDIS_URL")
     if not url:
         pytest.skip("An isolated Redis service is required")
     redis = Redis.from_url(url)

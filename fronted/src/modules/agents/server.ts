@@ -49,10 +49,10 @@ export const agentsRouter = createTRPCRouter({
         scopes: z
           .array(
             z.enum([
-              "postflow:read",
-              "postflow:write",
-              "postflow:publish",
-              "postflow:assistant",
+              "draftva:read",
+              "draftva:write",
+              "draftva:publish",
+              "draftva:assistant",
             ]),
           )
           .min(1)

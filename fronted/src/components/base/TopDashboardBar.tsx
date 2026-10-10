@@ -70,7 +70,7 @@ export default function TopDashboardBar() {
 
   function handleNewDraft() {
     window.dispatchEvent(new Event("draftva:new-draft"));
-    window.dispatchEvent(new Event("postflow:new-draft"));
+    window.dispatchEvent(new Event("draftva:new-draft"));
   }
 
   return (

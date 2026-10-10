@@ -105,7 +105,7 @@ class BlueskyAdapter(BlueskyOAuth, BlueskyManagement):
         self.client_id = (
             client_id
             or settings.bluesky_client_id
-            or "https://postflow.ai/api/v1/channels/bluesky/client-metadata"
+            or "https://draftva.com/api/v1/channels/bluesky/client-metadata"
         )
         self.pds_url = (pds_url or BSKY_PUBLIC_API).rstrip("/xrpc").rstrip("/")
         self.xrpc_url = f"{self.pds_url}/xrpc"

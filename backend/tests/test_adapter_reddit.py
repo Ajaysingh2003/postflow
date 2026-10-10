@@ -57,7 +57,7 @@ async def test_build_auth_url():
     res = await adapter.build_auth_url(
         workspace_id="ws_1",
         state="reddit_state_777",
-        redirect_uri="https://postflow.ai/api/v1/channels/oauth/callback",
+        redirect_uri="https://draftva.com/api/v1/channels/oauth/callback",
     )
     assert "https://www.reddit.com/api/v1/authorize" in res.auth_url
     assert "client_id=my_reddit_cid" in res.auth_url
@@ -74,7 +74,7 @@ async def test_handle_callback_success():
             return httpx.Response(
                 200, json={"is_flair_required": True, "title_text_max_length": 300}
             )
-        assert "postflow" in request.headers["User-Agent"]
+        assert "draftva" in request.headers["User-Agent"]
         if url_str == REDDIT_TOKEN_URL:
             return httpx.Response(
                 200,
@@ -274,7 +274,7 @@ async def test_publish_text_and_link_post(mock_reddit_account):
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == f"{REDDIT_OAUTH_API_BASE}/api/submit"
-        assert "postflow" in request.headers["User-Agent"]
+        assert "draftva" in request.headers["User-Agent"]
         import urllib.parse
 
         form_data = dict(urllib.parse.parse_qsl(request.content.decode("utf-8")))
@@ -302,7 +302,7 @@ async def test_publish_text_and_link_post(mock_reddit_account):
         MockVariant(
             {
                 "subreddit": "r/Python",
-                "title": "Release 1.0 of Postflow",
+                "title": "Release 1.0 of draftva",
                 "body": "Detailed notes on multi-platform scheduling",
                 "post_type": "text",
             }
@@ -322,14 +322,14 @@ async def test_publish_text_and_link_post(mock_reddit_account):
             {
                 "subreddit": "Python",
                 "title": "Documentation Link",
-                "url": "https://postflow.ai/docs",
+                "url": "https://draftva.com/docs",
                 "post_type": "link",
             }
         ),
     )
     assert res_link.success is True
     assert recorded_form_data[1]["kind"] == "link"
-    assert recorded_form_data[1]["url"] == "https://postflow.ai/docs"
+    assert recorded_form_data[1]["url"] == "https://draftva.com/docs"
 
 
 @pytest.mark.anyio

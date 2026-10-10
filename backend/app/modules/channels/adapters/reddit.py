@@ -33,7 +33,7 @@ REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 REDDIT_REVOKE_URL = "https://www.reddit.com/api/v1/revoke_token"
 REDDIT_OAUTH_API_BASE = "https://oauth.reddit.com"
 
-# Scopes needed for postflow: identity, submit, reading subreddits, flairs
+# Scopes needed for draftva: identity, submit, reading subreddits, flairs
 REDDIT_SCOPES = ["identity", "submit", "read", "mysubreddits", "flair"]
 
 
@@ -62,7 +62,7 @@ class RedditAdapter(RedditManagement):
             client_secret or settings.reddit_client_secret or "reddit_client_secret_placeholder"
         )
         self.user_agent = (
-            user_agent or settings.reddit_user_agent or "web:postflow:v0.1.0 (by /u/postflowapp)"
+            user_agent or settings.reddit_user_agent or "web:draftva:v0.1.0 (by /u/draftvaapp)"
         )
         self.redirect_base_url = settings.oauth_callback_url(self.platform)
         self._http_client = http_client

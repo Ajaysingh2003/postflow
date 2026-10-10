@@ -72,7 +72,7 @@ async def test_build_auth_url():
     res = await adapter.build_auth_url(
         workspace_id="ws_1",
         state="ig_state_777",
-        redirect_uri="https://postflow.ai/callback",
+        redirect_uri="https://draftva.com/callback",
     )
     assert res.auth_url.startswith("https://www.instagram.com/oauth/authorize?")
     assert "client_id=ig_app_id_123" in res.auth_url
@@ -85,7 +85,7 @@ async def test_handle_callback_discovers_authorized_instagram_account():
     from urllib.parse import parse_qs
 
     calls = []
-    redirect = "https://postflow.ai/api/v1/channels/instagram/callback"
+    redirect = "https://draftva.com/api/v1/channels/instagram/callback"
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
@@ -170,7 +170,7 @@ async def test_validate():
         MockVariant(
             {
                 "target_id": "17841405822383",
-                "image_url": "https://cdn.postflow.ai/photo.jpg",
+                "image_url": "https://cdn.draftva.ai/photo.jpg",
                 "caption": "Enjoying the sunset #goldenhour #photography",
             }
         )
@@ -178,7 +178,7 @@ async def test_validate():
     assert len(issues) == 0
 
     # Missing target account
-    issues = await adapter.validate(MockVariant({"image_url": "https://cdn.postflow.ai/photo.jpg"}))
+    issues = await adapter.validate(MockVariant({"image_url": "https://cdn.draftva.ai/photo.jpg"}))
     assert len(issues) == 1
     assert issues[0].code == "missing_instagram_target"
 
@@ -194,7 +194,7 @@ async def test_validate():
         MockVariant(
             {
                 "target_id": "17841405822383",
-                "image_url": "https://cdn.postflow.ai/photo.jpg",
+                "image_url": "https://cdn.draftva.ai/photo.jpg",
                 "caption": "A" * 2201,
             }
         )
@@ -208,7 +208,7 @@ async def test_validate():
         MockVariant(
             {
                 "target_id": "17841405822383",
-                "image_url": "https://cdn.postflow.ai/photo.jpg",
+                "image_url": "https://cdn.draftva.ai/photo.jpg",
                 "caption": f"Tags: {many_hashtags}",
             }
         )
@@ -257,7 +257,7 @@ async def test_publish_single_image(mock_instagram_account):
         MockVariant(
             {
                 "target_id": "17841405822383",
-                "image_url": "https://cdn.postflow.ai/images/product.jpg",
+                "image_url": "https://cdn.draftva.ai/images/product.jpg",
                 "caption": "Our new creation is now live!",
             }
         ),
@@ -269,7 +269,7 @@ async def test_publish_single_image(mock_instagram_account):
     assert result.external_post_id == "ig_media_id_777"
 
     # Verify Step 1 parameters
-    assert created_containers[0]["image_url"] == "https://cdn.postflow.ai/images/product.jpg"
+    assert created_containers[0]["image_url"] == "https://cdn.draftva.ai/images/product.jpg"
     assert created_containers[0]["caption"] == "Our new creation is now live!"
     assert created_containers[0]["access_token"] == "ig_user_token_abc"
 
@@ -309,7 +309,7 @@ async def test_publish_reel(mock_instagram_account):
         MockVariant(
             {
                 "target_id": "17841405822383",
-                "video_url": "https://cdn.postflow.ai/video/clip.mp4",
+                "video_url": "https://cdn.draftva.ai/video/clip.mp4",
                 "caption": "Short behind the scenes Reel #bts",
                 "media_type": "REELS",
             }
@@ -320,7 +320,7 @@ async def test_publish_reel(mock_instagram_account):
     assert result.external_post_id == "reel_media_id_222"
     assert result.external_post_id == "reel_media_id_222"
     assert recorded_container["media_type"] == "REELS"
-    assert recorded_container["video_url"] == "https://cdn.postflow.ai/video/clip.mp4"
+    assert recorded_container["video_url"] == "https://cdn.draftva.ai/video/clip.mp4"
 
 
 @pytest.mark.anyio
@@ -360,8 +360,8 @@ async def test_publish_carousel(mock_instagram_account):
             {
                 "target_id": "17841405822383",
                 "media_urls": [
-                    "https://cdn.postflow.ai/slide1.jpg",
-                    "https://cdn.postflow.ai/slide2.jpg",
+                    "https://cdn.draftva.ai/slide1.jpg",
+                    "https://cdn.draftva.ai/slide2.jpg",
                 ],
                 "caption": "Swipe left for carousel insights!",
             }

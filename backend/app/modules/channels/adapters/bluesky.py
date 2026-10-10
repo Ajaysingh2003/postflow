@@ -1,6 +1,8 @@
 import hashlib
 import logging
 import re
+import secrets
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -29,6 +31,31 @@ BSKY_APP_URL = "https://bsky.app"
 URL_REGEX = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 TAG_REGEX = regex.compile(r"(?<!\w)#([\p{L}\p{N}\p{M}_\-]+)")
 MENTION_REGEX = re.compile(r"@([a-zA-Z0-9\.\-]+)", re.UNICODE)
+
+TID_ALPHABET = "234567abcdefghijklmnopqrstuvwxyz"
+_last_tid_micros = 0
+_default_clock_id = secrets.randbelow(1024)
+
+
+def generate_tid(micros: int | None = None, clock_id: int | None = None) -> str:
+    """
+    Generate a valid 13-character base32-sortable TID string for AT Protocol record keys.
+    Structure (64 bits, top bit 0):
+    - 53 bits: timestamp in microseconds since Unix epoch
+    - 10 bits: clock identifier / sequence number (0-1023)
+    """
+    global _last_tid_micros
+    if micros is None:
+        now_micros = int(time.time() * 1_000_000)
+        if now_micros <= _last_tid_micros:
+            now_micros = _last_tid_micros + 1
+        _last_tid_micros = now_micros
+        micros = now_micros
+
+    c_id = _default_clock_id if clock_id is None else (clock_id & 0x3FF)
+    val = ((micros & 0x1FFFFFFFFFFFFF) << 10) | c_id
+    chars = [TID_ALPHABET[(val >> (5 * (12 - i))) & 0x1F] for i in range(13)]
+    return "".join(chars)
 
 
 def count_graphemes(text: str) -> int:
@@ -247,22 +274,34 @@ class BlueskyAdapter(BlueskyOAuth, BlueskyManagement):
         # Media embed support
         media_blobs = payload.get("media_blobs")
         if media_blobs:
+            images = []
+            for b in media_blobs:
+                img_data: dict[str, Any] = {
+                    "image": b.get("blob"),
+                    "alt": b.get("alt", ""),
+                }
+                ar = b.get("aspect_ratio") or b.get("aspectRatio")
+                if ar and isinstance(ar, dict) and ar.get("width") and ar.get("height"):
+                    img_data["aspectRatio"] = {
+                        "width": int(ar["width"]),
+                        "height": int(ar["height"]),
+                    }
+                images.append(img_data)
             record["embed"] = {
                 "$type": "app.bsky.embed.images",
-                "images": [
-                    {
-                        "image": b.get("blob"),
-                        "alt": b.get("alt", ""),
-                    }
-                    for b in media_blobs
-                ],
+                "images": images,
             }
 
         did = account.account_metadata.get("did") or account.external_account_id
+        idem_key = getattr(variant, "idempotency_key", None)
+        clock_id = (
+            int(hashlib.sha256(idem_key.encode()).hexdigest()[:4], 16) & 0x3FF
+            if idem_key
+            else None
+        )
+        rkey = payload.get("rkey") or generate_tid(clock_id=clock_id)
         body = {
-            "rkey": hashlib.sha256(variant.idempotency_key.encode()).hexdigest()[:48]
-            if getattr(variant, "idempotency_key", None)
-            else None,
+            "rkey": rkey,
             "repo": did,
             "collection": "app.bsky.feed.post",
             "record": record,

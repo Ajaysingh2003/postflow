@@ -49,7 +49,13 @@ def client_key():
     value = get_settings().bluesky_private_key
     if not value:
         return None
-    key = serialization.load_pem_private_key(value.replace("\\n", "\n").encode(), password=None)
+    raw = value.strip().replace("\\n", "\n")
+    if not raw.startswith("-----BEGIN"):
+        raw = f"-----BEGIN PRIVATE KEY-----\n{raw}\n-----END PRIVATE KEY-----"
+    try:
+        key = serialization.load_pem_private_key(raw.encode(), password=None)
+    except Exception as exc:
+        raise HTTPException(503, f"Invalid Bluesky private key: {exc}") from exc
     if not isinstance(key, ec.EllipticCurvePrivateKey) or not isinstance(key.curve, ec.SECP256R1):
         raise HTTPException(503, "Bluesky OAuth requires a P-256 private key")
     return key
@@ -67,10 +73,16 @@ class BlueskyOAuth:
             raise HTTPException(503, "Configure BLUESKY_CLIENT_ID to the public metadata URL")
         if not key and not get_settings().debug:
             raise HTTPException(503, "Configure BLUESKY_PRIVATE_KEY for confidential OAuth")
+        parts = urlsplit(self.client_id)
+        client_origin = (
+            f"{parts.scheme}://{parts.netloc}"
+            if parts.scheme and parts.netloc
+            else "https://draftva.com"
+        )
         metadata = {
             "client_id": self.client_id,
             "client_name": "draftva",
-            "client_uri": "https://draftva.com",
+            "client_uri": client_origin,
             "redirect_uris": [self.redirect_base_url],
             "scope": "atproto transition:generic",
             "grant_types": ["authorization_code", "refresh_token"],
@@ -251,7 +263,15 @@ class BlueskyOAuth:
                     "login_hint": identifier,
                 },
             )
-            par.raise_for_status()
+            if par.status_code >= 400:
+                logger.error("Bluesky PAR failed %s: %s", par.status_code, par.text)
+                detail = par.text
+                try:
+                    err = par.json()
+                    detail = err.get("error_description") or err.get("error") or par.text
+                except Exception:
+                    pass
+                raise HTTPException(par.status_code, f"Bluesky PAR failed: {detail}")
             record = opts.get("state_record")
             if not record or not opts.get("db"):
                 raise HTTPException(422, "OAuth state persistence is required")

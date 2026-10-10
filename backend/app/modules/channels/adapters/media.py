@@ -2,10 +2,13 @@
 
 import base64
 import io
+import logging
 from urllib.parse import quote
 
 from fastapi import HTTPException
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import get_settings
 from app.modules.channels.base import MediaProcessingPending
@@ -258,11 +261,33 @@ async def upload_bluesky(self, account, variant, assets):
     client = await self._get_client()
     blobs = list((variant.publish_state or {}).get("uploaded_media", []))
     try:
+        # Enrich any previously cached blobs with aspect_ratio if missing
+        for idx, (asset, alt) in enumerate(assets):
+            if idx < len(blobs) and "aspect_ratio" not in blobs[idx]:
+                w, h = getattr(asset, "width", None), getattr(asset, "height", None)
+                if not w or not h:
+                    try:
+                        d = service.read_ready(get_settings(), asset)
+                        with Image.open(io.BytesIO(d)) as img:
+                            w, h = img.size
+                    except (OSError, ValueError, HTTPException) as exc:
+                        logger.debug("Could not inspect cached asset dimensions: %s", exc)
+                if w and h:
+                    blobs[idx]["aspect_ratio"] = {"width": int(w), "height": int(h)}
+                    await save_state(variant, uploaded_media=blobs)
+
         for asset, alt in assets[len(blobs) :]:
             if not asset.content_type.startswith("image/"):
                 raise HTTPException(422, "Bluesky attachments must be images")
             data = service.read_ready(get_settings(), asset)
             content_type = asset.content_type
+            width, height = getattr(asset, "width", None), getattr(asset, "height", None)
+            if not width or not height:
+                try:
+                    with Image.open(io.BytesIO(data)) as img:
+                        width, height = img.size
+                except (OSError, ValueError) as exc:
+                    logger.debug("Could not inspect asset dimensions: %s", exc)
             if len(data) > 1_000_000:
                 with Image.open(io.BytesIO(data)) as image:
                     image = image.convert("RGB")
@@ -274,6 +299,7 @@ async def upload_bluesky(self, account, variant, assets):
                         output = io.BytesIO()
                         image.save(output, "JPEG", quality=80)
                     data, content_type = output.getvalue(), "image/jpeg"
+                    width, height = image.width, image.height
                 if len(data) > 1_000_000:
                     raise HTTPException(422, "Image cannot fit within the Bluesky blob limit")
             response = await self._oauth_request(
@@ -285,7 +311,10 @@ async def upload_bluesky(self, account, variant, assets):
                 headers={"Content-Type": content_type},
             )
             response.raise_for_status()
-            blobs.append({"blob": response.json()["blob"], "alt": alt})
+            blob_item = {"blob": response.json()["blob"], "alt": alt}
+            if width and height:
+                blob_item["aspect_ratio"] = {"width": int(width), "height": int(height)}
+            blobs.append(blob_item)
             await save_state(variant, uploaded_media=blobs)
         bind_uploaded_media(variant, assets, blobs, "media_blobs")
     finally:

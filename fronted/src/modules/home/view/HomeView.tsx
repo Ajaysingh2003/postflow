@@ -7,6 +7,7 @@ import FeatureSection from "../component/FeatureSection";
 import ContactUs from "../component/ContactUs";
 import GlobalDeliverySection from "../component/GlobalDeliverySection";
 import PricingSection from "@/modules/billing/component/PricingSection";
+import ReviewSection from "../component/ReviewSections";
 
 function HomeView() {
   return (
@@ -14,12 +15,12 @@ function HomeView() {
       
       <div className="max-w-[1280px] px-5 sm:px-7 lg:px-8   mx-auto">
       <HeroSection/>
+      <ReviewSection/>
       <FeatureSection/>
       <GlobalDeliverySection/>
       <PricingSection/>
       <ContactUs/>
       </div>
-
     </div>
   );
 }

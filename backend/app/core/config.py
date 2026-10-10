@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     instagram_app_secret: str | None = None
     facebook_redirect_uri: str | None = None
     instagram_redirect_uri: str | None = None
+    bluesky_redirect_uri: str | None = None
 
     # Billing
     dodo_api_key: str | None = None
@@ -127,10 +128,14 @@ class Settings(BaseSettings):
             "facebook": self.facebook_redirect_uri,
             "instagram": self.instagram_redirect_uri,
             "threads": self.threads_redirect_uri,
+            "bluesky": self.bluesky_redirect_uri,
         }.get(platform)
         if explicit_uri:
             # Registered provider URIs are exact values: do not normalize or format them.
             return explicit_uri
+        if platform == "bluesky" and self.bluesky_client_id and self.bluesky_client_id.startswith("http"):
+            parts = urlsplit(self.bluesky_client_id)
+            return f"{parts.scheme}://{parts.netloc}/api/v1/channels/bluesky/callback"
         return self.oauth_redirect_base_url.replace(
             "/oauth/callback", "/{platform}/callback"
         ).format(platform=platform)

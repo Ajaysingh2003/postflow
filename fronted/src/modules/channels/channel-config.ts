@@ -68,13 +68,13 @@ export const CHANNELS: ChannelConfig[] = [
     iconStyle: "bg-sky-50 text-sky-500 dark:bg-sky-950/30",
     features: ["Posts & threads", "Rich text"],
   },
-  {
-    id: "mastodon",
-    name: "Mastodon",
-    description: "Publish to your corner of the fediverse, on your terms.",
-    iconStyle: "bg-violet-50 text-violet-500 dark:bg-violet-950/30",
-    features: ["Your instance", "Content warnings"],
-  },
+  // {
+  //   id: "mastodon",
+  //   name: "Mastodon",
+  //   description: "Publish to your corner of the fediverse, on your terms.",
+  //   iconStyle: "bg-violet-50 text-violet-500 dark:bg-violet-950/30",
+  //   features: ["Your instance", "Content warnings"],
+  // },
   {
     id: "tiktok",
     name: "TikTok",

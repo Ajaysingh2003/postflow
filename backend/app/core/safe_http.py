@@ -39,7 +39,7 @@ class PublicTransport(httpx.AsyncHTTPTransport):
         # Connect to the validated address; retain Host and TLS identity. This
         # prevents a second DNS lookup from resolving to an internal address.
         request.headers["Host"] = request.url.netloc.decode()
-        request.extensions["sni_hostname"] = host.encode()
+        request.extensions["sni_hostname"] = host
         original_url = request.url
         request.url = request.url.copy_with(host=ip)
         try:

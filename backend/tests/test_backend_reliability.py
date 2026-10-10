@@ -1305,7 +1305,7 @@ async def test_public_transport_pins_connection_and_restores_original_url(monkey
     async def underlying(self, request):
         assert request.url.host == "8.8.8.8"
         assert request.headers["Host"] == "public.example"
-        assert request.extensions["sni_hostname"] == b"public.example"
+        assert request.extensions["sni_hostname"] in {"public.example", b"public.example"}
         return httpx.Response(200)
 
     monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", underlying)

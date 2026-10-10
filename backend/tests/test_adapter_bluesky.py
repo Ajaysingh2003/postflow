@@ -324,6 +324,48 @@ async def test_publish_success(mock_bsky_account):
 
 
 @pytest.mark.anyio
+async def test_publish_with_images_preserves_aspect_ratio(mock_bsky_account):
+    recorded_body: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        recorded_body.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "uri": "at://did:plc:abcdef1234567890/app.bsky.feed.post/3kxyz999999",
+                "cid": "bafyreibcd999999",
+            },
+        )
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    adapter = BlueskyAdapter(http_client=mock_client)
+
+    result = await adapter.publish(
+        mock_bsky_account,
+        MockVariant(
+            {
+                "text": "Post with uncropped photo",
+                "media_blobs": [
+                    {
+                        "blob": {"$type": "blob", "ref": {"$link": "blob1"}},
+                        "alt": "A full portrait photo",
+                        "aspect_ratio": {"width": 1080, "height": 1350},
+                    }
+                ],
+            }
+        ),
+    )
+
+    assert result.success is True
+    images = recorded_body["record"]["embed"]["images"]
+    assert len(images) == 1
+    assert images[0]["alt"] == "A full portrait photo"
+    assert images[0]["aspectRatio"] == {"width": 1080, "height": 1350}
+
+
+@pytest.mark.anyio
 async def test_delete_post(mock_bsky_account):
     def handler(request: httpx.Request) -> httpx.Response:
         assert f"{BSKY_PUBLIC_API}/com.atproto.repo.deleteRecord" in str(request.url)

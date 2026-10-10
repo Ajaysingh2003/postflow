@@ -4,10 +4,11 @@ import TopHeader from "../component/TopHeader";
 import HeroSection from "../component/HeroSection";
 import IntroVideo from "../component/IntroVideo";
 import FeatureSection from "../component/FeatureSection";
-import ContactUs from "../component/ContactUs";
+
 import GlobalDeliverySection from "../component/GlobalDeliverySection";
 import PricingSection from "@/modules/billing/component/PricingSection";
 import ReviewSection from "../component/ReviewSections";
+import FinalCta from "../component/FinalCta";
 
 function HomeView() {
   return (
@@ -19,7 +20,7 @@ function HomeView() {
       <FeatureSection/>
       <GlobalDeliverySection/>
       <PricingSection/>
-      <ContactUs/>
+      <FinalCta/>
       </div>
     </div>
   );

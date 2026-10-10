@@ -219,7 +219,7 @@ export function AgentsOverview({
         A little more connected.
       </h2>
       <p className="mt-2 max-w-lg text-[12px] leading-[1.65] text-muted-foreground">
-        Bring Postflow into your favorite AI assistant. Pick up a draft, plan
+        Bring Draftva into your favorite AI assistant. Pick up a draft, plan
         your next post, or find out what’s working.
       </p>
       <h3 className="mb-2 mt-6 text-[13px] font-semibold">Agents</h3>
@@ -304,11 +304,11 @@ export function AgentSetup({
       <div>
         <h2 className="font-heading text-[20px] font-semibold tracking-tight">Give your agent the context.</h2>
         <p className="mt-2 text-[12px] leading-[1.65] text-muted-foreground">
-          A ready-to-use skill for working with Postflow: finding the right
+          A ready-to-use skill for working with Draftva: finding the right
           account, adapting drafts, checking limits, and asking before
           publishing.
         </p>
-        <Step number={1} title="Connect Postflow first">
+        <Step number={1} title="Connect Draftva first">
           <p>
             The skill uses your MCP connection. Set that up in your agent before
             installing the guide.
@@ -326,7 +326,7 @@ export function AgentSetup({
           <p>
             Save this file as{" "}
             <code className="font-mono text-xs">postflow/SKILL.md</code> in your
-            agent’s skills folder. It contains your configured Postflow server
+            agent’s skills folder. It contains your configured Draftva server
             URL and no credentials.
           </p>
           <Button asChild className="primary-btn">
@@ -338,7 +338,7 @@ export function AgentSetup({
         </Step>
         <Step number={3} title="Make it part of your workflow">
           <p>
-            Ask your agent: “Use Postflow to help me turn this idea into a
+            Ask your agent: “Use Draftva to help me turn this idea into a
             draft.” The guide starts with drafts and asks for approval before
             scheduling or publishing.
           </p>
@@ -346,7 +346,7 @@ export function AgentSetup({
         <div className="mt-5">
           <CopyField
             value={postflowSkill(url)}
-            label="Postflow skill"
+            label="Draftva skill"
             multiline
           />
         </div>
@@ -355,11 +355,11 @@ export function AgentSetup({
   return (
     <div>
       <h2 className="font-heading text-[20px] font-semibold tracking-tight">
-        Connect {id === "mcp" ? "your assistant" : agent.name} to Postflow.
+        Connect {id === "mcp" ? "your assistant" : agent.name} to Draftva.
       </h2>
       <p className="mt-2 text-[12px] leading-[1.65] text-muted-foreground">
         Create drafts, plan your schedule and review post performance from your
-        conversations. Postflow’s writing assistant is available through the
+        conversations. Draftva’s writing assistant is available through the
         same connection.
       </p>
       {isCloud && isLocalEndpoint(url) && (
@@ -369,21 +369,21 @@ export function AgentSetup({
         >
           This is a local server address. {agent.name} needs a public HTTPS
           address to connect from the cloud. Use your deployed backend address
-          in Postflow’s configuration.
+          in Draftva’s configuration.
         </div>
       )}
-      <Step number={1} title="Copy your Postflow server URL">
+      <Step number={1} title="Copy your Draftva server URL">
         <CopyField value={url} label="Server URL" />
       </Step>
       <Step
         number={2}
-        title={isCloud ? `Add Postflow in ${agent.name}` : "Add the MCP server"}
+        title={isCloud ? `Add Draftva in ${agent.name}` : "Add the MCP server"}
       >
         {id === "claude" ? (
           <>
             <p>
               Open Claude’s connector settings and add a custom web connector
-              named Postflow. Paste your server URL, choose OAuth sign-in, and
+              named Draftva. Paste your server URL, choose OAuth sign-in, and
               select “Register automatically” for the OAuth client.
             </p>
             <Button asChild className="primary-btn">
@@ -401,7 +401,7 @@ export function AgentSetup({
           <>
             <p>
               Open ChatGPT’s settings and add a custom MCP connection in Apps or
-              Plugins. Use your Postflow server URL and OAuth authentication.
+              Plugins. Use your Draftva server URL and OAuth authentication.
               Custom connections may require developer mode or workspace admin
               access.
             </p>
@@ -435,7 +435,7 @@ export function AgentSetup({
           <>
             <p>
               {id === "cursor"
-                ? "Add Postflow to Cursor’s MCP settings using this configuration, then use the server’s sign-in action."
+                ? "Add Draftva to Cursor’s MCP settings using this configuration, then use the server’s sign-in action."
                 : "Add a remote Streamable HTTP server in your MCP client. Use OAuth to sign in; clients that support custom headers can also use a scoped token from Connection access."}
             </p>
             <CopyField
@@ -448,7 +448,7 @@ export function AgentSetup({
       </Step>
       <Step number={3} title="Approve your workspace access">
         <p>
-          Sign in to Postflow and review the requested permissions. Your
+          Sign in to Draftva and review the requested permissions. Your
           connection stays tied to the workspace you approve. Your social
           account passwords and access tokens are never shared with the agent.
         </p>
@@ -458,7 +458,7 @@ export function AgentSetup({
           “Show my connected accounts and help me draft my next post.”
         </div>
         <p>
-          For Postflow AI, ask the agent to list the channel’s writing features.
+          For Draftva AI, ask the agent to list the channel’s writing features.
           These runs use your plan’s AI allowance.
         </p>
       </Step>
@@ -483,7 +483,7 @@ export function AgentGuide() {
   return (
     <div>
       <h2 className="font-heading text-[20px] font-semibold tracking-tight">
-        Your Postflow workflow, in a conversation.
+        Your Draftva workflow, in a conversation.
       </h2>
       <p className="mt-2 text-[12px] leading-[1.65] text-muted-foreground">
         Connect once, then use these tools with your agent. Every connection
@@ -500,7 +500,7 @@ export function AgentGuide() {
           {
             icon: Sparkles,
             title: "Write with your channel in mind",
-            text: "Discover Postflow’s platform-specific writing features. Use them to refine a hook, write a thread or adapt a draft. These runs use your included AI credits.",
+            text: "Discover Draftva’s platform-specific writing features. Use them to refine a hook, write a thread or adapt a draft. These runs use your included AI credits.",
             prompt:
               "What writing features are available for my Threads account?",
           },
@@ -514,7 +514,7 @@ export function AgentGuide() {
           {
             icon: BookOpen,
             title: "Learn what resonates",
-            text: "Review analytics for the selected connected account, including posts published outside Postflow when the platform API returns them.",
+            text: "Review analytics for the selected connected account, including posts published outside Draftva when the platform API returns them.",
             prompt:
               "Which posts performed best on this account in the last 30 days?",
           },
@@ -534,7 +534,7 @@ export function AgentGuide() {
         ))}
       </div>
       <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-        MCP access itself doesn’t use AI credits. Calling Postflow’s writing
+        MCP access itself doesn’t use AI credits. Calling Draftva’s writing
         assistant does. Your agent provider may have its own usage limits.
       </p>
     </div>
@@ -809,7 +809,7 @@ function ConnectedDialog({
               (section === "connections"
                 ? "Connection access"
                 : section === "guide"
-                  ? "Postflow guide"
+                  ? "Draftva guide"
                   : "Agents & integrations")}
           </DialogTitle>
           <DialogDescription className="mt-0.5 text-[11px]">
@@ -952,7 +952,7 @@ export default function AgentsDialog({
                   Agents & integrations
                 </DialogTitle>
                 <DialogDescription className="sr-only">
-                  Connect your AI assistant to Postflow.
+                  Connect your AI assistant to Draftva.
                 </DialogDescription>
                 <AgentsSkeleton />
               </>

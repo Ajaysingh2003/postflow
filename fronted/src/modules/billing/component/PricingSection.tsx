@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import PricingPlan from "./PricingPlan";
-import PricingCardSection from "./PricingCardSection";
+import PricingCardSection, { PricingSkeleton } from "./PricingCardSection";
+import { Suspense } from "react";
 
 function PricingSection() {
   const [timeLine, setTimeLine] = useState<
@@ -47,7 +48,9 @@ function PricingSection() {
 
         {/* ── Pricing Cards Grid ── */}
         <div className="w-full h-full px-4 md:px-0">
-          <PricingCardSection timeLine={timeLine} />
+          <Suspense fallback={<PricingSkeleton />}>
+            <PricingCardSection timeLine={timeLine} />
+          </Suspense>
         </div>
       </div>
     </section>

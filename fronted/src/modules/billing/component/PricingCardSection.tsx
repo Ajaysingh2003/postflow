@@ -1,6 +1,6 @@
 import React from "react";
 import PlanCard from "./PlanCard";
-import { useQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import { BillingConfigResponse, FeatureItem } from "@/modules/types";
 
@@ -45,46 +45,30 @@ export function planFeatures(plan: PlanConfig): FeatureItem[] {
   ];
 }
 
+export function PricingSkeleton() {
+  return (
+    <div className="w-full h-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="h-96 rounded-2xl bg-muted/30 border border-border/60 animate-pulse"
+        />
+      ))}
+    </div>
+  );
+}
+
 function PricingCardSection({
   timeLine,
 }: {
   timeLine: "monthly" | "quarterly" | "annually";
 }) {
   const trpc = useTRPC();
-  const { data, isPending, isError, refetch } = useQuery(
+  const { data } = useSuspenseQuery(
     trpc.billing.getPlans.queryOptions(),
   );
 
   const plans = data as BillingConfigResponse;
-
-  if (isPending) {
-    return (
-      <div
-        role="status"
-        className="mx-auto max-w-6xl py-16 text-center text-sm text-muted-foreground"
-      >
-        Loading plans…
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div
-        role="alert"
-        className="mx-auto max-w-6xl py-16 text-center text-sm text-muted-foreground"
-      >
-        Plans are temporarily unavailable.{" "}
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          className="ml-1 font-medium text-foreground underline underline-offset-4"
-        >
-          Try again
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className="w-full h-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">

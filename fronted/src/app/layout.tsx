@@ -19,8 +19,8 @@ const fontContent = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Outlify | LinkedIn content, outreach & automation",
-  description: "Create AI-powered LinkedIn posts, build and schedule content, and grow relationships with personalised outreach and automation.",
+  title: "Draftva | Multi-channel social scheduling & writing platform",
+  description: "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

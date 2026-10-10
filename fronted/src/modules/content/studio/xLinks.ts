@@ -1,7 +1,7 @@
 import type { Payload } from "@/modules/studio/types";
 
 export const X_LINK_MESSAGE =
-  "Postflow doesn't publish links to X. Remove links from this version before publishing or scheduling.";
+  "Draftva doesn't publish links to X. Remove links from this version before publishing or scheduling.";
 
 // Mirrors the publisher's link check; attachment URLs and email addresses are excluded.
 const POST_LINK =

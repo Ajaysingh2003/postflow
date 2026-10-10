@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { ChevronDown, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
@@ -25,7 +25,7 @@ export default function LinkedInRefine({
   onOpen: () => void;
 }) {
   const trpc = useTRPC();
-  const scope = useQuery(trpc.workspace.current.queryOptions());
+  const scope = useSuspenseQuery(trpc.workspace.current.queryOptions());
   const { mutateAsync: runAssistant } = useMutation(trpc.studio.runFeature.mutationOptions());
   const button = useRef<HTMLButtonElement>(null);
   const current = useRef({ w, workspaceId: scope.data?.id });

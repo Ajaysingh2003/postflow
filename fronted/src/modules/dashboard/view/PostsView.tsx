@@ -182,7 +182,7 @@ function PostsWorkspace() {
           </p>
           <h1 className="text-3xl font-semibold tracking-tight">Posts</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Your Postflow posts, from first draft to published.
+            Your Draftva posts, from first draft to published.
           </p>
         </div>
         <Button
@@ -238,7 +238,7 @@ function OverviewCards({
           tab: "posts" as const,
           icon: CheckCheck,
           color: "text-emerald-600 bg-emerald-500/10",
-          hint: "Shared through Postflow",
+          hint: "Shared through Draftva",
         },
         {
           tab: "scheduled" as const,
@@ -430,7 +430,7 @@ function PostLibrary(props: FeedProps) {
         title={TAB_LABELS[tab]}
         subtitle={
           tab === "posts"
-            ? "Posts published through Postflow."
+            ? "Posts published through Draftva."
             : tab === "scheduled"
               ? "Upcoming posts and those currently publishing."
               : "Saved ideas and posts that need attention."
@@ -495,7 +495,7 @@ function EmptyPosts({
         {search
           ? "Try another phrase or browse the next page."
           : tab === "posts"
-            ? "Posts you publish through Postflow will appear here."
+            ? "Posts you publish through Draftva will appear here."
             : tab === "scheduled"
               ? "Choose a time in the editor to add a post to your schedule."
               : "Save a draft in the editor to continue writing later."}

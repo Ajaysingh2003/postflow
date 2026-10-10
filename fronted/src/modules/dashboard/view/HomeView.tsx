@@ -271,7 +271,7 @@ function EmptySection({
     published: {
       icon: CheckCheck,
       title: "No published posts yet",
-      text: "Posts you publish through Postflow will show up here.",
+      text: "Posts you publish through Draftva will show up here.",
       href: "/dashboard/content",
       action: "Open content",
     },
@@ -633,7 +633,7 @@ export function HomeOverview({
         >
           <SectionHeading
             title="Recently published"
-            subtitle="Latest posts shared through Postflow"
+            subtitle="Latest posts shared through Draftva"
           />
           {data.published.length ? (
             <div className={cn(panel, "divide-y divide-border/60")}>

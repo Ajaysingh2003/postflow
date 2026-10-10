@@ -33,7 +33,7 @@ function Heading({
   return (
     <header>
       <p className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-        Postflow workspace
+        Draftva workspace
       </p>
       <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
       <p className="mt-2 text-sm text-muted-foreground">{description}</p>

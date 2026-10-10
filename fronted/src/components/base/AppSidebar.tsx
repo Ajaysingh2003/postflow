@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
-import { RefObject, useEffect, useRef, useState } from "react";
+import { RefObject, Suspense, useEffect, useRef, useState } from "react";
 
 import {
   BarChart3,
@@ -41,7 +41,7 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import ProfileMenu from "./ProfileMenu";
 
@@ -305,7 +305,27 @@ const ACCOUNT_MENU = [
   { label: "Settings", href: ROUTES.settings, icon: Settings },
 ] as const;
 
-function SidebarUserFooter() {
+export function SidebarUserFooterSkeleton() {
+  const { open } = useSidebar();
+  return (
+    <div
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-xl p-2",
+        !open && "justify-center",
+      )}
+    >
+      <div className="size-8 shrink-0 rounded-full animate-pulse bg-neutral-200 dark:bg-white/10" />
+      {open && (
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="h-3.5 w-24 rounded animate-pulse bg-neutral-200 dark:bg-white/10" />
+          <div className="h-2.5 w-32 rounded animate-pulse bg-neutral-200 dark:bg-white/10" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SidebarUserFooterContent() {
   const { open } = useSidebar();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -314,7 +334,7 @@ function SidebarUserFooter() {
   useOutsideClick(dropdownRef, isOpen, () => setIsOpen(false));
 
   const trpc = useTRPC();
-  const { data } = useQuery(trpc.user.me.queryOptions());
+  const { data } = useSuspenseQuery(trpc.user.me.queryOptions());
   const logout = useMutation(
     trpc.user.logout.mutationOptions({
       onSuccess: () => {
@@ -406,6 +426,14 @@ function SidebarUserFooter() {
   );
 }
 
+function SidebarUserFooter() {
+  return (
+    <Suspense fallback={<SidebarUserFooterSkeleton />}>
+      <SidebarUserFooterContent />
+    </Suspense>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*                           PRIMARY CREATE ACTION                            */
 /* -------------------------------------------------------------------------- */
@@ -427,6 +455,7 @@ function CreateActionButton() {
 
   function handleNewPost() {
     if (NEW_DRAFT_PATHS.includes(window.location.pathname)) {
+      window.dispatchEvent(new Event("draftva:new-draft"));
       window.dispatchEvent(new Event("postflow:new-draft"));
     } else {
       router.push(ROUTES.compose);

@@ -112,11 +112,11 @@ export default function AuthVisualPanel() {
         {/* Brand */}
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-[15px] font-semibold text-white">
-            P
+            D
           </span>
 
           <span className="font-heading text-[17px] font-semibold tracking-[-0.02em] text-slate-900">
-            Postflow
+            Draftva
           </span>
         </div>
 

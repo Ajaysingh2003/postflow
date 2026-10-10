@@ -1,13 +1,27 @@
 
-import GeneratorView from '@/modules/content/studio/ContentStudio'
-import React from 'react'
+import React, { Suspense } from "react";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { getQueryClient, trpc } from "@/trpc/server";
+import GeneratorView from "@/modules/content/studio/ContentStudio";
+import ContentStudioSkeleton from "@/modules/content/studio/ContentStudioSkeleton";
 
-function page() {
+async function PreloadedGenerator() {
+  const queryClient = getQueryClient();
+  await Promise.all([
+    queryClient.prefetchQuery(trpc.workspace.current.queryOptions()),
+    queryClient.prefetchQuery(trpc.studio.accounts.queryOptions()),
+  ]);
   return (
-    // <section className='flex items-center justify-center w-full h-full'>
-      <GeneratorView/>
-    // </section>
-  )
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <GeneratorView />
+    </HydrationBoundary>
+  );
 }
 
-export default page
+export default function Page() {
+  return (
+    <Suspense fallback={<ContentStudioSkeleton />}>
+      <PreloadedGenerator />
+    </Suspense>
+  );
+}

@@ -90,7 +90,10 @@ import {
   type WritingSession,
 } from "./writingSession";
 import MediaPicker, { MediaPreview } from "./MediaPicker";
-import PublishedDetails, { PublishedMetrics } from "./PublishedDetails";
+import PublishedDetails, {
+  PublishedMetrics,
+  PublishedMetricsSkeleton,
+} from "./PublishedDetails";
 import { cn } from "@/lib/utils";
 import { editorMedia } from "../component/editor/socialEditorModel";
 
@@ -867,8 +870,12 @@ function AccountStudio({
   const requestFresh = useEffectEvent(fresh);
   useEffect(() => {
     const listener = () => requestFresh();
+    window.addEventListener("draftva:new-draft", listener);
     window.addEventListener("postflow:new-draft", listener);
-    return () => window.removeEventListener("postflow:new-draft", listener);
+    return () => {
+      window.removeEventListener("draftva:new-draft", listener);
+      window.removeEventListener("postflow:new-draft", listener);
+    };
   }, []);
   function duplicate() {
     const next = newDraft(account.platform);
@@ -1290,10 +1297,12 @@ function AccountStudio({
               </p>
             )}
             {published && latestVariant && (
-              <PublishedMetrics
-                key={`metrics:${latestVariant.id}`}
-                variant={latestVariant}
-              />
+              <Suspense fallback={<PublishedMetricsSkeleton />}>
+                <PublishedMetrics
+                  key={`metrics:${latestVariant.id}`}
+                  variant={latestVariant}
+                />
+              </Suspense>
             )}
             {latestVariant?.last_error && (
               <p className="text-[11px] leading-relaxed text-destructive py-2 whitespace-pre-wrap">

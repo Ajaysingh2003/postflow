@@ -39,7 +39,7 @@ function LoginView() {
           {/* Heading */}
           <div className=" space-y-1">
             <h2 className="text-2xl font-semibold tracking-tight text-foreground font-heading">
-              Sign in to Postflow
+              Sign in to Draftva
             </h2>
             <p className="text-[14px] font-medium text-muted-foreground">
               Don't have an account?{" "}

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Suspense, useRef, useState } from "react";
+import { useMutation, useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   ChevronDown,
@@ -56,12 +56,24 @@ type Props = {
   onBusy?: (busy: boolean) => void;
 };
 
-export default function PublicationDialog(props: Props) {
+function PublicationContentWrapper(
+  props: Props & { onBusy: (busy: boolean) => void },
+) {
   const trpc = useTRPC();
-  const [busy, setBusy] = useState(false);
-  const post = useQuery(
+  const { data: post } = useSuspenseQuery(
     trpc.studio.post.queryOptions({ id: props.source.post_id }),
   );
+  return (
+    <PublicationContent
+      {...props}
+      existing={post?.variants ?? []}
+      onBusy={props.onBusy}
+    />
+  );
+}
+
+export default function PublicationDialog(props: Props) {
+  const [busy, setBusy] = useState(false);
   return (
     <Dialog
       open
@@ -73,40 +85,33 @@ export default function PublicationDialog(props: Props) {
         showCloseButton={!busy}
         className="sm:max-w-[450px] max-h-[90svh] overflow-y-auto p-0 gap-0"
       >
-        {post.isPending ? (
-          <>
-            <DialogHeader className="sr-only">
-              <DialogTitle>Review post</DialogTitle>
-              <DialogDescription>
-                Loading publishing destinations.
-              </DialogDescription>
-            </DialogHeader>
-            <div
-              className="flex items-center justify-center gap-2 p-10"
-              role="status"
-            >
-              <Loader2 className="size-4 animate-spin" />
-              Loading destinations…
-            </div>
-          </>
-        ) : post.error ? (
-          <div className="p-6 space-y-3">
-            <DialogTitle>Could not load this post</DialogTitle>
-            <DialogDescription>{post.error.message}</DialogDescription>
-            <Button variant="outline" onClick={() => void post.refetch()}>
-              Try again
-            </Button>
-          </div>
-        ) : (
-          <PublicationContent
+        <Suspense
+          fallback={
+            <>
+              <DialogHeader className="sr-only">
+                <DialogTitle>Review post</DialogTitle>
+                <DialogDescription>
+                  Loading publishing destinations.
+                </DialogDescription>
+              </DialogHeader>
+              <div
+                className="flex items-center justify-center gap-2 p-10"
+                role="status"
+              >
+                <Loader2 className="size-4 animate-spin" />
+                Loading destinations…
+              </div>
+            </>
+          }
+        >
+          <PublicationContentWrapper
             {...props}
-            existing={post.data?.variants ?? []}
             onBusy={(value) => {
               setBusy(value);
               props.onBusy?.(value);
             }}
           />
-        )}
+        </Suspense>
       </DialogContent>
     </Dialog>
   );

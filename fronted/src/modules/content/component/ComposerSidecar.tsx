@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { SOURCE_ACCEPT } from "../assets";
 import type { SourceAsset } from "../assets";
 import { useAssetQueue } from "../hooks/useAssetQueue";
 import { AssetCards, PendingAssetCards } from "./AssetCards";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+
 import {
   AlertCircle,
   ArrowUp,
@@ -126,7 +127,35 @@ function StatusRow({ label }: { label: string }) {
   );
 }
 
-export function ComposerSidecar({
+export function ComposerSidecarSkeleton({ onClose }: { onClose?: () => void }) {
+  return (
+    <aside className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#fafafa] text-[15px] text-[#23272c] antialiased">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b-[0.5px] border-black/10 px-3.5">
+        <div className="flex items-center gap-2">
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close assistant"
+              className={ICON_BUTTON}
+            >
+              <X className="size-[18px] stroke-[1.6]" />
+            </button>
+          )}
+          <h2 className="font-heading text-[16px] font-semibold tracking-tight text-neutral-900">
+            Assistant
+          </h2>
+        </div>
+      </header>
+      <div className="flex-1 space-y-4 p-4">
+        <div className="h-20 animate-pulse rounded-xl bg-neutral-200/60 dark:bg-white/10" />
+        <div className="h-40 animate-pulse rounded-xl bg-neutral-200/60 dark:bg-white/10" />
+      </div>
+    </aside>
+  );
+}
+
+function ComposerSidecarContent({
   onClose,
   styleOwner,
 }: {
@@ -143,7 +172,7 @@ export function ComposerSidecar({
   const state = sidecarBridge
     ? { ...composerState, content: sidecarBridge.content }
     : composerState;
-  const workspace = useQuery(trpc.workspace.current.queryOptions());
+  const workspace = useSuspenseQuery(trpc.workspace.current.queryOptions());
   const allowance = useAiAllowance(workspace.data?.id);
   const refreshUsage = useRefreshUsage();
   const account = useQuery(
@@ -164,7 +193,7 @@ export function ComposerSidecar({
     account.data?.public_identifier ||
     workspace.data?.name ||
     "Workspace";
-  const query = useQuery(trpc.content.getCommands.queryOptions());
+  const query = useSuspenseQuery(trpc.content.getCommands.queryOptions());
   const scope =
     sidecarBridge?.scope ??
     `${workspace.data?.id ?? "loading"}:${state.localId}:${account.data?.id ?? "no-account"}`;
@@ -698,5 +727,19 @@ export function ComposerSidecar({
         command={editing}
       />
     </aside>
+  );
+}
+
+export function ComposerSidecar({
+  onClose,
+  styleOwner,
+}: {
+  onClose?: () => void;
+  styleOwner?: string;
+}) {
+  return (
+    <Suspense fallback={<ComposerSidecarSkeleton onClose={onClose} />}>
+      <ComposerSidecarContent onClose={onClose} styleOwner={styleOwner} />
+    </Suspense>
   );
 }

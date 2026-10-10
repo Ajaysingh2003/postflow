@@ -1,11 +1,11 @@
 "use client";
 
-import React, { use, useState } from "react";
+import React, { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useMutation,
   useQueryClient,
-  useQuery,
+  useSuspenseQuery,
 } from "@tanstack/react-query";
 import {
   Check,
@@ -46,7 +46,24 @@ interface ProfileType {
   isActive?: boolean;
 }
 
-export default function ProfileMenu() {
+export function ProfileMenuSkeleton() {
+  const sidebar = useSidebar();
+  return (
+    <div className="flex h-12 w-full items-center justify-between gap-2.5 rounded-xl py-1.5 text-xs">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <div className="size-8 shrink-0 rounded-xl bg-neutral-200 dark:bg-white/10 animate-pulse" />
+        {sidebar.open && (
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-left">
+            <div className="h-3.5 w-24 rounded bg-neutral-200 dark:bg-white/10 animate-pulse" />
+            <div className="h-2.5 w-28 rounded bg-neutral-200 dark:bg-white/10 animate-pulse" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProfileMenuContent() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
@@ -59,12 +76,10 @@ export default function ProfileMenu() {
   const trpc = useTRPC();
 
   // Queries
-  const { data: profile } = useQuery(trpc.user.profile.queryOptions());
-  const { data: workspaces } = useQuery(
-    { ...trpc.workspace.list.queryOptions(), enabled: !!profile },
-  );
-  const { data: currentWorkspace } = useQuery(
-    { ...trpc.workspace.current.queryOptions(), enabled: !!profile },
+  const { data: profile } = useSuspenseQuery(trpc.user.profile.queryOptions());
+  const { data: workspaces } = useSuspenseQuery(trpc.workspace.list.queryOptions());
+  const { data: currentWorkspace } = useSuspenseQuery(
+    trpc.workspace.current.queryOptions(),
   );
 
   const profileData = profile as ProfileType;
@@ -323,5 +338,13 @@ export default function ProfileMenu() {
 
       <InviteMemberBox open={openInvite} setOpen={setOpenInvite} />
     </>
+  );
+}
+
+export default function ProfileMenu() {
+  return (
+    <Suspense fallback={<ProfileMenuSkeleton />}>
+      <ProfileMenuContent />
+    </Suspense>
   );
 }

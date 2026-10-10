@@ -11,7 +11,7 @@ import {
   Dispatch,
   SetStateAction,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import {
   composerSettingsSchema,
@@ -106,8 +106,11 @@ export function ComposerProvider({
   initialData?: Partial<ComposerState>;
 }) {
   const trpc = useTRPC();
-  const workspace = useQuery(trpc.workspace.current.queryOptions());
+  const workspace = useSuspenseQuery(trpc.workspace.current.queryOptions());
   const storageKey = workspace.data
+    ? `draftva_draft:${workspace.data.id}`
+    : null;
+  const legacyStorageKey = workspace.data
     ? `outlify_draft:${workspace.data.id}`
     : null;
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
@@ -129,7 +132,12 @@ export function ComposerProvider({
     let restored = fresh();
     try {
       const saved =
-        sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey);
+        sessionStorage.getItem(storageKey) ||
+        localStorage.getItem(storageKey) ||
+        (legacyStorageKey
+          ? sessionStorage.getItem(legacyStorageKey) ||
+            localStorage.getItem(legacyStorageKey)
+          : null);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (typeof parsed.content === "string")

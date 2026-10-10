@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
   Bookmark,
   Eye,
@@ -27,20 +27,32 @@ import { cn } from "@/lib/utils";
 import type { Variant } from "@/modules/studio/types";
 import { draftText, profileFor } from "./model";
 
+export function PublishedMetricsSkeleton() {
+  return (
+    <div className="text-center text-muted-foreground mb-10">
+      <div className="h-3 w-28 mx-auto mb-5 rounded bg-muted/40 animate-pulse" />
+      <div className="flex items-center justify-center gap-5 flex-wrap">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-5 w-20 rounded bg-muted/30 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function PublishedMetrics({ variant }: { variant: Variant }) {
   const trpc = useTRPC();
-  const metrics = useQuery(
+  const { data, refetch } = useSuspenseQuery(
     trpc.studio.metrics.queryOptions({ id: variant.id }),
   );
   const sync = useMutation(
     trpc.studio.syncMetrics.mutationOptions({
       onSuccess: () => {
-        void metrics.refetch();
+        void refetch();
       },
       onError: (error) => toast.error(error.message),
     }),
   );
-  const data = metrics.data;
   const unavailable = Array.isArray(data?.extras?.unavailable_metrics)
     ? (data.extras.unavailable_metrics as string[])
     : [];
@@ -117,11 +129,9 @@ export function PublishedMetrics({ variant }: { variant: Variant }) {
         </button>
       </div>
       <small className="block mt-4 text-[9px] text-muted-foreground">
-        {metrics.error
-          ? metrics.error.message
-          : data?.latest_snapshot_at
-            ? `Updated ${new Date(data.latest_snapshot_at).toLocaleString()}`
-            : "Metrics will appear after the platform’s first successful sync."}
+        {data?.latest_snapshot_at
+          ? `Updated ${new Date(data.latest_snapshot_at).toLocaleString()}`
+          : "Metrics will appear after the platform’s first successful sync."}
       </small>
     </div>
   );

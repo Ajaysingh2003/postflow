@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import {
   CalendarDays,
@@ -63,7 +63,7 @@ export default function PostActions({
 }) {
   const trpc = useTRPC();
   const client = useQueryClient();
-  const scope = useQuery(trpc.workspace.current.queryOptions());
+  const scope = useSuspenseQuery(trpc.workspace.current.queryOptions());
   const [snapshot, setSnapshot] = useState<PublicationSnapshot | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -95,7 +95,7 @@ export default function PostActions({
       composer: structuredClone(w.state.composer),
       localId: w.state.localId,
       workspaceId: scope.data.id,
-      storageKey: `outlify_publication:${scope.data.id}:${w.state.localId}`,
+      storageKey: `draftva_publication:${scope.data.id}:${w.state.localId}`,
     });
     void w.accounts.refetch();
   }

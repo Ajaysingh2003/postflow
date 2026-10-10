@@ -805,7 +805,7 @@ function AnalyticsDashboardContent({ accounts }: { accounts: Account[] }) {
 
           <p className="mt-1 text-xs text-muted-foreground/80">
             All posts from the selected account, including those published
-            outside Postflow. The date range filters posts by publish date;
+            outside Draftva. The date range filters posts by publish date;
             metrics are their latest reported totals.
           </p>
         </div>

@@ -1,8 +1,11 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getAccessToken } from "@/lib/http-error";
 import { getQueryClient, trpc } from "@/trpc/server";
-import AgentAuthorization from "@/modules/agents/AgentAuthorization";
+import AgentAuthorization, {
+  AgentAuthSkeleton,
+} from "@/modules/agents/AgentAuthorization";
 
 export default async function Page({
   searchParams,
@@ -25,7 +28,9 @@ export default async function Page({
   ]);
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <AgentAuthorization request={request} />
+      <Suspense fallback={<AgentAuthSkeleton />}>
+        <AgentAuthorization request={request} />
+      </Suspense>
     </HydrationBoundary>
   );
 }

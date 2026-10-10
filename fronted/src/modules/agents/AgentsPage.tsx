@@ -10,7 +10,7 @@ export default function AgentsPage() {
       <div className="p-8">
         <h1 className="font-heading text-2xl">Agents & integrations</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Connect your favorite AI assistant to Postflow.
+          Connect your favorite AI assistant to Draftva.
         </p>
       </div>
       <AgentsDialog

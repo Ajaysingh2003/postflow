@@ -111,7 +111,7 @@ export default function VerifyOTPForm({
   const isResendDisabled = resend.isPending || cooldown > 0 || !email.trim();
 
   return (
-    <div className="w-full   flex items-center justify-center ">
+    <div className="w-full   zflex items-center justify-center ">
       <div className=" space-y-4">
 
       

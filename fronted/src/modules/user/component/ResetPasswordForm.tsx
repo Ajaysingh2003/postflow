@@ -54,7 +54,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
       <Button
         type="submit"
         disabled={reset.isPending || !token}
-        className="w-full rounded-md font-medium"
+        className="w-full primary-btn rounded-md font-medium"
       >
         {reset.isPending && (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />

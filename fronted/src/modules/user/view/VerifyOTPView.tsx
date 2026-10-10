@@ -12,43 +12,49 @@ interface VerifyOTPViewProps {
 
 export default function VerifyOTPView({ email, token }: VerifyOTPViewProps) {
   return (
-    <div className="flex min-h-[calc(100dvh-1rem)] w-full flex-col items-center justify-center p-4">
-      <div className="flex w-full max-w-sm  flex-col items-center justify-center gap-4">
-        {/* Verification Icon Badge */}
-        <div className="flex size-11 items-center justify-center rounded-sm border border-border bg-muted/40 text-foreground shadow-xs">
-          <ShieldCheck className="size-5.5 text-foreground" />
-        </div>
+    <div className="flex min-h-[calc(100dvh-4rem)] w-full flex-col">
+      <div className="flex h-full flex-1 w-full items-center justify-center p-4">
+        <div className="card-shadow relative z-10 mt-4 block w-full rounded-lg bg-background p-6 card sm:w-98">
+          
 
-        {/* Header */}
-        <div className="text-center space-y-1.5">
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground font-heading">
-            Verify your email
-          </h2>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Enter the 6-digit confirmation code sent to
-          </p>
-          {email ? (
-            <span className="inline-block rounded-sm border border-border/80 bg-muted/30 px-2 py-0.5  text-xs font-medium text-foreground">
-              {email}
-            </span>
-          ) : (
-            <p className="text-xs text-muted-foreground">your inbox</p>
-          )}
-        </div>
+          {/* Verification Badge & Header */}
+          <div className="space-y-1.5">
+            
 
-        {/* Form Container */}
-        <div className="w-full">
-          <VerifyOTPForm email={email ?? ""} token={token} />
-        </div>
+            <h2 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
+              Verify your email
+            </h2>
+            <p className="text-[14px] font-medium leading-relaxed text-muted-foreground">
+              Enter the 6-digit confirmation code sent to{" "}
+              {email ? (
+                <span className="font-medium text-foreground break-all">
+                  {email}
+                </span>
+              ) : (
+                "your inbox"
+              )}
+              .
+            </p>
+          </div>
 
-        {/* Navigation Escape Hatch */}
-        <Link
-          href="/login"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline underline-offset-4"
-        >
-          <ArrowLeft className="size-3.5" />
-          Back to sign in
-        </Link>
+          {/* Primary Form */}
+          <div className="mt-6 w-full">
+            <VerifyOTPForm email={email ?? ""} token={token} />
+          </div>
+
+          {/* Footer Navigation */}
+          <div className="mt-6 border-t border-border/60 pt-4 text-center">
+            <p className="text-xs text-muted-foreground">
+              Didn&apos;t receive a code or used the wrong address?{" "}
+              <Link
+                href="/register"
+                className="font-medium text-brand-primary underline-offset-4 hover:underline"
+              >
+                Change email
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

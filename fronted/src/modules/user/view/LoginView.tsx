@@ -34,8 +34,8 @@ function LoginView() {
 
   return (
     <div className="flex   min-h-[calc(100dvh-4rem)] w-full flex-col">
-      <div className="flex flex-1 w-full items-center justify-center p-4">
-        <div className="flexz card-shadow block bg-background p-6 mt-4 card w-full sm:w-98 relative z-10  rounded-lg  flex-col items-center justify-center ">
+      <div className="flex  h-full flex-1 w-full items-center justify-center p-4">
+        <div className="card-shadow block bg-background p-6 mt-4 card w-full sm:w-98 relative z-10  rounded-lg  flex-col items-center justify-center ">
           {/* Heading */}
           <div className=" space-y-1">
             <h2 className="text-2xl font-semibold tracking-tight text-foreground font-heading">
@@ -44,7 +44,7 @@ function LoginView() {
             <p className="text-[14px] font-medium text-muted-foreground">
               Don't have an account?{" "}
               <a
-                href="/auth/register"
+                href="/register"
                 className="font-medium text-brand-primary underline-offset-4 hover:underline"
               >
                 Sign up

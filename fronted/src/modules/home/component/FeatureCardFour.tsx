@@ -83,7 +83,7 @@ export function FeatureCardFour() {
   };
 
   return (
-    <BentoCard className="relative flex flex-col overflow-hidden bg-background">
+    <BentoCard className="relative !h-[460px] sm:!h-[480px] flex flex-col overflow-hidden bg-background">
       <BentoHeader
         icon={Code2}
         badge="Developer first"

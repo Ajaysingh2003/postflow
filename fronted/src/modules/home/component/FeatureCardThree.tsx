@@ -1,477 +1,1205 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { AnimatePresence, animate, motion, useInView, useReducedMotion } from "framer-motion";
-import { ArrowUpRight, BarChart3, Monitor, Smartphone, Tv } from "lucide-react";
-import { BentoCard, BentoHeader, CardBottomFade } from "./FeatureSection";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
-const BRAND = "#B3E61D";
-// Pure lime is ~1.4:1 on white, fine for fills but not for lines or text
-const OLIVE = "#5c7a0b";
-const LINE_COLOR = "#6f8f0f";
-const ease = [0.16, 1, 0.3, 1] as const;
-const spring = { type: "spring", stiffness: 520, damping: 42, mass: 0.6 } as const;
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+} from "framer-motion";
 
-/* Share of viewers still watching a 12:00 video, sampled every 30s (averages ~56%) */
-const RETENTION = [100, 88, 80, 75, 71, 68, 65, 63, 61, 60, 58, 56, 60, 58, 50, 48, 45, 43, 40, 38, 36, 34, 33, 31, 30];
-const STEP = 30;
-const PLAYS = 124_800;
-const AVG = 56;
-const START_POINT = 12; // the replay bump at 6:00
+import {
+  ArrowUpRight,
+  BarChart3,
+  ChevronDown,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 
-const INSIGHTS = [
-  { at: 1, label: "Biggest drop", time: "0:30" },
-  { at: 12, label: "Replay spike", time: "6:00" },
-];
+import { BentoCard } from "./FeatureSection";
 
-const KPIS = [
-  { label: "Plays", to: 124.8, format: (v: number) => `${v.toFixed(1)}K`, delta: "+14.8%", up: true },
-  {
-    label: "Avg. watch",
-    to: 402,
-    format: (v: number) => `${Math.floor(v / 60)}m ${String(Math.floor(v % 60)).padStart(2, "0")}s`,
-    delta: "+9.2%",
-    up: true,
-  },
-  { label: "Buffering", to: 0.02, format: (v: number) => `${v.toFixed(2)}%`, delta: "Healthy", up: false },
-];
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
 
-const LOCATIONS = [
-  { code: "US", name: "United States", value: 34 },
-  { code: "DE", name: "Germany", value: 16 },
-  { code: "IN", name: "India", value: 12 },
-  { code: "NL", name: "Netherlands", value: 11 },
-  { code: "JP", name: "Japan", value: 8 },
-];
+type Platform = "all" | "x" | "linkedin" | "threads";
+type DateRange = "7D" | "30D";
 
-const DEVICES = [
-  { label: "Desktop", value: 46, icon: Monitor, color: BRAND },
-  { label: "Mobile", value: 43, icon: Smartphone, color: "#11120e" },
-  { label: "TV", value: 11, icon: Tv, color: "rgba(17,18,14,0.25)" },
-];
-
-/* ------------------------------ chart geometry ----------------------------- */
-
-const n = RETENTION.length;
-const points = RETENTION.map((v, i): [number, number] => [(i / (n - 1)) * 100, 100 - v]);
-
-// Catmull-Rom to cubic Bézier, so the curve passes through every sample
-function smooth(p: [number, number][]) {
-  const f = (v: number) => v.toFixed(2);
-  let d = `M${f(p[0][0])} ${f(p[0][1])}`;
-  for (let i = 0; i < p.length - 1; i++) {
-    const p0 = p[i - 1] ?? p[i];
-    const p1 = p[i];
-    const p2 = p[i + 1];
-    const p3 = p[i + 2] ?? p2;
-    d += ` C${f(p1[0] + (p2[0] - p0[0]) / 6)} ${f(p1[1] + (p2[1] - p0[1]) / 6)} ${f(p2[0] - (p3[0] - p1[0]) / 6)} ${f(p2[1] - (p3[1] - p1[1]) / 6)} ${f(p2[0])} ${f(p2[1])}`;
-  }
-  return d;
-}
-const LINE = smooth(points);
-const AREA = `${LINE} L100 100 L0 100 Z`;
-
-const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
-const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-
-/* ---------------------------------- flags ---------------------------------- */
-
-const FLAGS: Record<string, React.ReactNode> = {
-  US: (
-    <>
-      <rect width="30" height="20" fill="#fff" />
-      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-        <rect key={i} y={i * 3.077} width="30" height="1.538" fill="#B22234" />
-      ))}
-      <rect width="12.5" height="10.77" fill="#3C3B6E" />
-      {[0, 1, 2].flatMap((r) =>
-        [0, 1, 2, 3].map((c) => <circle key={`${r}${c}`} cx={2.2 + c * 2.9} cy={2.2 + r * 3} r="0.55" fill="#fff" />)
-      )}
-    </>
-  ),
-  DE: (
-    <>
-      <rect width="30" height="6.67" fill="#000" />
-      <rect y="6.67" width="30" height="6.67" fill="#DD0000" />
-      <rect y="13.33" width="30" height="6.67" fill="#FFCE00" />
-    </>
-  ),
-  NL: (
-    <>
-      <rect width="30" height="6.67" fill="#AE1C28" />
-      <rect y="6.67" width="30" height="6.67" fill="#fff" />
-      <rect y="13.33" width="30" height="6.67" fill="#21468B" />
-    </>
-  ),
-  IN: (
-    <>
-      <rect width="30" height="6.67" fill="#FF9933" />
-      <rect y="6.67" width="30" height="6.67" fill="#fff" />
-      <rect y="13.33" width="30" height="6.67" fill="#138808" />
-      <circle cx="15" cy="10" r="2.3" fill="none" stroke="#000080" strokeWidth="0.5" />
-      <circle cx="15" cy="10" r="0.5" fill="#000080" />
-    </>
-  ),
-  JP: (
-    <>
-      <rect width="30" height="20" fill="#fff" />
-      <circle cx="15" cy="10" r="6" fill="#BC002D" />
-    </>
-  ),
+type MetricData = {
+  impressions: string;
+  engagement: string;
+  followers: string;
+  growth: string;
+  topPost: string;
+  topEngagement: string;
 };
 
-function Flag({ code, name }: { code: string; name: string }) {
+type Point = {
+  x: number;
+  y: number;
+  value: number;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Platform configuration                                                     */
+/* -------------------------------------------------------------------------- */
+
+const PLATFORMS: {
+  id: Platform;
+  label: string;
+  short: string;
+}[] = [
+  {
+    id: "all",
+    label: "All platforms",
+    short: "All",
+  },
+  {
+    id: "x",
+    label: "X",
+    short: "𝕏",
+  },
+  {
+    id: "linkedin",
+    label: "LinkedIn",
+    short: "in",
+  },
+  {
+    id: "threads",
+    label: "Threads",
+    short: "@",
+  },
+];
+
+/* -------------------------------------------------------------------------- */
+/* Demo analytics data                                                        */
+/* -------------------------------------------------------------------------- */
+
+const CHART_DATA: Record<
+  Platform,
+  Record<DateRange, number[]>
+> = {
+  all: {
+    "7D": [18, 23, 22, 26, 24, 33, 41],
+    "30D": [
+      15, 18, 17, 19, 22, 21, 25,
+      23, 26, 29, 27, 33, 36, 41,
+    ],
+  },
+
+  x: {
+    "7D": [7, 9, 8, 11, 10, 12, 15],
+    "30D": [
+      5, 7, 6, 8, 7, 9, 8,
+      10, 9, 12, 10, 13, 12, 15,
+    ],
+  },
+
+  linkedin: {
+    "7D": [9, 11, 12, 13, 11, 17, 20],
+    "30D": [
+      8, 9, 10, 9, 12, 11, 14,
+      12, 16, 15, 14, 18, 19, 20,
+    ],
+  },
+
+  threads: {
+    "7D": [2, 3, 2, 2, 3, 4, 6],
+    "30D": [
+      2, 2, 3, 2, 3, 3, 3,
+      4, 3, 4, 5, 4, 5, 6,
+    ],
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/* KPI data                                                                   */
+/* -------------------------------------------------------------------------- */
+
+const METRICS: Record<
+  Platform,
+  Record<DateRange, MetricData>
+> = {
+  all: {
+    "7D": {
+      impressions: "187.4K",
+      engagement: "6.8%",
+      followers: "+624",
+      growth: "+18.6%",
+      topPost: "Why consistency beats going viral",
+      topEngagement: "9.2%",
+    },
+    "30D": {
+      impressions: "812.6K",
+      engagement: "6.4%",
+      followers: "+2,418",
+      growth: "+24.3%",
+      topPost: "Lessons from building in public",
+      topEngagement: "11.4%",
+    },
+  },
+
+  x: {
+    "7D": {
+      impressions: "68.2K",
+      engagement: "5.9%",
+      followers: "+218",
+      growth: "+12.8%",
+      topPost: "Build something people come back to",
+      topEngagement: "8.7%",
+    },
+    "30D": {
+      impressions: "294.8K",
+      engagement: "5.6%",
+      followers: "+842",
+      growth: "+19.2%",
+      topPost: "A lesson from shipping my SaaS",
+      topEngagement: "10.2%",
+    },
+  },
+
+  linkedin: {
+    "7D": {
+      impressions: "94.6K",
+      engagement: "7.4%",
+      followers: "+316",
+      growth: "+22.4%",
+      topPost: "Why consistency beats going viral",
+      topEngagement: "12.8%",
+    },
+    "30D": {
+      impressions: "408.5K",
+      engagement: "7.1%",
+      followers: "+1,264",
+      growth: "+28.6%",
+      topPost: "What building products taught me",
+      topEngagement: "13.6%",
+    },
+  },
+
+  threads: {
+    "7D": {
+      impressions: "24.6K",
+      engagement: "6.2%",
+      followers: "+90",
+      growth: "+16.8%",
+      topPost: "Small improvements compound",
+      topEngagement: "8.4%",
+    },
+    "30D": {
+      impressions: "109.3K",
+      engagement: "6.1%",
+      followers: "+312",
+      growth: "+21.7%",
+      topPost: "The best ideas start as simple notes",
+      topEngagement: "9.6%",
+    },
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/* Constants                                                                  */
+/* -------------------------------------------------------------------------- */
+
+const ROTATE_INTERVAL = 8000;
+const CURSOR_INTERVAL = 1600;
+
+const CHART_HEIGHT = 100;
+
+const CHART_LABELS: Record<DateRange, string[]> = {
+  "7D": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  "30D": ["Day 1", "Day 7", "Day 14", "Day 21", "Day 30"],
+};
+
+const ease = [0.22, 1, 0.36, 1] as const;
+
+/* -------------------------------------------------------------------------- */
+/* Chart helpers                                                              */
+/* -------------------------------------------------------------------------- */
+
+function getPoints(values: number[]): Point[] {
+  const max = Math.max(...values, 1) * 1.18;
+
+  return values.map((value, index) => ({
+    x:
+      values.length === 1
+        ? 50
+        : (index / (values.length - 1)) * 100,
+
+    y: 86 - (value / max) * 72,
+
+    value,
+  }));
+}
+
+function createSmoothPath(points: Point[]) {
+  if (!points.length) return "";
+
+  let path = `M ${points[0].x} ${points[0].y}`;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const current = points[i];
+    const next = points[i + 1];
+
+    const middleX = (current.x + next.x) / 2;
+
+    path += `
+      C ${middleX} ${current.y},
+        ${middleX} ${next.y},
+        ${next.x} ${next.y}
+    `;
+  }
+
+  return path;
+}
+
+function formatChartValue(value: number) {
+  return `${value.toFixed(1).replace(".0", "")}K`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Platform symbol                                                            */
+/* -------------------------------------------------------------------------- */
+
+function PlatformSymbol({
+  platform,
+}: {
+  platform: Platform;
+}) {
+  if (platform === "all") {
+    return (
+      <BarChart3 className="size-3.5" />
+    );
+  }
+
+  if (platform === "linkedin") {
+    return (
+      <span className="text-[11px] font-bold leading-none">
+        in
+      </span>
+    );
+  }
+
+  if (platform === "threads") {
+    return (
+      <span className="text-[14px] font-semibold leading-none">
+        @
+      </span>
+    );
+  }
+
   return (
-    <svg
-      viewBox="0 0 30 20"
-      role="img"
-      aria-label={name}
-      className="h-[14px] w-[21px] shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.12)]"
-    >
-      <title>{name}</title>
-      {FLAGS[code]}
-    </svg>
+    <span className="text-[14px] leading-none">
+      𝕏
+    </span>
   );
 }
 
-/* ------------------------------- small pieces ------------------------------ */
+/* -------------------------------------------------------------------------- */
+/* KPI card                                                                   */
+/* -------------------------------------------------------------------------- */
 
-function Counter({ to, run, format }: { to: number; run: boolean; format: (v: number) => string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const reduced = useReducedMotion();
-
-  useEffect(() => {
-    if (reduced) {
-      if (ref.current) ref.current.textContent = format(to);
-      return;
-    }
-    if (!run) return;
-    const controls = animate(0, to, {
-      duration: 1.4,
-      ease,
-      onUpdate: (v) => {
-        if (ref.current) ref.current.textContent = format(v);
-      },
-    });
-    return () => controls.stop();
-  }, [run, to, format, reduced]);
-
-  return <span ref={ref}>{format(0)}</span>;
-}
-
-function LivePill({ run }: { run: boolean }) {
-  const [count, setCount] = useState(1284);
-  const reduced = useReducedMotion();
-
-  useEffect(() => {
-    if (!run || reduced) return;
-    const id = setInterval(() => setCount((c) => Math.max(900, c + Math.round((Math.random() - 0.45) * 18))), 2200);
-    return () => clearInterval(id);
-  }, [run, reduced]);
-
+function Metric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+}) {
   return (
-    <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-2.5 py-1">
-      <span className="relative flex size-1.5">
-        <span className="absolute inline-flex size-full animate-ping rounded-full opacity-70" style={{ backgroundColor: BRAND }} />
-        <span className="relative inline-flex size-1.5 rounded-full" style={{ backgroundColor: LINE_COLOR }} />
-      </span>
-      <span className="relative inline-flex h-4 items-center overflow-hidden text-[11px] font-semibold tabular-nums text-foreground">
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.span
-            key={count}
-            initial={{ y: 10, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -10, opacity: 0 }}
-            transition={{ duration: 0.25, ease }}
-          >
-            {count.toLocaleString("en-US")}
-          </motion.span>
-        </AnimatePresence>
-      </span>
-      <span className="font-subheading hidden text-[11px] text-muted-foreground sm:inline">watching</span>
+    <div className="min-w-0 px-3 py-2.5 sm:px-4">
+      <p
+        className="
+          truncate font-subheading
+          text-[9.5px] font-medium
+          text-[#8b9290]
+        "
+      >
+        {label}
+      </p>
+
+      <div className="mt-1 flex items-center gap-1.5">
+        <span
+          className="
+            truncate font-heading
+            text-[17px] font-semibold
+            leading-none tracking-[-0.045em]
+            tabular-nums text-[#191d1a]
+            sm:text-[19px]
+          "
+        >
+          {value}
+        </span>
+      </div>
+
+      {detail && (
+        <p
+          className="
+            mt-1 text-[9px]
+            font-medium text-[#548b66]
+          "
+        >
+          {detail}
+        </p>
+      )}
     </div>
   );
 }
 
-/* ---------------------------------- card ----------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* Interactive analytics chart                                                */
+/* -------------------------------------------------------------------------- */
 
-export function FeatureCardThree() {
-  const rootRef = useRef<HTMLDivElement>(null);
+function AnalyticsChart({
+  platform,
+  range,
+  values,
+  reducedMotion,
+}: {
+  platform: Platform;
+  range: DateRange;
+  values: number[];
+  reducedMotion: boolean;
+}) {
   const plotRef = useRef<HTMLDivElement>(null);
-  const inView = useInView(rootRef, { once: true, margin: "-80px" });
-  const reduced = useReducedMotion();
-  const show = inView || !!reduced;
-  const init = <T extends object>(v: T) => (reduced ? false : v);
 
-  const [pinned, setPinned] = useState(START_POINT);
-  const [active, setActive] = useState(START_POINT);
+  const gradientId = useId().replace(/:/g, "");
 
-  const value = RETENTION[active];
-  const [x, y] = points[active];
-  const tipX = Math.min(76, Math.max(24, x));
-  const below = value > 50; // tooltip drops under the point on the high part of the curve
+  const [hoveredIndex, setHoveredIndex] =
+    useState<number | null>(null);
 
-  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const r = plotRef.current?.getBoundingClientRect();
-    if (!r) return;
-    const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    setActive(Math.round(frac * (n - 1)));
+  const [autoIndex, setAutoIndex] =
+    useState(0);
+
+  const points = useMemo(
+    () => getPoints(values),
+    [values],
+  );
+
+  const linePath = useMemo(
+    () => createSmoothPath(points),
+    [points],
+  );
+
+  const areaPath = `${linePath} L 100 ${CHART_HEIGHT} L 0 ${CHART_HEIGHT} Z`;
+
+  const selectedIndex =
+    hoveredIndex !== null
+      ? Math.min(hoveredIndex, points.length - 1)
+      : autoIndex % points.length;
+
+  const selectedPoint = points[selectedIndex];
+
+  /* Automatically highlight different points */
+
+  useEffect(() => {
+    if (reducedMotion) return;
+
+    const interval = window.setInterval(() => {
+      setAutoIndex(
+        (current) => (current + 1) % values.length,
+      );
+    }, CURSOR_INTERVAL);
+
+    return () => window.clearInterval(interval);
+  }, [values.length, reducedMotion]);
+
+  /* Reset pointer on dataset change */
+
+  useEffect(() => {
+    setHoveredIndex(null);
+    setAutoIndex(0);
+  }, [platform, range]);
+
+  const onPointerMove = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    const rect =
+      plotRef.current?.getBoundingClientRect();
+
+    if (!rect) return;
+
+    const relativeX =
+      (event.clientX - rect.left) / rect.width;
+
+    const index = Math.round(
+      Math.max(0, Math.min(1, relativeX)) *
+        (points.length - 1),
+    );
+
+    setHoveredIndex(index);
+  };
+
+  const onKeyDown = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (
+      event.key !== "ArrowLeft" &&
+      event.key !== "ArrowRight"
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const direction =
+      event.key === "ArrowRight" ? 1 : -1;
+
+    setHoveredIndex((current) => {
+      const next =
+        (current ?? selectedIndex) + direction;
+
+      return Math.max(
+        0,
+        Math.min(points.length - 1, next),
+      );
+    });
+  };
+
+  const label =
+    range === "7D"
+      ? CHART_LABELS["7D"][selectedIndex]
+      : `Day ${
+          Math.round(
+            (selectedIndex / (points.length - 1)) * 29,
+          ) + 1
+        }`;
+
+  return (
+    <div className="px-3.5 pb-2 pt-2.5 sm:px-4">
+      {/* Chart heading */}
+
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div>
+          <p
+            className="
+              text-[10.5px] font-semibold
+              text-[#303631]
+            "
+          >
+            Impressions over time
+          </p>
+
+          <p className="mt-0.5 text-[9px] text-[#a0a6a1]">
+            Your content performance
+          </p>
+        </div>
+
+        {/* Live point readout */}
+
+        <div className="flex items-center gap-1.5">
+          <span
+            className="
+              size-1.5 rounded-full
+              bg-[#548b66]
+            "
+          />
+
+          <span
+            className="
+              text-[10px] font-medium
+              tabular-nums text-[#626b65]
+            "
+          >
+            {formatChartValue(selectedPoint.value)}
+          </span>
+
+          <span className="text-[9px] text-[#9ba29c]">
+            {label}
+          </span>
+        </div>
+      </div>
+
+      {/* Graph */}
+
+      <div
+        ref={plotRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Explore impressions over time"
+        aria-valuemin={0}
+        aria-valuemax={points.length - 1}
+        aria-valuenow={selectedIndex}
+        aria-valuetext={`${label}, ${formatChartValue(selectedPoint.value)} impressions`}
+        onPointerMove={onPointerMove}
+        onPointerDown={onPointerMove}
+        onPointerLeave={() => setHoveredIndex(null)}
+        onPointerCancel={() => setHoveredIndex(null)}
+        onKeyDown={onKeyDown}
+        onBlur={() => setHoveredIndex(null)}
+        className="
+          relative h-[83px] w-full
+          cursor-crosshair touch-pan-y
+          select-none outline-none
+          focus-visible:rounded
+          focus-visible:ring-2
+          focus-visible:ring-[#548b66]/40
+          sm:h-[91px]
+        "
+      >
+        <AnimatePresence mode="wait">
+          <motion.svg
+            key={`${platform}-${range}`}
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            className="absolute inset-0 size-full overflow-visible"
+            initial={
+              reducedMotion
+                ? false
+                : { opacity: 0, y: 5 }
+            }
+            animate={{
+              opacity: 1,
+              y: 0,
+            }}
+            exit={{
+              opacity: 0,
+              y: -3,
+            }}
+            transition={{
+              duration: reducedMotion ? 0 : 0.35,
+              ease,
+            }}
+          >
+            <defs>
+              <linearGradient
+                id={gradientId}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor="#83af91"
+                  stopOpacity="0.26"
+                />
+
+                <stop
+                  offset="100%"
+                  stopColor="#83af91"
+                  stopOpacity="0.01"
+                />
+              </linearGradient>
+            </defs>
+
+            {/* Grid */}
+
+            {[20, 50, 80].map((y) => (
+              <line
+                key={y}
+                x1="0"
+                x2="100"
+                y1={y}
+                y2={y}
+                stroke="#e8ebe8"
+                strokeWidth="1"
+                strokeDasharray="3 4"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+
+            {/* Area */}
+
+            <motion.path
+              d={areaPath}
+              fill={`url(#${gradientId})`}
+              initial={
+                reducedMotion
+                  ? false
+                  : { opacity: 0 }
+              }
+              animate={{ opacity: 1 }}
+              transition={{
+                duration: 0.6,
+              }}
+            />
+
+            {/* Line */}
+
+            <motion.path
+              d={linePath}
+              fill="none"
+              stroke="#477e5b"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+              initial={
+                reducedMotion
+                  ? false
+                  : { pathLength: 0 }
+              }
+              animate={{ pathLength: 1 }}
+              transition={{
+                duration: reducedMotion ? 0 : 1.15,
+                ease,
+              }}
+            />
+
+            {/* Active cursor */}
+
+            <line
+              x1={selectedPoint.x}
+              x2={selectedPoint.x}
+              y1={selectedPoint.y}
+              y2="100"
+              stroke="#477e5b"
+              strokeOpacity="0.3"
+              strokeWidth="1"
+              strokeDasharray="3 3"
+              vectorEffect="non-scaling-stroke"
+            />
+
+            {/* Active point */}
+
+            <circle
+              cx={selectedPoint.x}
+              cy={selectedPoint.y}
+              r="2.6"
+              fill="#ffffff"
+              stroke="#477e5b"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+            />
+
+            <circle
+              cx={selectedPoint.x}
+              cy={selectedPoint.y}
+              r="1"
+              fill="#477e5b"
+            />
+          </motion.svg>
+        </AnimatePresence>
+      </div>
+
+      {/* X-axis */}
+
+      <div
+        aria-hidden="true"
+        className="
+          mt-1 flex items-center
+          justify-between text-[9px]
+          text-[#a3aaa4]
+        "
+      >
+        {CHART_LABELS[range].map((label) => (
+          <span key={label}>{label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Analytics dashboard                                                        */
+/* -------------------------------------------------------------------------- */
+
+function AnalyticsDashboard() {
+  const reducedMotion = !!useReducedMotion();
+
+  const [platform, setPlatform] =
+    useState<Platform>("all");
+
+  const [range, setRange] =
+    useState<DateRange>("7D");
+
+  const [cycle, setCycle] = useState(0);
+
+  const metrics = METRICS[platform][range];
+  const chartValues = CHART_DATA[platform][range];
+
+  /*
+   * Infinite platform rotation.
+   *
+   * All -> X -> LinkedIn -> Threads -> All
+   *
+   * Continues even while hovering.
+   * Manual selections restart the countdown.
+   */
+
+  useEffect(() => {
+    if (reducedMotion) return;
+
+    const timeout = window.setTimeout(() => {
+      setPlatform((current) => {
+        const currentIndex = PLATFORMS.findIndex(
+          (item) => item.id === current,
+        );
+
+        return PLATFORMS[
+          (currentIndex + 1) % PLATFORMS.length
+        ].id;
+      });
+    }, ROTATE_INTERVAL);
+
+    return () => window.clearTimeout(timeout);
+  }, [platform, cycle, reducedMotion]);
+
+  const choosePlatform = (next: Platform) => {
+    setPlatform(next);
+    setCycle((current) => current + 1);
   };
 
   return (
-    <BentoCard className="relative flex flex-col overflow-hidden bg-background">
-      <BentoHeader
-        icon={BarChart3}
-        badge="Analytics"
-        title="Know where viewers stop watching"
-        description="See retention, playback health and audience behavior without installing another tracking script."
-        linkText="Explore analytics ↗"
+    <div
+      className="
+        relative mx-auto w-full
+        max-w-[520px]
+        overflow-hidden rounded-[14px]
+        border border-[#e7eae7]
+        bg-white
+        shadow-[0_14px_35px_-22px_rgba(20,35,25,0.2),0_2px_8px_rgba(20,35,25,0.035)]
+      "
+    >
+      {/* Dashboard toolbar */}
+
+      <div
+        className="
+          flex h-[41px] items-center
+          justify-between gap-2
+          border-b border-black/[0.06]
+          px-3.5 sm:px-4
+        "
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="
+              flex size-6 shrink-0
+              items-center justify-center
+              rounded-md bg-[#f3f5f3]
+            "
+          >
+            <BarChart3 className="size-3 text-[#444b45]" />
+          </span>
+
+          <span
+            className="
+              truncate text-[11px]
+              font-semibold text-[#303630]
+            "
+          >
+            Performance overview
+          </span>
+        </div>
+
+        {/* Date filters */}
+
+        <div
+          role="group"
+          aria-label="Analytics date range"
+          className="
+            flex shrink-0 items-center
+            rounded-md border
+            border-black/[0.06]
+            bg-[#f6f7f6] p-[2px]
+          "
+        >
+          {(["7D", "30D"] as DateRange[]).map(
+            (item) => {
+              const active = range === item;
+
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setRange(item)}
+                  className={`
+                    rounded-[4px]
+                    px-2.5 py-1
+                    text-[9.5px]
+                    font-medium
+                    transition-all duration-200
+                    focus-visible:outline-none
+                    focus-visible:ring-2
+                    focus-visible:ring-[#548b66]/40
+                    ${
+                      active
+                        ? "bg-white text-[#242a25] shadow-sm"
+                        : "text-[#9aa19b] hover:text-[#444b45]"
+                    }
+                  `}
+                >
+                  {item}
+                </button>
+              );
+            },
+          )}
+        </div>
+      </div>
+
+      {/* Platform tabs */}
+
+      <div
+        role="group"
+        aria-label="Filter analytics by platform"
+        className="
+          flex items-center gap-1
+          border-b border-black/[0.055]
+          px-3 py-1.5 sm:px-3.5
+        "
+      >
+        {PLATFORMS.map((item) => {
+          const active = item.id === platform;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() =>
+                choosePlatform(item.id)
+              }
+              aria-pressed={active}
+              className={`
+                flex min-w-0 items-center
+                justify-center gap-1.5
+                rounded-md px-2.5 py-1.5
+                text-[10px] font-medium
+                transition-colors duration-200
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-[#548b66]/40
+                ${
+                  active
+                    ? "bg-[#232823] text-white"
+                    : "text-[#8f9790] hover:bg-[#f4f5f3] hover:text-[#343a35]"
+                }
+              `}
+            >
+              <PlatformSymbol platform={item.id} />
+
+              <span
+                className={
+                  item.id !== "all"
+                    ? "hidden min-[420px]:inline"
+                    : ""
+                }
+              >
+                {item.id === "all" ? "All" : item.label}
+              </span>
+            </button>
+          );
+        })}
+
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <span className="size-1.5 rounded-full bg-[#69a57b]" />
+
+          <span className="text-[9px] text-[#9aa19c]">
+            Overview
+          </span>
+        </div>
+      </div>
+
+      {/* KPI metrics */}
+
+      <div
+        className="
+          grid grid-cols-3
+          divide-x divide-black/[0.06]
+          border-b border-black/[0.06]
+        "
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`${platform}-${range}-metrics`}
+            className="col-span-3 grid grid-cols-3 divide-x divide-black/[0.06]"
+            initial={
+              reducedMotion
+                ? false
+                : { opacity: 0, y: 5 }
+            }
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{
+              duration: reducedMotion ? 0 : 0.25,
+            }}
+          >
+            <Metric
+              label="Impressions"
+              value={metrics.impressions}
+              detail={metrics.growth}
+            />
+
+            <Metric
+              label="Engagement"
+              value={metrics.engagement}
+              detail="Engagement rate"
+            />
+
+            <Metric
+              label="New followers"
+              value={metrics.followers}
+              detail="Net growth"
+            />
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Chart */}
+
+      <AnalyticsChart
+        platform={platform}
+        range={range}
+        values={chartValues}
+        reducedMotion={reducedMotion}
       />
 
-      <div className="relative mt-1 flex-1 select-none px-3 pb-5 sm:px-6 sm:pb-6">
-        <motion.div
-          ref={rootRef}
-          initial={init({ opacity: 0, y: 18 })}
-          animate={show ? { opacity: 1, y: 0 } : undefined}
-          transition={{ duration: 0.7, ease }}
-          className="relative z-10 mx-auto w-full max-w-[620px]"
-        >
-          <div className="overflow-hidden rounded-[16px] border border-border/70 bg-background shadow-[0_18px_40px_-28px_rgba(15,23,42,.28)]">
-            {/* Video and live audience */}
-            <div className="flex h-12 items-center justify-between gap-3 border-b border-border/60 px-3 sm:h-[52px] sm:px-4">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <div className="relative h-7 w-10 shrink-0 overflow-hidden rounded-md bg-[#151a22] sm:h-8 sm:w-11">
-                  <div className="absolute inset-x-0 bottom-0 h-[48%] bg-[#bd8467]" />
-                  <div className="absolute inset-x-0 bottom-0 h-[38%] bg-[#202631] [clip-path:polygon(0_80%,20%_45%,37%_65%,56%_30%,75%_65%,100%_42%,100%_100%,0_100%)]" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-heading truncate text-xs font-semibold text-foreground sm:text-sm">Q3 launch keynote</p>
-                  <p className="font-subheading mt-0.5 text-[10px] text-muted-foreground">12:00 long</p>
-                </div>
-              </div>
-              <LivePill run={show} />
-            </div>
+      {/* Top-performing post */}
 
-            {/* Headline numbers count up once in view */}
-            <div className="grid grid-cols-3 divide-x divide-border/60 border-b border-border/60">
-              {KPIS.map((k) => (
-                <div key={k.label} className="min-w-0 px-2.5 py-2.5 sm:px-4 sm:py-3">
-                  <p className="font-subheading truncate text-[11px] font-medium text-muted-foreground">{k.label}</p>
-                  <div className="mt-1 flex items-baseline gap-1.5">
-                    <span className="font-heading truncate text-sm font-bold tracking-tight tabular-nums text-foreground sm:text-base">
-                      <Counter to={k.to} run={show} format={k.format} />
-                    </span>
-                    <span
-                      className="font-subheading hidden items-center text-[10px] font-semibold sm:inline-flex"
-                      style={{ color: OLIVE }}
-                    >
-                      {k.up && <ArrowUpRight className="size-3" />}
-                      {k.delta}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+      <div
+        className="
+          flex min-h-[38px]
+          items-center justify-between
+          gap-2 border-t
+          border-black/[0.06]
+          bg-[#fafbfa]
+          px-3.5 py-2 sm:px-4
+        "
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="
+              flex size-5 shrink-0
+              items-center justify-center
+              rounded-md bg-[#eaf3ec]
+            "
+          >
+            <Sparkles className="size-3 text-[#508361]" />
+          </span>
 
-            {/* Audience retention */}
-            <div className="px-3 pt-3 sm:px-4 sm:pt-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-heading text-xs font-bold text-foreground sm:text-sm">Audience retention</p>
-                  <p className="font-subheading mt-0.5 text-[11px] text-muted-foreground">Still watching, last 28 days</p>
-                </div>
-                <div className="flex shrink-0 items-baseline gap-1">
-                  <span className="font-heading text-xs font-bold tabular-nums text-foreground sm:text-sm">{AVG}%</span>
-                  <span className="font-subheading text-[10px] text-muted-foreground">avg.</span>
-                </div>
-              </div>
+          <div className="min-w-0">
+            <p
+              className="
+                text-[9px] font-medium
+                text-[#929a94]
+              "
+            >
+              Top-performing post
+            </p>
 
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {INSIGHTS.map((ins) => {
-                  const on = pinned === ins.at;
-                  return (
-                    <button
-                      key={ins.at}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => {
-                        setPinned(ins.at);
-                        setActive(ins.at);
-                      }}
-                      className={`font-subheading rounded-full border px-2.5 py-1 text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground ${
-                        on
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-background text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {ins.label} <span className="tabular-nums opacity-70">{ins.time}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-3 flex gap-1.5 sm:gap-2">
-                <div
-                  aria-hidden
-                  className="font-subheading flex h-[104px] shrink-0 flex-col justify-between py-0.5 text-right text-[10px] leading-none text-muted-foreground/70 sm:h-[132px]"
-                >
-                  <span>100</span>
-                  <span>50</span>
-                  <span>0</span>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div
-                    ref={plotRef}
-                    onPointerMove={onMove}
-                    onPointerDown={onMove}
-                    onPointerLeave={() => setActive(pinned)}
-                    onPointerCancel={() => setActive(pinned)}
-                    role="img"
-                    aria-label={`Audience retention over 12 minutes. ${value}% still watching at ${fmtTime(active * STEP)}.`}
-                    className="relative h-[104px] cursor-crosshair touch-pan-y sm:h-[132px]"
-                  >
-                    {/* The curve wipes in from the left */}
-                    <motion.svg
-                      viewBox="0 0 100 100"
-                      preserveAspectRatio="none"
-                      aria-hidden
-                      className="absolute inset-0 size-full overflow-visible text-foreground"
-                      initial={init({ clipPath: "inset(-6px 100% -6px -6px)" })}
-                      animate={show ? { clipPath: "inset(-6px 0% -6px -6px)" } : undefined}
-                      transition={{ duration: 1.3, ease, delay: 0.25 }}
-                    >
-                      <defs>
-                        <linearGradient id="retention-area" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0" stopColor={BRAND} stopOpacity="0.42" />
-                          <stop offset="1" stopColor={BRAND} stopOpacity="0" />
-                        </linearGradient>
-                      </defs>
-                      {[0, 50, 100].map((g) => (
-                        <line key={g} x1="0" x2="100" y1={g} y2={g} stroke="currentColor" strokeOpacity="0.08" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
-                      ))}
-                      <line x1="0" x2="100" y1={100 - AVG} y2={100 - AVG} stroke={LINE_COLOR} strokeOpacity="0.55" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
-                      <path d={AREA} fill="url(#retention-area)" />
-                      <path d={LINE} fill="none" stroke={LINE_COLOR} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-                    </motion.svg>
-
-                    {/* Cursor, point and readout appear once the curve has drawn */}
-                    <motion.div
-                      className="pointer-events-none absolute inset-0"
-                      initial={init({ opacity: 0 })}
-                      animate={show ? { opacity: 1 } : undefined}
-                      transition={{ duration: 0.4, delay: 1.3 }}
-                    >
-                      <motion.span
-                        aria-hidden
-                        initial={false}
-                        animate={{ left: `${x}%` }}
-                        transition={spring}
-                        className="absolute inset-y-0 w-px bg-foreground/15"
-                      />
-                      <motion.span
-                        aria-hidden
-                        initial={false}
-                        animate={{ left: `${x}%`, top: `${y}%` }}
-                        transition={spring}
-                        className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-[#11120e] shadow ring-4 ring-[#B3E61D]/30"
-                      />
-                      <motion.div
-                        aria-hidden
-                        initial={false}
-                        animate={{ left: `${tipX}%`, top: `${y}%` }}
-                        transition={spring}
-                        className="absolute z-20 w-max -translate-x-1/2"
-                      >
-                        <div
-                          className={`min-w-[96px] rounded-lg border border-white/[0.08] bg-[#11120e] px-2.5 py-1.5 zshadow-lg transition-transform duration-150 ${
-                            below ? "translate-y-3" : "-translate-y-[calc(100%+12px)]"
-                          }`}
-                        >
-                          <p className="font-subheading text-[10px] text-white/50">{fmtTime(active * STEP)}</p>
-                          <p className="font-heading mt-0.5 text-xs font-bold tabular-nums text-white">{value}% watching</p>
-                          <p className="font-subheading mt-0.5 hidden text-[10px] tabular-nums text-white/50 sm:block">
-                            {compact.format(Math.round((PLAYS * value) / 100))} viewers
-                          </p>
-                        </div>
-                      </motion.div>
-                    </motion.div>
-                  </div>
-
-                  <div aria-hidden className="font-subheading mt-1.5 flex justify-between text-[10px] text-muted-foreground/70">
-                    {["0:00", "3:00", "6:00", "9:00", "12:00"].map((t) => (
-                      <span key={t}>{t}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Where viewers are, and what they watch on */}
-            <div className="mt-4 grid grid-cols-2 border-t border-border/60">
-              <div className="border-r border-border/60 px-3 py-3 sm:px-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-heading text-xs font-semibold text-foreground">Top locations</p>
-                  <span className="font-subheading hidden text-[10px] text-muted-foreground sm:inline">142 countries</span>
-                </div>
-                <ul className="mt-2.5 space-y-2">
-                  {LOCATIONS.map((l, i) => (
-                    <motion.li
-                      key={l.code}
-                      className="flex items-center gap-2"
-                      initial={init({ opacity: 0, x: -6 })}
-                      animate={show ? { opacity: 1, x: 0 } : undefined}
-                      transition={{ duration: 0.5, ease, delay: 0.5 + i * 0.07 }}
-                    >
-                      <Flag code={l.code} name={l.name} />
-                      <span className="h-1.5 min-w-0 flex-1 rounded-full bg-foreground/[0.06]">
-                        <motion.span
-                          className="block h-full rounded-full"
-                          initial={init({ scaleX: 0 })}
-                          animate={show ? { scaleX: 1 } : undefined}
-                          transition={{ duration: 0.9, ease, delay: 0.6 + i * 0.07 }}
-                          style={{
-                            originX: 0,
-                            width: `${(l.value / 34) * 100}%`,
-                            backgroundColor: i === 0 ? BRAND : "rgba(17,18,14,0.25)",
-                          }}
-                        />
-                      </span>
-                      <span className="font-subheading w-7 text-right text-[10px] font-medium tabular-nums text-muted-foreground">{l.value}%</span>
-                    </motion.li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="px-3 py-3 sm:px-4">
-                <p className="font-heading text-xs font-semibold text-foreground">Devices</p>
-                <div className="mt-2.5 flex h-1.5 gap-0.5 overflow-hidden rounded-full">
-                  {DEVICES.map((d, i) => (
-                    <motion.span
-                      key={d.label}
-                      className="h-full rounded-full"
-                      initial={init({ scaleX: 0 })}
-                      animate={show ? { scaleX: 1 } : undefined}
-                      transition={{ duration: 0.9, ease, delay: 0.6 + i * 0.1 }}
-                      style={{ originX: 0, width: `${d.value}%`, backgroundColor: d.color }}
-                    />
-                  ))}
-                </div>
-                <ul className="mt-3 space-y-2">
-                  {DEVICES.map((d) => (
-                    <li key={d.label} className="flex items-center gap-2">
-                      <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
-                      <d.icon className="size-3 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{d.label}</span>
-                      <span className="font-subheading text-[10px] font-semibold tabular-nums text-foreground">{d.value}%</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+            <p
+              className="
+                truncate text-[10px]
+                font-medium text-[#3b423c]
+              "
+            >
+              {metrics.topPost}
+            </p>
           </div>
-        </motion.div>
-        <CardBottomFade height="h-28" />
+        </div>
+
+        <div
+          className="
+            flex shrink-0 items-center
+            gap-0.5 text-[10px]
+            font-semibold text-[#548765]
+          "
+        >
+          {metrics.topEngagement}
+
+          <ArrowUpRight className="size-3" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Feature Card Three                                                         */
+/* -------------------------------------------------------------------------- */
+
+export function FeatureCardThree() {
+  return (
+    <BentoCard
+      className="
+      !h-[460px] sm:!h-[480px]
+        group relative isolate
+        flex z!h-[455px] min-w-0
+        flex-col overflow-hidden
+        !border-black/[0.07]
+        !bg-white
+        text-[#171717]
+      "
+    >
+      {/* Background */}
+
+      <div
+        aria-hidden="true"
+        className="
+          pointer-events-none
+          absolute inset-0 overflow-hidden
+        "
+      >
+        {/* Ambient glow */}
+
+        <div
+          className="
+            absolute bottom-[-150px]
+            left-1/2 h-[300px]
+            w-[85%] -translate-x-1/2
+            rounded-full
+            bg-[#edf1ed]/75
+            blur-[95px]
+          "
+        />
+
+        {/* Soft neutral radial gradient */}
+
+        <div
+          className="
+            absolute inset-0
+            bg-[radial-gradient(ellipse_at_50%_100%,rgba(0,0,0,0.018),transparent_65%)]
+          "
+        />
+      </div>
+
+      {/* Feature heading */}
+
+      <div
+        className="
+          relative z-10 shrink-0
+          px-5 pt-5 sm:px-6 sm:pt-6
+        "
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span
+              className="
+                flex size-7 items-center
+                justify-center rounded-lg
+                border border-black/[0.07]
+                bg-[#f7f8f7]
+              "
+            >
+              <BarChart3 className="size-3.5 text-[#404540]" />
+            </span>
+
+            <span
+              className="
+                text-[10px] font-semibold
+                uppercase tracking-[0.12em]
+                text-[#888e89]
+              "
+            >
+              ADVANCED ANALYTICS
+            </span>
+          </div>
+
+          <span
+            className="
+              flex shrink-0 items-center
+              gap-1.5 rounded-full
+              border border-black/[0.07]
+              bg-[#f9faf9]
+              px-2.5 py-1.5
+            "
+          >
+            <TrendingUp className="size-3 text-[#608c6c]" />
+
+            <span className="text-[9px] font-medium text-[#737b75]">
+              Insights
+            </span>
+          </span>
+        </div>
+
+        {/* Title */}
+
+        <h3
+          className="
+            font-heading mt-4 max-w-[370px]
+            text-[22px] font-semibold
+            leading-[1.16]
+            tracking-[-0.04em]
+            text-[#181b19]
+            sm:text-[25px]
+          "
+        >
+          Know what works.
+          <br />
+
+          <span className="text-[#9b9f9c]">
+            Grow faster.
+          </span>
+        </h3>
+
+        {/* Description */}
+
+        <p
+          className="
+            font-subheading mt-2
+            max-w-[370px]
+            text-[12px] leading-[1.65]
+            text-[#848b86]
+          "
+        >
+          Track engagement, understand your audience,
+          and discover which content performs best.
+        </p>
+      </div>
+
+      {/* Analytics preview */}
+
+      <div
+        className="
+          relative z-10 mt-auto
+          min-h-0 px-3.5
+          pb-4 pt-3 sm:px-5
+        "
+      >
+        {/* Preview glow */}
+
+        <div
+          aria-hidden="true"
+          className="
+            pointer-events-none
+            absolute left-1/2 top-3
+            h-[160px] w-[75%]
+            -translate-x-1/2
+            rounded-full
+            bg-[#e8eee9]/60
+            blur-[55px]
+          "
+        />
+
+        {/* Dashboard */}
+
+        <div className="relative">
+          <AnalyticsDashboard />
+        </div>
+
+        {/* Footer */}
+
+        <div
+          className="
+            mt-2.5 flex items-center
+            justify-between gap-3 px-1
+          "
+        >
+          <div
+            className="
+              flex items-center gap-1.5
+              text-[10px] text-[#959b96]
+            "
+          >
+            <Sparkles className="size-3" />
+
+            Insights that help you grow.
+          </div>
+
+          <span className="text-[9px] text-[#a3a9a4]">
+            Illustrative data
+          </span>
+        </div>
       </div>
     </BentoCard>
   );

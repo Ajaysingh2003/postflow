@@ -144,6 +144,8 @@ export function BentoCard({
   );
 }
 
+
+
 export function BentoHeader({
   icon: Icon,
   iconBg = "bg-neutral-100 text-neutral-700",
@@ -152,6 +154,7 @@ export function BentoHeader({
   description,
   linkText,
   liveDot = false,
+  href,
 }: {
   icon: React.ElementType;
   iconBg?: string;
@@ -160,6 +163,7 @@ export function BentoHeader({
   description: string;
   linkText?: string;
   liveDot?: boolean;
+  href?:string
 }) {
   return (
     <div className="p-6 sm:p-7 space-y-3">
@@ -171,14 +175,14 @@ export function BentoHeader({
         </div>
 
         {badge && (
-          <span className="font-subheading rounded-full border border-neutral-200/90 bg-neutral-50/80 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+          <span className="font-subheading rounded-full border border-neutral-200/90 bg-neutral-50/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
             {badge}
           </span>
         )}
       </div>
 
       <div>
-        <h3 className="font-heading text-lg sm:text-2xl font-semibold tracking-tight capitalize text-foreground flex items-center gap-2">
+        <h3 className="font-heading text-lg sm:text-xl font-semibold tracking-tight capitalize text-foreground flex items-center gap-2">
           <span>{title}</span>
           {liveDot && (
             <span className="relative flex size-2">
@@ -187,7 +191,7 @@ export function BentoHeader({
             </span>
           )}
         </h3>
-        <p className="mt-1 text-sm sm:text-base text-neutral-500 leading-relaxed">
+        <p className="mt-1 text-sm sm:text-sm text-neutral-500 leading-relaxed">
           {description}
         </p>
       </div>
@@ -195,7 +199,7 @@ export function BentoHeader({
       {linkText && (
         <div className="pt-0.5">
           <Link
-            href={linkText}
+            href={href || "#"}
             className="font-subheading inline-flex items-center justify-center whitespace-nowrap ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 text-primary-link text-xs sm:text-sm underline-offset-4 hover:text-primary-link-hover hover:underline rounded-lg font-semibold p-0 h-auto"
           >
             {linkText}
@@ -205,6 +209,11 @@ export function BentoHeader({
     </div>
   );
 }
+
+
+
+
+
 export function CardBottomFade({ height = "h-28" }: { height?: string }) {
   return (
     <div
@@ -217,12 +226,3 @@ export function CardBottomFade({ height = "h-28" }: { height?: string }) {
     />
   );
 }
-
-// export function CardBottomFade({ height = "h-20" }: { height?: string }) {
-//   return (
-//     <div
-//       aria-hidden="true"
-//       className={`pointer-events-none absolute inset-x-0 bottom-0 ${height} bg-gradient-to-t from-white via-white/80 to-transparent z-20`}
-//     />
-//   );
-// }

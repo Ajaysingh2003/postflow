@@ -77,8 +77,8 @@ export default function FinalCta() {
             transition={{ duration: 0.6, ease: "easeOut" }}
             className="relative z-10 mx-auto flex max-w-[760px] flex-col items-center px-5 pt-10 text-center sm:px-6 sm:pt-16 lg:pt-24"
           >
-            <h2 className="max-w-[340px] text-balance font-heading text-[34px] font-semibold leading-[1] tracking-[-0.045em] text-white drop-shadow-[0_2px_12px_rgba(6,56,29,0.28)] sm:max-w-[640px] sm:text-[54px] lg:text-[64px]">
-              Ready to grow your audience everywhere?
+            <h2 className="max-w-[300px] text-balance font-heading text-[34px] font-semibold leading-[1] tracking-[-0.045em] text-white drop-shadow-[0_2px_12px_rgba(6,56,29,0.28)] sm:max-w-[640px] sm:text-[54px] lg:text-[64px]">
+              Write once. Show up everywhere.
             </h2>
 
             <p className="mt-4 max-w-[420px] text-[15px] leading-[1.5] text-white drop-shadow-[0_1px_8px_rgba(6,56,29,0.25)] sm:mt-5 sm:max-w-[540px] sm:text-lg sm:leading-7">

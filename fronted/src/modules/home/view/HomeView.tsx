@@ -11,6 +11,7 @@ import ReviewSection from "../component/ReviewSections";
 import FinalCta from "../component/FinalCta";
 import Intigration from "../component/Intigration";
 import McpSupport from "../component/McpSupport";
+import PricingOverviewHome from "../component/PricingOverview";
 
 function HomeView() {
   return (
@@ -20,6 +21,7 @@ function HomeView() {
       <HeroSection/>
       <ReviewSection/>
       <FeatureSection/>
+      <PricingOverviewHome/>
       <Intigration/>
       <McpSupport/>
       <PricingSection/>

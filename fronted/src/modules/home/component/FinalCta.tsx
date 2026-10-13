@@ -24,7 +24,7 @@ export default function FinalCta() {
           className="
             relative isolate flex flex-col overflow-hidden
             rounded-[24px] border-[0.5px] border-[#172000]/15
-            bg-[#3fda8a]
+            bg-[#3fda8a]z
             bg-[radial-gradient(ellipse_120%_80%_at_50%_0%,#b9fad8_0%,#3fda8a_60%,#1db868_100%)]
             shadow-[0_1px_2px_rgba(23,32,0,0.06),0_28px_48px_-28px_rgba(23,32,0,0.3)]
             sm:rounded-[34px] lg:rounded-[36px]

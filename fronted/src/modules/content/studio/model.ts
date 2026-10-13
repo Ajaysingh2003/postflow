@@ -245,6 +245,24 @@ export function postMediaIds(payload: Payload, mediaIds: string[], index: number
   return index === 0 && !items.some((item) => Array.isArray(item.media_ids)) ? mediaIds : [];
 }
 
+export function publishedPostMediaIds(payload: Payload, mediaIds: string[], index: number): string[] {
+  const items = threadItems(payload);
+  // Publishing replaces media_ids with provider IDs. Thread uploads retain
+  // their original workspace IDs separately; those are the preview sources.
+  if (items.some((item) => Array.isArray(item.media_asset_ids))) {
+    const assigned = items[index]?.media_asset_ids;
+    return Array.isArray(assigned)
+      ? assigned.filter((id): id is string => typeof id === "string" && mediaIds.includes(id))
+      : [];
+  }
+  const selected = items[index]?.media_ids;
+  if (Array.isArray(selected) && selected.every((id) => mediaIds.includes(String(id)))) {
+    return selected as string[];
+  }
+  // Legacy uploads were attached to the first post through the variant links.
+  return index === 0 ? mediaIds : [];
+}
+
 export function draftMediaIds(payload: Payload, fallback: string[]): string[] {
   const items = threadItems(payload);
   return items.some((item) => Array.isArray(item.media_ids))

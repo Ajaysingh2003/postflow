@@ -501,7 +501,7 @@ async def publish_variant_job(
             status_code=exc.status_code,
             error_message=str(exc.detail),
             auth_error=refreshing or exc.status_code == 401,
-            is_retryable=exc.status_code in {429, 502, 503},
+            is_retryable=exc.status_code in {429, 500, 502, 503, 504},
             retry_after=int(exc.headers.get("Retry-After", 0)) if exc.headers else None,
         )
     except Exception as exc:  # noqa: BLE001
@@ -565,8 +565,10 @@ async def publish_variant_job(
         account.status = "needs_reauth"
         variant.status = "failed"
         variant.last_error = "Auth error: reconnect this account before publishing"
+        if result.error_message:
+            variant.last_error += ". " + result.error_message
         attempt.result = "auth_error"
-        attempt.status_code = 401
+        attempt.status_code = result.status_code or 401
         attempt.error = variant.last_error
     else:
         if result.waiting_for_media:

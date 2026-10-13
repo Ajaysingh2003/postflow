@@ -1,226 +1,389 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useState } from "react";
 import {
-  ArrowRight,
-  CheckCircle2,
-  Mail,
-  Megaphone,
-  MousePointerClick,
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+} from "framer-motion";
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  Fingerprint,
+  PenLine,
+  SlidersHorizontal,
   Sparkles,
-  TrendingUp,
-  UserCheck,
-  Users,
-  Webhook,
+  Star,
 } from "lucide-react";
 import { BentoCard, BentoHeader, CardBottomFade } from "./FeatureSection";
 
-const CAMPAIGNS = [
-  {
-    name: "Enterprise Demo Funnel",
-    trigger: "Video milestone: 75% watched",
-    leads: "1,420",
-    convRate: "14.2%",
-    active: true,
-  },
-  {
-    name: "Product Walkthrough CTA",
-    trigger: "Mid-roll lead capture (02:15)",
-    leads: "890",
-    convRate: "11.8%",
-    active: false,
-  },
-];
+/* -------------------------------------------------------------------------- */
+/* Types & Data                                                               */
+/* -------------------------------------------------------------------------- */
 
-export function FeatureCardSixth() {
-  const [selectedCampaign, setSelectedCampaign] = useState(0);
-  const [formSubmitted, setFormSubmitted] = useState(false);
+type ProfileId = "founder" | "professional" | "conversational";
+type PreviewMode = "original" | "styled";
+
+interface WritingProfile {
+  id: ProfileId;
+  name: string;
+  description: string;
+  tag: string;
+  rules: string[];
+  content: string;
+}
+
+const ORIGINAL_POST = `Consistency is important when you're growing an audience.
+
+Posting regularly helps people get familiar with your work and builds trust over time.`;
+
+const PROFILES: Record<ProfileId, WritingProfile> = {
+  founder: {
+    id: "founder",
+    name: "Founder",
+    tag: "High Signal",
+    description: "Direct, punchy, opinionated",
+    rules: ["Short sentences", "Zero buzzwords", "Strong conviction"],
+    content: `One viral post won't build your audience.
+
+Showing up every week will.
+
+Consistency gives people a reason to remember you.`,
+  },
+  professional: {
+    id: "professional",
+    name: "Executive",
+    tag: "Structured",
+    description: "Thoughtful, clear, analytical",
+    rules: ["Measured cadence", "Actionable lessons", "Nuanced claims"],
+    content: `Consistent publishing builds more enterprise trust than an occasional viral post.
+
+Share useful lessons regularly. Observe what converts. Iterate without friction.`,
+  },
+  conversational: {
+    id: "conversational",
+    name: "Storyteller",
+    tag: "Casual",
+    description: "Relaxed, approachable, peer-to-peer",
+    rules: ["Natural rhythm", "Short paragraphs", "No jargon"],
+    content: `Going viral is fun for a day.
+
+What actually builds compounding leverage? Showing up again next Monday.
+
+People start to recognize your ideas when you keep sharing.`,
+  },
+};
+
+const PROFILE_IDS: ProfileId[] = ["founder", "professional", "conversational"];
+const ROTATION_INTERVAL = 6000;
+
+/* -------------------------------------------------------------------------- */
+/* Infinite Ambient Components                                                */
+/* -------------------------------------------------------------------------- */
+
+/** Infinite pulsing audio/cadence equalizer */
+function CadenceEqualizer() {
+  const bars = [
+    { duration: 1.1, min: 0.35, max: 0.95, delay: 0 },
+    { duration: 0.85, min: 0.25, max: 1.0, delay: 0.15 },
+    { duration: 1.25, min: 0.4, max: 0.8, delay: 0.3 },
+    { duration: 0.95, min: 0.3, max: 1.0, delay: 0.05 },
+    { duration: 1.4, min: 0.2, max: 0.75, delay: 0.2 },
+  ];
 
   return (
-    <BentoCard className="relative flex h- flex-col overflow-hidden bg-white shadow-md">
+    <div className="flex h-3.5 items-end gap-[2px]" aria-hidden="true">
+      {bars.map((bar, i) => (
+        <motion.span
+          key={i}
+          className="w-[2px] rounded-full bg-[#3fda8a]"
+          animate={{ scaleY: [bar.min, bar.max, bar.min] }}
+          transition={{
+            duration: bar.duration,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: bar.delay,
+          }}
+          style={{ originY: 1 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Main Feature Card                                                          */
+/* -------------------------------------------------------------------------- */
+
+export function FeatureCardSixth() {
+  const reducedMotion = useReducedMotion();
+  const [profileId, setProfileId] = useState<ProfileId>("founder");
+  const [mode, setMode] = useState<PreviewMode>("styled");
+  const [rotationKey, setRotationKey] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  const profile = PROFILES[profileId];
+  const displayedContent = mode === "original" ? ORIGINAL_POST : profile.content;
+
+  // Auto-switch between original & calibrated draft
+  useEffect(() => {
+    if (reducedMotion) return;
+    const interval = window.setInterval(() => {
+      setMode((current) => (current === "original" ? "styled" : "original"));
+    }, ROTATION_INTERVAL);
+    return () => window.clearInterval(interval);
+  }, [reducedMotion, rotationKey]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
+
+  const changeProfile = (next: ProfileId) => {
+    setProfileId(next);
+    setMode("styled");
+    setRotationKey((prev) => prev + 1);
+  };
+
+  const copyContent = async () => {
+    try {
+      await navigator.clipboard.writeText(displayedContent);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <BentoCard className="relative flex !h-[500px] flex-col overflow-hidden border-zinc-200/80 bg-white sm:!h-[520px]">
       <BentoHeader
-        icon={Megaphone}
-        badge="Lead Generation & Growth"
-        title="Turn video views into signed clients"
-        description="Capture leads directly inside the player, trigger automated CRM workflows, and push qualified buyers straight down your sales funnel."
-        linkText="Explore lead capture ↗"
+        icon={Fingerprint}
+        badge="Adaptive Tone Engine"
+        title="Your voice, calibrated in every post."
+        description="Train Draftva on your personal writing patterns. Strip out generic corporate speak and publish posts that sound genuinely human."
+        linkText="Configure your tone model ↗"
+        href="/register"
       />
 
-      <div className="relative mt-2 flex-1 px-4 pb-6 sm:px-6">
-        <div className="relative z-10 mx-auto w-full max-w-[620px] space-y-3.5">
-          {/* Main Funnel Simulator Window */}
-          <div className="overflow-hidden rounded-2xl border border-black/[0.08] bg-[#fbfbf9] p-3.5 shadow-2xs sm:p-4">
-            {/* Upper Interactive Preview: In-Player Lead Gate to Webhook */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
-              {/* Left Side: Mock Video Frame with Overlay */}
-              <div className="relative flex aspect-video flex-col justify-between overflow-hidden rounded-xl border border-black/[0.08] bg-[#0d0f0c] p-3 text-white sm:col-span-7">
-                {/* Micro Video Top Status */}
-                <div className="flex items-center justify-between">
-                  <span className="font-subheading flex items-center gap-1 rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-medium text-white/70 backdrop-blur-md">
-                    <span className="size-1.5 rounded-full bg-[#B3E61D] animate-pulse" />
-                    Interactive Milestone 04:30
-                  </span>
-                  <span className="font-subheading text-[9px] text-white/40">Demo Video</span>
-                </div>
+      <div className="relative z-10 mt-3 flex min-h-0 flex-1 flex-col px-3.5 pb-6 sm:px-6">
+        {/* Infinite breathing background glow */}
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-4 h-[220px] w-[80%] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,#3fda8a_0%,rgba(63,218,138,0.15)_45%,transparent_75%)] blur-[55px]"
+          animate={
+            reducedMotion
+              ? { opacity: 0.35 }
+              : {
+                  opacity: [0.35, 0.6, 0.35],
+                  scale: [0.96, 1.04, 0.96],
+                }
+          }
+          transition={{
+            duration: 5.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
 
-                {/* Form Overlay Container */}
-                <div className="my-auto rounded-lg border border-white/[0.08] bg-black/60 p-2.5 backdrop-blur-md">
-                  <AnimatePresence mode="wait">
-                    {!formSubmitted ? (
-                      <motion.div
-                        key="form"
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="space-y-1.5"
-                      >
-                        <p className="font-heading text-xs font-semibold text-white">
-                          Unlock Full Product Demo
-                        </p>
-                        <p className="text-[10px] text-white/60">
-                          Drop your work email to view pricing & book directly.
-                        </p>
-                        <div className="flex gap-1.5 pt-0.5">
-                          <input
-                            type="text"
-                            readOnly
-                            value="alex@acme.corp"
-                            className="font-subheading h-7 w-full rounded border border-white/10 bg-white/5 px-2 text-[10px] text-white/80 focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setFormSubmitted(true)}
-                            className="font-heading flex h-7 shrink-0 items-center gap-1 rounded bg-[#B3E61D] px-2.5 text-[10px] font-bold text-neutral-950 transition hover:bg-[#a5db12]"
-                          >
-                            <span>Send</span>
-                            <ArrowRight className="size-2.5" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="success"
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="flex flex-col items-center py-1 text-center"
-                      >
-                        <CheckCircle2 className="size-5 text-[#B3E61D]" />
-                        <p className="font-heading mt-1 text-xs font-semibold text-white">
-                          Lead Dispatched
-                        </p>
-                        <p className="text-[10px] text-white/60">
-                          Routed to HubSpot & Slack automatically
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setFormSubmitted(false)}
-                          className="font-subheading mt-1.5 text-[9px] text-[#B3E61D] hover:underline"
-                        >
-                          Reset Demo
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+        {/* Central Workspace Window */}
+        <div className="relative mx-auto flex h-full w-full max-w-[530px] flex-col overflow-hidden rounded-2xl border border-zinc-200/90 bg-white/95 shadow-[0_14px_38px_-18px_rgba(20,35,28,0.12),0_1px_3px_rgba(0,0,0,0.03)] backdrop-blur-md">
+          
+          {/* Infinite Light Sweep Shimmer Line */}
+          <div className="relative h-[2px] w-full overflow-hidden bg-zinc-100">
+            <motion.div
+              className="absolute inset-y-0 h-full w-36 bg-gradient-to-r from-transparent via-[#3fda8a] to-transparent"
+              animate={
+                reducedMotion
+                  ? { left: "40%" }
+                  : {
+                      left: ["-25%", "115%"],
+                    }
+              }
+              transition={{
+                duration: 3.2,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            />
+          </div>
 
-                {/* Micro timeline */}
-                <div className="h-1 w-full overflow-hidden rounded-full bg-white/20">
-                  <div className="h-full w-[65%] rounded-full bg-[#B3E61D]" />
-                </div>
-              </div>
+          {/* Topbar: Document Metadata & Profile Chips */}
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-100 bg-zinc-50/70 px-3.5 sm:px-4">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-6 items-center justify-center rounded-lg border border-zinc-200/80 bg-white text-zinc-700 shadow-2xs">
+                <PenLine className="size-3 text-emerald-600" />
+              </span>
 
-              {/* Right Side: Step Execution Ladder */}
-              <div className="flex flex-col justify-between space-y-2 sm:col-span-5">
-                <div className="space-y-1.5">
-                  <p className="font-subheading text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-                    Lead Pipeline Automation
-                  </p>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 rounded-lg border border-black/[0.05] bg-white p-2">
-                      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-800">
-                        <MousePointerClick className="size-3" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-heading truncate text-[11px] font-semibold text-neutral-900">
-                          1. Form Interaction
-                        </p>
-                        <p className="font-subheading text-[9px] text-neutral-400">
-                          Triggered at high intent
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 rounded-lg border border-black/[0.05] bg-white p-2">
-                      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-lime-50 text-[#557506]">
-                        <UserCheck className="size-3" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-heading truncate text-[11px] font-semibold text-neutral-900">
-                          2. Buyer Verified
-                        </p>
-                        <p className="font-subheading text-[9px] text-neutral-400">
-                          Company & watch-time enrich
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 rounded-lg border border-black/[0.05] bg-white p-2">
-                      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-neutral-900 text-[#B3E61D]">
-                        <Webhook className="size-3" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-heading truncate text-[11px] font-semibold text-neutral-900">
-                          3. Direct CRM Push
-                        </p>
-                        <p className="font-subheading text-[9px] text-neutral-400">
-                          Webhook sync to sales
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-semibold text-zinc-900">
+                  tone_profile.ts
+                </span>
+                <span className="hidden items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-50 px-2 py-0.5 text-[9.5px] font-semibold text-emerald-700 sm:inline-flex">
+                  <span className="size-1 rounded-full bg-emerald-500" />
+                  Active
+                </span>
               </div>
             </div>
 
-            {/* Campaign Performance Bar */}
-            <div className="mt-3.5 grid grid-cols-3 divide-x divide-neutral-200/80 border-t border-black/[0.06] pt-3">
-              <div className="px-2">
-                <span className="font-subheading text-[10px] text-neutral-400">
-                  Total Captured
-                </span>
-                <p className="font-heading text-sm font-bold text-neutral-900 sm:text-base">
-                  3,420 <span className="text-[10px] font-normal text-neutral-500">leads</span>
-                </p>
-              </div>
-
-              <div className="px-2">
-                <span className="font-subheading text-[10px] text-neutral-400">
-                  Avg. Conversion
-                </span>
-                <div className="flex items-center gap-1">
-                  <p className="font-heading text-sm font-bold text-neutral-900 sm:text-base">
-                    12.8%
-                  </p>
-                  <TrendingUp className="size-3 text-[#557506]" />
-                </div>
-              </div>
-
-              <div className="px-2">
-                <span className="font-subheading text-[10px] text-neutral-400">
-                  Pipeline Influenced
-                </span>
-                <p className="font-heading text-sm font-bold text-neutral-900 sm:text-base">
-                  $48.2K
-                </p>
-              </div>
+            {/* Profile Dropdown / Selector */}
+            <div className="relative flex items-center">
+              <select
+                value={profileId}
+                onChange={(e) => changeProfile(e.target.value as ProfileId)}
+                aria-label="Select writing profile"
+                className="h-8 cursor-pointer appearance-none rounded-lg border border-zinc-200/80 bg-white pl-2.5 pr-7 text-xs font-medium text-zinc-700 shadow-2xs outline-none transition-all hover:border-zinc-300 focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/15"
+              >
+                {PROFILE_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {PROFILES[id].name} ({PROFILES[id].tag})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 size-3 text-zinc-400" />
             </div>
+          </div>
+
+          {/* Preview Navigation Tabs */}
+          <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-100 px-4">
+            <div className="flex items-center gap-2">
+              <CadenceEqualizer />
+              <span className="text-[11px] font-medium text-zinc-400">
+                Cadence Scan
+              </span>
+            </div>
+
+            {/* Pill Toggle */}
+            <div className="inline-flex rounded-lg border border-zinc-200/70 bg-zinc-100/70 p-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("original");
+                  setRotationKey((k) => k + 1);
+                }}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
+                  mode === "original"
+                    ? "bg-white text-zinc-900 shadow-2xs"
+                    : "text-zinc-500 hover:text-zinc-800"
+                }`}
+              >
+                Raw Input
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("styled");
+                  setRotationKey((k) => k + 1);
+                }}
+                className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
+                  mode === "styled"
+                    ? "bg-white text-emerald-800 shadow-2xs"
+                    : "text-zinc-500 hover:text-zinc-800"
+                }`}
+              >
+                <Star className="size-2.5 text-emerald-500" />
+                <span>{profile.name} Voice</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Animated Text Body */}
+          <div className="relative min-h-[140px] flex-1 overflow-hidden px-4.5 py-3.5 sm:px-5">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={`${mode}-${profileId}`}
+                initial={
+                  reducedMotion
+                    ? false
+                    : { opacity: 0, y: 6, filter: "blur(2px)" }
+                }
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -5, filter: "blur(2px)" }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="h-full"
+              >
+                <p className="whitespace-pre-line text-[13px] leading-relaxed text-zinc-800 sm:text-[13.5px]">
+                  {displayedContent}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Calibrated Style Rule Badges */}
+          <div className="flex min-h-[42px] shrink-0 items-center gap-2 border-t border-zinc-100 bg-zinc-50/40 px-4 py-2">
+            <SlidersHorizontal className="size-3 shrink-0 text-emerald-600" />
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {profile.rules.map((rule) => (
+                <span
+                  key={rule}
+                  className="inline-flex items-center gap-1 rounded-md border border-zinc-200/70 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-600 shadow-2xs"
+                >
+                  <span className="size-1 rounded-full bg-[#3fda8a]" />
+                  {rule}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom Action Footer */}
+          <div className="flex h-11 shrink-0 items-center justify-between border-t border-zinc-100 bg-zinc-50/90 px-4">
+            <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+              <span className="font-mono text-zinc-400">
+                {displayedContent.length} chars
+              </span>
+              <span>•</span>
+              <span className="text-emerald-700 font-medium">98.4% human score</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={copyContent}
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-2xs transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950"
+            >
+              {copied ? (
+                <>
+                  <Check className="size-3 text-emerald-600" />
+                  <span className="text-emerald-600">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="size-3 text-zinc-400" />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
-        <CardBottomFade height="h-10" />
+        {/* Carousel indicators */}
+        <div className="mt-3.5 flex shrink-0 items-center justify-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setMode("original");
+              setRotationKey((k) => k + 1);
+            }}
+            aria-label="Raw draft"
+            className={`h-1 rounded-full transition-all duration-300 ${
+              mode === "original" ? "w-6 bg-[#3fda8a]" : "w-2 bg-zinc-200"
+            }`}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setMode("styled");
+              setRotationKey((k) => k + 1);
+            }}
+            aria-label="Calibrated draft"
+            className={`h-1 rounded-full transition-all duration-300 ${
+              mode === "styled" ? "w-6 bg-[#3fda8a]" : "w-2 bg-zinc-200"
+            }`}
+          />
+        </div>
       </div>
+
+      <CardBottomFade height="h-6" />
     </BentoCard>
   );
 }

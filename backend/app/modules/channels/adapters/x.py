@@ -33,7 +33,7 @@ X_REVOKE_URL = "https://api.twitter.com/2/oauth2/revoke"
 X_API_BASE = "https://api.twitter.com/2"
 
 # Required OAuth 2.0 scopes for posting, metrics, and offline token refresh
-X_SCOPES = ["tweet.read", "tweet.write", "users.read", "offline.access"]
+X_SCOPES = ["tweet.read", "tweet.write", "users.read", "media.write", "offline.access"]
 
 
 class XAdapter(XManagement):
@@ -119,7 +119,7 @@ class XAdapter(XManagement):
             auth_url=auth_url,
             state=state,
             code_verifier=opts.get("code_verifier"),
-            metadata={"redirect_uri": redirect_uri},
+            metadata={"redirect_uri": redirect_uri, "requested_scopes": list(X_SCOPES)},
         )
 
     async def handle_callback(
@@ -183,8 +183,13 @@ class XAdapter(XManagement):
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
         expires_in = token_data.get("expires_in", 7200)
-        granted_scope_str = token_data.get("scope", "")
-        granted_scopes = granted_scope_str.split(" ") if granted_scope_str else X_SCOPES
+        # OAuth permits omitting scope when unchanged. Use this authorization's
+        # saved request, never the current global list, for that fallback.
+        granted_scopes = (
+            token_data["scope"].split()
+            if "scope" in token_data
+            else opts.get("oauth_metadata", {}).get("requested_scopes", [])
+        )
 
         # Fetch authenticated user profile
         user_info = await self._fetch_user_me(access_token)
@@ -275,6 +280,8 @@ class XAdapter(XManagement):
         account.encrypted_access_token = encrypt_token(new_access)
         account.encrypted_refresh_token = encrypt_token(new_refresh)
         account.token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
+        if "scope" in token_data:
+            account.granted_scopes = token_data["scope"].split()
         account.status = "active"
         return account
 

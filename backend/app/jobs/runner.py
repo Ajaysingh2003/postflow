@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.logging import configure_safe_logging
 from app.db.session import SessionLocal
 from app.modules.billing.service import reconcile_subscriptions
 from app.modules.channels.oauth import refresh_expiring_accounts
@@ -111,6 +112,7 @@ def refresh_channel_metadata(db: Session | None = None) -> int:
 
 def run(kind: str) -> None:
     """Main worker/scheduler loop daemon."""
+    configure_safe_logging()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)

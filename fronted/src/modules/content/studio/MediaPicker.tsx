@@ -43,7 +43,7 @@ export function MediaPreview({
           >
             {type.startsWith("image/") ? (
               <img
-                className="w-full max-h-[330px] object-cover"
+                className="block h-auto w-full max-h-[560px] object-contain"
                 src={`/api/media/${id}/content`}
                 alt={String(
                   asset?.alt_text ??

@@ -74,7 +74,7 @@ function PlatformBadge({ platform }: { platform: Platform }) {
 
 export function FeatureCardTwo() {
   return (
-    <BentoCard className="relative !h-[460px] sm:!h-[480px] flex flex-col overflow-hidden bg-white">
+    <BentoCard className="relative !h-[460px] sm:!h-[540px] flex flex-col overflow-hidden bg-white">
       <BentoHeader
         icon={CalendarClock}
         badge="Smart scheduler"

@@ -674,7 +674,9 @@ async def test_x_video_upload_resumes_processing(monkeypatch):
 
     variant = SimpleNamespace(payload={}, publish_state={})
     asset = SimpleNamespace(content_type="video/mp4")
-    account = SimpleNamespace(encrypted_access_token=encrypt_token("access"))
+    account = SimpleNamespace(
+        encrypted_access_token=encrypt_token("access"), granted_scopes=["media.write"]
+    )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         adapter = XAdapter(http_client=client)
         with pytest.raises(MediaProcessingPending):

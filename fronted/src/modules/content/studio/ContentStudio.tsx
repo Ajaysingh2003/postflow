@@ -13,7 +13,12 @@ import {
   useSyncExternalStore,
   Suspense,
 } from "react";
-import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import {
   CalendarClock,
   ChevronLeft,
@@ -97,14 +102,12 @@ import PublishedDetails, {
 import { cn } from "@/lib/utils";
 import { editorMedia } from "../component/editor/socialEditorModel";
 
-
-
-
-import {  FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmptyPosts } from "./EmptyPosts";
 
 const statusLabel: Record<string, string> = {
   failed: "Failed",
@@ -112,7 +115,6 @@ const statusLabel: Record<string, string> = {
   scheduled: "Scheduled",
   published: "Published",
 };
-
 
 const emptySubscribe = () => () => {};
 const clientSnapshot = () => true;
@@ -192,23 +194,7 @@ function ContentStudioWorkspace() {
         </button>
       </div>
     );
-  if (!accounts.data?.length || !workspace.data)
-    return (
-      <div className="flex items-center justify-center flex-col gap-4 h-full min-h-[350px] text-center text-muted-foreground p-8 text-xs [&_h1]:font-serif [&_h1]:text-[30px] [&_h1]:tracking-tight [&_h1]:text-foreground [&_p]:max-w-[350px] [&_p]:leading-relaxed [&>a]:mt-1.5">
-        <FilePenLine size={32} />
-        <h1>A place for your next idea</h1>
-        <p>
-          Connect a social account to open its editor and writing assistant.
-        </p>
-        <Link
-          className="inline-flex items-center justify-center gap-1.5 text-xs font-medium rounded-[7px] px-3.5 py-2.25 bg-[#239a7d] hover:bg-[#198268] text-white cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          href="/dashboard/channels"
-        >
-          <Plus size={15} />
-          Connect an account
-        </Link>
-      </div>
-    );
+  if (!accounts.data?.length || !workspace.data) return <EmptyPosts />;
   const linkedVariant = linkedPost.data?.variants.find(
     (variant) => variant.id === requestedVariant,
   );
@@ -277,9 +263,9 @@ function WorkspaceStudio({
       };
     const stored = readWritingSession(workspaceId, accounts);
     if (!startNew) return stored;
-    const account = accounts.find((item) => item.id === requestedAccount) ?? accounts.find(
-      (item) => item.id === stored.activeAccountId,
-    )!;
+    const account =
+      accounts.find((item) => item.id === requestedAccount) ??
+      accounts.find((item) => item.id === stored.activeAccountId)!;
     return {
       activeAccountId: account.id,
       drafts: { [account.id]: newDraft(account.platform) },
@@ -464,13 +450,21 @@ function AccountStudio({
   const create = useMutation(trpc.studio.create.mutationOptions());
   const edit = useMutation(trpc.studio.editDraft.mutationOptions());
   const { mutateAsync: runAssistant } = useMutation(
-    trpc.studio.runFeature.mutationOptions({onSettled: () => {
-      void Promise.all([
-        queryClient.invalidateQueries({queryKey: trpc.studio.usage.queryKey()}),
-        queryClient.invalidateQueries({queryKey: trpc.studio.billingUsage.queryKey()}),
-        queryClient.invalidateQueries({queryKey: trpc.studio.home.queryKey()}),
-      ]);
-    }}),
+    trpc.studio.runFeature.mutationOptions({
+      onSettled: () => {
+        void Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: trpc.studio.usage.queryKey(),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: trpc.studio.billingUsage.queryKey(),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: trpc.studio.home.queryKey(),
+          }),
+        ]);
+      },
+    }),
   );
   const cancel = useMutation(
     trpc.studio.cancel.mutationOptions({
@@ -778,7 +772,9 @@ function AccountStudio({
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: trpc.studio.home.queryKey() }),
       queryClient.invalidateQueries({ queryKey: trpc.studio.posts.queryKey() }),
-      queryClient.invalidateQueries({ queryKey: trpc.studio.postLibrary.queryKey() }),
+      queryClient.invalidateQueries({
+        queryKey: trpc.studio.postLibrary.queryKey(),
+      }),
       queryClient.invalidateQueries({ queryKey: trpc.studio.post.queryKey() }),
     ]);
   }
@@ -1593,38 +1589,39 @@ function AccountStudio({
           overflowXIndex !== -1 &&
           !dismissedLimitBanner && (
             <div className="absolute bottom-20 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-zinc-700/60 bg-zinc-900/95 px-4 py-2 text-xs font-medium text-white shadow-2xl backdrop-blur-md dark:bg-zinc-800/95 max-w-[calc(100%-2rem)]">
-  <span className="truncate text-zinc-200">
-    {getOrdinal(overflowXIndex + 1)} post is too long, you can increase the limit by upgrading to X Premium
-  </span>
+              <span className="truncate text-zinc-200">
+                {getOrdinal(overflowXIndex + 1)} post is too long, you can
+                increase the limit by upgrading to X Premium
+              </span>
 
-  <div className="flex shrink-0 items-center gap-1.5">
-    <a
-      href="https://x.com/i/premium_sign_up"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="rounded-md border border-zinc-700/50 bg-zinc-800 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-zinc-700"
-    >
-      View
-    </a>
-    <button
-      type="button"
-      onClick={() => autoSplitXPost(overflowXIndex)}
-      className="flex cursor-pointer items-center gap-1.5 rounded-md border border-zinc-700/50 bg-zinc-800 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-zinc-700"
-    >
-      <Scissors className="size-3.5" />
-      <span>Auto-split</span>
-    </button>
-  </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <a
+                  href="https://x.com/i/premium_sign_up"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-md border border-zinc-700/50 bg-zinc-800 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-zinc-700"
+                >
+                  View
+                </a>
+                <button
+                  type="button"
+                  onClick={() => autoSplitXPost(overflowXIndex)}
+                  className="flex cursor-pointer items-center gap-1.5 rounded-md border border-zinc-700/50 bg-zinc-800 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-zinc-700"
+                >
+                  <Scissors className="size-3.5" />
+                  <span>Auto-split</span>
+                </button>
+              </div>
 
-  <button
-    type="button"
-    onClick={() => setDismissedLimitBanner(true)}
-    className="shrink-0 cursor-pointer rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-700/60 hover:text-white"
-    aria-label="Dismiss banner"
-  >
-    <CloseIcon className="size-3.5" />
-  </button>
-</div>
+              <button
+                type="button"
+                onClick={() => setDismissedLimitBanner(true)}
+                className="shrink-0 cursor-pointer rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-700/60 hover:text-white"
+                aria-label="Dismiss banner"
+              >
+                <CloseIcon className="size-3.5" />
+              </button>
+            </div>
           )}
         <FloatingPostActions
           busy={busy}
@@ -1663,12 +1660,21 @@ function AccountStudio({
           setMediaTargetIndex(null);
         }}
         assets={assets}
-        ids={postMediaIds(writingPayload, writingMediaIds, mediaTargetIndex ?? 0)}
+        ids={postMediaIds(
+          writingPayload,
+          writingMediaIds,
+          mediaTargetIndex ?? 0,
+        )}
         capabilities={capabilities.data ?? {}}
         platform={account.platform}
         onChange={(chosenMediaIds) => {
           const currentDraft = current.current;
-          const next = setPostMedia(currentDraft.payload, currentDraft.mediaIds, mediaTargetIndex ?? 0, chosenMediaIds);
+          const next = setPostMedia(
+            currentDraft.payload,
+            currentDraft.mediaIds,
+            mediaTargetIndex ?? 0,
+            chosenMediaIds,
+          );
           update({ ...currentDraft, ...next });
         }}
         onRefresh={() => void mediaQuery.refetch()}

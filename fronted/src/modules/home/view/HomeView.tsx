@@ -5,10 +5,12 @@ import HeroSection from "../component/HeroSection";
 import IntroVideo from "../component/IntroVideo";
 import FeatureSection from "../component/FeatureSection";
 
-import GlobalDeliverySection from "../component/GlobalDeliverySection";
+
 import PricingSection from "@/modules/billing/component/PricingSection";
 import ReviewSection from "../component/ReviewSections";
 import FinalCta from "../component/FinalCta";
+import Intigration from "../component/Intigration";
+import McpSupport from "../component/McpSupport";
 
 function HomeView() {
   return (
@@ -18,7 +20,8 @@ function HomeView() {
       <HeroSection/>
       <ReviewSection/>
       <FeatureSection/>
-      <GlobalDeliverySection/>
+      <Intigration/>
+      <McpSupport/>
       <PricingSection/>
       <FinalCta/>
       </div>

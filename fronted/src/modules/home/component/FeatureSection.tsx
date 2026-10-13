@@ -6,13 +6,15 @@ import { FeatureCardOne } from "./FeatureCardOne";
 import { FeatureCardTwo } from "./FeatureCardTwo";
 import { FeatureCardFour } from "./FeatureCardFour";
 import { FeatureCardThree } from "./FeatureCardThree";
-import { FeatureCardFive } from "./FeatureCardFive";
+
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import FeatureCardTitlt from "./FeatureCardTitlt";
 import FeatureCardSixth from "./FeatureCardSixth";
 import {FeatureCardNormal} from "./FeatureCardNormal";
 import FeatureCardTilt from "./FeatureCardTitlt";
+import { FeatureCardChannels, FeatureCardEditor, FeatureCardReview } from "./FeatureCardFive";
+import { DraftvaHeadline } from "./FeatureHeading";
 
 /* -------------------------------------------------------------------------- */
 /* Main Feature Section                                                       */
@@ -49,15 +51,9 @@ export default function FeatureSection() {
       <div className="relative mx-auto max-w-6xlz">
         {/* Header */}
         <div className="mb-8 max-w-2xl select-none sm:mb-10 lg:mb-12">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-[#B3E61D]" />
+          
 
-            <span className="font-subheading text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c8f86]">
-              Video infrastructure
-            </span>
-          </div>
-
-          <h2 className="font-heading text-[22px] font-medium leading-[1.35] tracking-[-0.02em] sm:text-[26px] md:text-[27px] lg:text-[36px]">
+          {/* <h2 className="font-heading text-[22px] font-medium leading-[1.35] tracking-[-0.02em] sm:text-[26px] md:text-[27px] lg:text-[36px]">
             <span className={activeStep === 0 ? active : muted}>
               Encode once,{" "}
             </span>
@@ -97,7 +93,9 @@ export default function FeatureSection() {
             <span className={activeStep === 2 ? active : muted}>
               with real-time playback data.
             </span>
-          </h2>
+          </h2> */}
+
+        <DraftvaHeadline activeStep={activeStep} onStepChange={setActiveStep}      />
         </div>
 
         {/* Bento Grid */}
@@ -116,7 +114,13 @@ export default function FeatureSection() {
           </div>
 
           <div className="lg:col-span-2 space-y-4">
-            <FeatureCardFive />
+            {/* <FeatureCardFive /> */}
+
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+              <FeatureCardEditor/>
+              <FeatureCardReview/>
+              <FeatureCardChannels/>
+            </div>
           </div>
         </div>
       </div>

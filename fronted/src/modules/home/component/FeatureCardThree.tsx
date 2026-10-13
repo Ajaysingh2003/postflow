@@ -1,1205 +1,409 @@
 "use client";
 
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { animate, motion, useInView, useReducedMotion } from "framer-motion";
+import { ArrowUpRight, BarChart3 } from "lucide-react";
+import { BentoCard, BentoHeader, CardBottomFade } from "./FeatureSection";
 
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-} from "framer-motion";
+const BRAND = "#3fda8a";
+// Pure brand green is too light for thin lines and small text on white
+const DEEP = "#1f9d5c";
+const ease = [0.16, 1, 0.3, 1] as const;
+const spring = { type: "spring", stiffness: 520, damping: 42, mass: 0.6 } as const;
 
-import {
-  ArrowUpRight,
-  BarChart3,
-  ChevronDown,
-  Sparkles,
-  TrendingUp,
-} from "lucide-react";
+// Plot height. The y-axis labels use the same value so they always line up.
+const CHART_H = "h-[78px]";
 
-import { BentoCard } from "./FeatureSection";
+/* ------------------------------- demo data -------------------------------- */
 
-/* -------------------------------------------------------------------------- */
-/* Types                                                                      */
-/* -------------------------------------------------------------------------- */
+/* Daily impressions, Sep 14 to Oct 11 (28 days) */
+const DATA = [
+  3200, 3400, 3100, 3800, 4100, 3600, 3300, 4200, 4500, 4300, 4800, 5200, 4700, 4400,
+  5600, 6100, 5800, 5400, 6300, 7200, 6800, 6100, 8100, 8600, 8100, 7400, 9300, 9900,
+];
+const MAX = 10_000;
+const TOTAL = DATA.reduce((sum, v) => sum + v, 0);
+const AVG = Math.round(TOTAL / DATA.length);
+const ENGAGEMENT_RATE = 0.046;
+const BEST = DATA.indexOf(Math.max(...DATA)); // the tooltip rests on the best day
 
-type Platform = "all" | "x" | "linkedin" | "threads";
-type DateRange = "7D" | "30D";
-
-type MetricData = {
-  impressions: string;
-  engagement: string;
-  followers: string;
-  growth: string;
-  topPost: string;
-  topEngagement: string;
-};
-
-type Point = {
-  x: number;
-  y: number;
-  value: number;
-};
-
-/* -------------------------------------------------------------------------- */
-/* Platform configuration                                                     */
-/* -------------------------------------------------------------------------- */
-
-const PLATFORMS: {
-  id: Platform;
-  label: string;
-  short: string;
-}[] = [
+const KPIS = [
   {
-    id: "all",
-    label: "All platforms",
-    short: "All",
+    label: "Impressions",
+    to: TOTAL / 1000,
+    format: (v: number) => `${v.toFixed(1)}K`,
+    delta: "+18.4%",
   },
   {
-    id: "x",
-    label: "X",
-    short: "𝕏",
+    label: "Engagement",
+    to: 4.6,
+    format: (v: number) => `${v.toFixed(1)}%`,
+    delta: "+0.9%",
   },
   {
-    id: "linkedin",
-    label: "LinkedIn",
-    short: "in",
-  },
-  {
-    id: "threads",
-    label: "Threads",
-    short: "@",
+    label: "New followers",
+    to: 1840,
+    format: (v: number) => `+${Math.round(v).toLocaleString("en-US")}`,
+    delta: "+11.2%",
   },
 ];
 
-/* -------------------------------------------------------------------------- */
-/* Demo analytics data                                                        */
-/* -------------------------------------------------------------------------- */
+type Platform = "linkedin" | "x";
 
-const CHART_DATA: Record<
-  Platform,
-  Record<DateRange, number[]>
-> = {
-  all: {
-    "7D": [18, 23, 22, 26, 24, 33, 41],
-    "30D": [
-      15, 18, 17, 19, 22, 21, 25,
-      23, 26, 29, 27, 33, 36, 41,
-    ],
-  },
-
-  x: {
-    "7D": [7, 9, 8, 11, 10, 12, 15],
-    "30D": [
-      5, 7, 6, 8, 7, 9, 8,
-      10, 9, 12, 10, 13, 12, 15,
-    ],
-  },
-
-  linkedin: {
-    "7D": [9, 11, 12, 13, 11, 17, 20],
-    "30D": [
-      8, 9, 10, 9, 12, 11, 14,
-      12, 16, 15, 14, 18, 19, 20,
-    ],
-  },
-
-  threads: {
-    "7D": [2, 3, 2, 2, 3, 4, 6],
-    "30D": [
-      2, 2, 3, 2, 3, 3, 3,
-      4, 3, 4, 5, 4, 5, 6,
-    ],
-  },
+const TOP_POST: { platform: Platform; title: string; rate: number } = {
+  platform: "linkedin",
+  title: "Why consistency beats going viral",
+  rate: 8.4,
 };
 
-/* -------------------------------------------------------------------------- */
-/* KPI data                                                                   */
-/* -------------------------------------------------------------------------- */
+const PLATFORMS: { label: string; value: number; color: string }[] = [
+  { label: "LinkedIn", value: 54, color: BRAND },
+  { label: "X", value: 31, color: "#11120e" },
+  { label: "Threads", value: 15, color: "rgba(17,18,14,0.25)" },
+];
+const PLATFORM_SUMMARY = PLATFORMS.map((p) => `${p.label} ${p.value}%`).join(" · ");
 
-const METRICS: Record<
-  Platform,
-  Record<DateRange, MetricData>
-> = {
-  all: {
-    "7D": {
-      impressions: "187.4K",
-      engagement: "6.8%",
-      followers: "+624",
-      growth: "+18.6%",
-      topPost: "Why consistency beats going viral",
-      topEngagement: "9.2%",
-    },
-    "30D": {
-      impressions: "812.6K",
-      engagement: "6.4%",
-      followers: "+2,418",
-      growth: "+24.3%",
-      topPost: "Lessons from building in public",
-      topEngagement: "11.4%",
-    },
-  },
+/* ------------------------------ chart geometry ----------------------------- */
 
-  x: {
-    "7D": {
-      impressions: "68.2K",
-      engagement: "5.9%",
-      followers: "+218",
-      growth: "+12.8%",
-      topPost: "Build something people come back to",
-      topEngagement: "8.7%",
-    },
-    "30D": {
-      impressions: "294.8K",
-      engagement: "5.6%",
-      followers: "+842",
-      growth: "+19.2%",
-      topPost: "A lesson from shipping my SaaS",
-      topEngagement: "10.2%",
-    },
-  },
+const n = DATA.length;
+const points = DATA.map((v, i): [number, number] => [(i / (n - 1)) * 100, 100 - (v / MAX) * 100]);
+const AVG_Y = 100 - (AVG / MAX) * 100;
 
-  linkedin: {
-    "7D": {
-      impressions: "94.6K",
-      engagement: "7.4%",
-      followers: "+316",
-      growth: "+22.4%",
-      topPost: "Why consistency beats going viral",
-      topEngagement: "12.8%",
-    },
-    "30D": {
-      impressions: "408.5K",
-      engagement: "7.1%",
-      followers: "+1,264",
-      growth: "+28.6%",
-      topPost: "What building products taught me",
-      topEngagement: "13.6%",
-    },
-  },
-
-  threads: {
-    "7D": {
-      impressions: "24.6K",
-      engagement: "6.2%",
-      followers: "+90",
-      growth: "+16.8%",
-      topPost: "Small improvements compound",
-      topEngagement: "8.4%",
-    },
-    "30D": {
-      impressions: "109.3K",
-      engagement: "6.1%",
-      followers: "+312",
-      growth: "+21.7%",
-      topPost: "The best ideas start as simple notes",
-      topEngagement: "9.6%",
-    },
-  },
-};
-
-/* -------------------------------------------------------------------------- */
-/* Constants                                                                  */
-/* -------------------------------------------------------------------------- */
-
-const ROTATE_INTERVAL = 8000;
-const CURSOR_INTERVAL = 1600;
-
-const CHART_HEIGHT = 100;
-
-const CHART_LABELS: Record<DateRange, string[]> = {
-  "7D": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-  "30D": ["Day 1", "Day 7", "Day 14", "Day 21", "Day 30"],
-};
-
-const ease = [0.22, 1, 0.36, 1] as const;
-
-/* -------------------------------------------------------------------------- */
-/* Chart helpers                                                              */
-/* -------------------------------------------------------------------------- */
-
-function getPoints(values: number[]): Point[] {
-  const max = Math.max(...values, 1) * 1.18;
-
-  return values.map((value, index) => ({
-    x:
-      values.length === 1
-        ? 50
-        : (index / (values.length - 1)) * 100,
-
-    y: 86 - (value / max) * 72,
-
-    value,
-  }));
+// Catmull-Rom to cubic Bézier, so the curve passes through every sample
+function smooth(p: [number, number][]) {
+  const f = (v: number) => v.toFixed(2);
+  let d = `M${f(p[0][0])} ${f(p[0][1])}`;
+  for (let i = 0; i < p.length - 1; i++) {
+    const p0 = p[i - 1] ?? p[i];
+    const p1 = p[i];
+    const p2 = p[i + 1];
+    const p3 = p[i + 2] ?? p2;
+    d += ` C${f(p1[0] + (p2[0] - p0[0]) / 6)} ${f(p1[1] + (p2[1] - p0[1]) / 6)} ${f(p2[0] - (p3[0] - p1[0]) / 6)} ${f(p2[1] - (p3[1] - p1[1]) / 6)} ${f(p2[0])} ${f(p2[1])}`;
+  }
+  return d;
 }
+const LINE = smooth(points);
+const AREA = `${LINE} L100 100 L0 100 Z`;
 
-function createSmoothPath(points: Point[]) {
-  if (!points.length) return "";
+const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
+const dateAt = (i: number) => dateFmt.format(new Date(Date.UTC(2026, 8, 14 + i)));
 
-  let path = `M ${points[0].x} ${points[0].y}`;
+/* ----------------------------- platform badge ------------------------------ */
 
-  for (let i = 0; i < points.length - 1; i++) {
-    const current = points[i];
-    const next = points[i + 1];
+const LINKEDIN_PATH =
+  "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z";
+const X_PATH =
+  "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z";
 
-    const middleX = (current.x + next.x) / 2;
-
-    path += `
-      C ${middleX} ${current.y},
-        ${middleX} ${next.y},
-        ${next.x} ${next.y}
-    `;
-  }
-
-  return path;
-}
-
-function formatChartValue(value: number) {
-  return `${value.toFixed(1).replace(".0", "")}K`;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Platform symbol                                                            */
-/* -------------------------------------------------------------------------- */
-
-function PlatformSymbol({
-  platform,
-}: {
-  platform: Platform;
-}) {
-  if (platform === "all") {
-    return (
-      <BarChart3 className="size-3.5" />
-    );
-  }
-
-  if (platform === "linkedin") {
-    return (
-      <span className="text-[11px] font-bold leading-none">
-        in
-      </span>
-    );
-  }
-
-  if (platform === "threads") {
-    return (
-      <span className="text-[14px] font-semibold leading-none">
-        @
-      </span>
-    );
-  }
-
+function PlatformBadge({ platform }: { platform: Platform }) {
   return (
-    <span className="text-[14px] leading-none">
-      𝕏
+    <span
+      className={`flex size-[18px] shrink-0 items-center justify-center rounded-[5px] ${
+        platform === "linkedin" ? "bg-[#0A66C2]" : "bg-[#11120e]"
+      }`}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="size-3 fill-white">
+        <path d={platform === "x" ? X_PATH : LINKEDIN_PATH} />
+      </svg>
     </span>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* KPI card                                                                   */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------- small pieces ------------------------------ */
 
-function Metric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-}) {
-  return (
-    <div className="min-w-0 px-3 py-2.5 sm:px-4">
-      <p
-        className="
-          truncate font-subheading
-          text-[9.5px] font-medium
-          text-[#8b9290]
-        "
-      >
-        {label}
-      </p>
-
-      <div className="mt-1 flex items-center gap-1.5">
-        <span
-          className="
-            truncate font-heading
-            text-[17px] font-semibold
-            leading-none tracking-[-0.045em]
-            tabular-nums text-[#191d1a]
-            sm:text-[19px]
-          "
-        >
-          {value}
-        </span>
-      </div>
-
-      {detail && (
-        <p
-          className="
-            mt-1 text-[9px]
-            font-medium text-[#548b66]
-          "
-        >
-          {detail}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Interactive analytics chart                                                */
-/* -------------------------------------------------------------------------- */
-
-function AnalyticsChart({
-  platform,
-  range,
-  values,
-  reducedMotion,
-}: {
-  platform: Platform;
-  range: DateRange;
-  values: number[];
-  reducedMotion: boolean;
-}) {
-  const plotRef = useRef<HTMLDivElement>(null);
-
-  const gradientId = useId().replace(/:/g, "");
-
-  const [hoveredIndex, setHoveredIndex] =
-    useState<number | null>(null);
-
-  const [autoIndex, setAutoIndex] =
-    useState(0);
-
-  const points = useMemo(
-    () => getPoints(values),
-    [values],
-  );
-
-  const linePath = useMemo(
-    () => createSmoothPath(points),
-    [points],
-  );
-
-  const areaPath = `${linePath} L 100 ${CHART_HEIGHT} L 0 ${CHART_HEIGHT} Z`;
-
-  const selectedIndex =
-    hoveredIndex !== null
-      ? Math.min(hoveredIndex, points.length - 1)
-      : autoIndex % points.length;
-
-  const selectedPoint = points[selectedIndex];
-
-  /* Automatically highlight different points */
+function Counter({ to, run, format }: { to: number; run: boolean; format: (v: number) => string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
-    if (reducedMotion) return;
-
-    const interval = window.setInterval(() => {
-      setAutoIndex(
-        (current) => (current + 1) % values.length,
-      );
-    }, CURSOR_INTERVAL);
-
-    return () => window.clearInterval(interval);
-  }, [values.length, reducedMotion]);
-
-  /* Reset pointer on dataset change */
-
-  useEffect(() => {
-    setHoveredIndex(null);
-    setAutoIndex(0);
-  }, [platform, range]);
-
-  const onPointerMove = (
-    event: React.PointerEvent<HTMLDivElement>,
-  ) => {
-    const rect =
-      plotRef.current?.getBoundingClientRect();
-
-    if (!rect) return;
-
-    const relativeX =
-      (event.clientX - rect.left) / rect.width;
-
-    const index = Math.round(
-      Math.max(0, Math.min(1, relativeX)) *
-        (points.length - 1),
-    );
-
-    setHoveredIndex(index);
-  };
-
-  const onKeyDown = (
-    event: React.KeyboardEvent<HTMLDivElement>,
-  ) => {
-    if (
-      event.key !== "ArrowLeft" &&
-      event.key !== "ArrowRight"
-    ) {
+    if (reduced) {
+      if (ref.current) ref.current.textContent = format(to);
       return;
     }
-
-    event.preventDefault();
-
-    const direction =
-      event.key === "ArrowRight" ? 1 : -1;
-
-    setHoveredIndex((current) => {
-      const next =
-        (current ?? selectedIndex) + direction;
-
-      return Math.max(
-        0,
-        Math.min(points.length - 1, next),
-      );
+    if (!run) return;
+    const controls = animate(0, to, {
+      duration: 1.4,
+      ease,
+      onUpdate: (v) => {
+        if (ref.current) ref.current.textContent = format(v);
+      },
     });
-  };
+    return () => controls.stop();
+  }, [run, to, format, reduced]);
 
-  const label =
-    range === "7D"
-      ? CHART_LABELS["7D"][selectedIndex]
-      : `Day ${
-          Math.round(
-            (selectedIndex / (points.length - 1)) * 29,
-          ) + 1
-        }`;
-
-  return (
-    <div className="px-3.5 pb-2 pt-2.5 sm:px-4">
-      {/* Chart heading */}
-
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div>
-          <p
-            className="
-              text-[10.5px] font-semibold
-              text-[#303631]
-            "
-          >
-            Impressions over time
-          </p>
-
-          <p className="mt-0.5 text-[9px] text-[#a0a6a1]">
-            Your content performance
-          </p>
-        </div>
-
-        {/* Live point readout */}
-
-        <div className="flex items-center gap-1.5">
-          <span
-            className="
-              size-1.5 rounded-full
-              bg-[#548b66]
-            "
-          />
-
-          <span
-            className="
-              text-[10px] font-medium
-              tabular-nums text-[#626b65]
-            "
-          >
-            {formatChartValue(selectedPoint.value)}
-          </span>
-
-          <span className="text-[9px] text-[#9ba29c]">
-            {label}
-          </span>
-        </div>
-      </div>
-
-      {/* Graph */}
-
-      <div
-        ref={plotRef}
-        role="slider"
-        tabIndex={0}
-        aria-label="Explore impressions over time"
-        aria-valuemin={0}
-        aria-valuemax={points.length - 1}
-        aria-valuenow={selectedIndex}
-        aria-valuetext={`${label}, ${formatChartValue(selectedPoint.value)} impressions`}
-        onPointerMove={onPointerMove}
-        onPointerDown={onPointerMove}
-        onPointerLeave={() => setHoveredIndex(null)}
-        onPointerCancel={() => setHoveredIndex(null)}
-        onKeyDown={onKeyDown}
-        onBlur={() => setHoveredIndex(null)}
-        className="
-          relative h-[83px] w-full
-          cursor-crosshair touch-pan-y
-          select-none outline-none
-          focus-visible:rounded
-          focus-visible:ring-2
-          focus-visible:ring-[#548b66]/40
-          sm:h-[91px]
-        "
-      >
-        <AnimatePresence mode="wait">
-          <motion.svg
-            key={`${platform}-${range}`}
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            className="absolute inset-0 size-full overflow-visible"
-            initial={
-              reducedMotion
-                ? false
-                : { opacity: 0, y: 5 }
-            }
-            animate={{
-              opacity: 1,
-              y: 0,
-            }}
-            exit={{
-              opacity: 0,
-              y: -3,
-            }}
-            transition={{
-              duration: reducedMotion ? 0 : 0.35,
-              ease,
-            }}
-          >
-            <defs>
-              <linearGradient
-                id={gradientId}
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
-                <stop
-                  offset="0%"
-                  stopColor="#83af91"
-                  stopOpacity="0.26"
-                />
-
-                <stop
-                  offset="100%"
-                  stopColor="#83af91"
-                  stopOpacity="0.01"
-                />
-              </linearGradient>
-            </defs>
-
-            {/* Grid */}
-
-            {[20, 50, 80].map((y) => (
-              <line
-                key={y}
-                x1="0"
-                x2="100"
-                y1={y}
-                y2={y}
-                stroke="#e8ebe8"
-                strokeWidth="1"
-                strokeDasharray="3 4"
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-
-            {/* Area */}
-
-            <motion.path
-              d={areaPath}
-              fill={`url(#${gradientId})`}
-              initial={
-                reducedMotion
-                  ? false
-                  : { opacity: 0 }
-              }
-              animate={{ opacity: 1 }}
-              transition={{
-                duration: 0.6,
-              }}
-            />
-
-            {/* Line */}
-
-            <motion.path
-              d={linePath}
-              fill="none"
-              stroke="#477e5b"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-              initial={
-                reducedMotion
-                  ? false
-                  : { pathLength: 0 }
-              }
-              animate={{ pathLength: 1 }}
-              transition={{
-                duration: reducedMotion ? 0 : 1.15,
-                ease,
-              }}
-            />
-
-            {/* Active cursor */}
-
-            <line
-              x1={selectedPoint.x}
-              x2={selectedPoint.x}
-              y1={selectedPoint.y}
-              y2="100"
-              stroke="#477e5b"
-              strokeOpacity="0.3"
-              strokeWidth="1"
-              strokeDasharray="3 3"
-              vectorEffect="non-scaling-stroke"
-            />
-
-            {/* Active point */}
-
-            <circle
-              cx={selectedPoint.x}
-              cy={selectedPoint.y}
-              r="2.6"
-              fill="#ffffff"
-              stroke="#477e5b"
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-            />
-
-            <circle
-              cx={selectedPoint.x}
-              cy={selectedPoint.y}
-              r="1"
-              fill="#477e5b"
-            />
-          </motion.svg>
-        </AnimatePresence>
-      </div>
-
-      {/* X-axis */}
-
-      <div
-        aria-hidden="true"
-        className="
-          mt-1 flex items-center
-          justify-between text-[9px]
-          text-[#a3aaa4]
-        "
-      >
-        {CHART_LABELS[range].map((label) => (
-          <span key={label}>{label}</span>
-        ))}
-      </div>
-    </div>
-  );
+  return <span ref={ref}>{format(0)}</span>;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Analytics dashboard                                                        */
-/* -------------------------------------------------------------------------- */
-
-function AnalyticsDashboard() {
-  const reducedMotion = !!useReducedMotion();
-
-  const [platform, setPlatform] =
-    useState<Platform>("all");
-
-  const [range, setRange] =
-    useState<DateRange>("7D");
-
-  const [cycle, setCycle] = useState(0);
-
-  const metrics = METRICS[platform][range];
-  const chartValues = CHART_DATA[platform][range];
-
-  /*
-   * Infinite platform rotation.
-   *
-   * All -> X -> LinkedIn -> Threads -> All
-   *
-   * Continues even while hovering.
-   * Manual selections restart the countdown.
-   */
-
-  useEffect(() => {
-    if (reducedMotion) return;
-
-    const timeout = window.setTimeout(() => {
-      setPlatform((current) => {
-        const currentIndex = PLATFORMS.findIndex(
-          (item) => item.id === current,
-        );
-
-        return PLATFORMS[
-          (currentIndex + 1) % PLATFORMS.length
-        ].id;
-      });
-    }, ROTATE_INTERVAL);
-
-    return () => window.clearTimeout(timeout);
-  }, [platform, cycle, reducedMotion]);
-
-  const choosePlatform = (next: Platform) => {
-    setPlatform(next);
-    setCycle((current) => current + 1);
-  };
-
-  return (
-    <div
-      className="
-        relative mx-auto w-full
-        max-w-[520px]
-        overflow-hidden rounded-[14px]
-        border border-[#e7eae7]
-        bg-white
-        shadow-[0_14px_35px_-22px_rgba(20,35,25,0.2),0_2px_8px_rgba(20,35,25,0.035)]
-      "
-    >
-      {/* Dashboard toolbar */}
-
-      <div
-        className="
-          flex h-[41px] items-center
-          justify-between gap-2
-          border-b border-black/[0.06]
-          px-3.5 sm:px-4
-        "
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="
-              flex size-6 shrink-0
-              items-center justify-center
-              rounded-md bg-[#f3f5f3]
-            "
-          >
-            <BarChart3 className="size-3 text-[#444b45]" />
-          </span>
-
-          <span
-            className="
-              truncate text-[11px]
-              font-semibold text-[#303630]
-            "
-          >
-            Performance overview
-          </span>
-        </div>
-
-        {/* Date filters */}
-
-        <div
-          role="group"
-          aria-label="Analytics date range"
-          className="
-            flex shrink-0 items-center
-            rounded-md border
-            border-black/[0.06]
-            bg-[#f6f7f6] p-[2px]
-          "
-        >
-          {(["7D", "30D"] as DateRange[]).map(
-            (item) => {
-              const active = range === item;
-
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setRange(item)}
-                  className={`
-                    rounded-[4px]
-                    px-2.5 py-1
-                    text-[9.5px]
-                    font-medium
-                    transition-all duration-200
-                    focus-visible:outline-none
-                    focus-visible:ring-2
-                    focus-visible:ring-[#548b66]/40
-                    ${
-                      active
-                        ? "bg-white text-[#242a25] shadow-sm"
-                        : "text-[#9aa19b] hover:text-[#444b45]"
-                    }
-                  `}
-                >
-                  {item}
-                </button>
-              );
-            },
-          )}
-        </div>
-      </div>
-
-      {/* Platform tabs */}
-
-      <div
-        role="group"
-        aria-label="Filter analytics by platform"
-        className="
-          flex items-center gap-1
-          border-b border-black/[0.055]
-          px-3 py-1.5 sm:px-3.5
-        "
-      >
-        {PLATFORMS.map((item) => {
-          const active = item.id === platform;
-
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() =>
-                choosePlatform(item.id)
-              }
-              aria-pressed={active}
-              className={`
-                flex min-w-0 items-center
-                justify-center gap-1.5
-                rounded-md px-2.5 py-1.5
-                text-[10px] font-medium
-                transition-colors duration-200
-                focus-visible:outline-none
-                focus-visible:ring-2
-                focus-visible:ring-[#548b66]/40
-                ${
-                  active
-                    ? "bg-[#232823] text-white"
-                    : "text-[#8f9790] hover:bg-[#f4f5f3] hover:text-[#343a35]"
-                }
-              `}
-            >
-              <PlatformSymbol platform={item.id} />
-
-              <span
-                className={
-                  item.id !== "all"
-                    ? "hidden min-[420px]:inline"
-                    : ""
-                }
-              >
-                {item.id === "all" ? "All" : item.label}
-              </span>
-            </button>
-          );
-        })}
-
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          <span className="size-1.5 rounded-full bg-[#69a57b]" />
-
-          <span className="text-[9px] text-[#9aa19c]">
-            Overview
-          </span>
-        </div>
-      </div>
-
-      {/* KPI metrics */}
-
-      <div
-        className="
-          grid grid-cols-3
-          divide-x divide-black/[0.06]
-          border-b border-black/[0.06]
-        "
-      >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`${platform}-${range}-metrics`}
-            className="col-span-3 grid grid-cols-3 divide-x divide-black/[0.06]"
-            initial={
-              reducedMotion
-                ? false
-                : { opacity: 0, y: 5 }
-            }
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{
-              duration: reducedMotion ? 0 : 0.25,
-            }}
-          >
-            <Metric
-              label="Impressions"
-              value={metrics.impressions}
-              detail={metrics.growth}
-            />
-
-            <Metric
-              label="Engagement"
-              value={metrics.engagement}
-              detail="Engagement rate"
-            />
-
-            <Metric
-              label="New followers"
-              value={metrics.followers}
-              detail="Net growth"
-            />
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* Chart */}
-
-      <AnalyticsChart
-        platform={platform}
-        range={range}
-        values={chartValues}
-        reducedMotion={reducedMotion}
-      />
-
-      {/* Top-performing post */}
-
-      <div
-        className="
-          flex min-h-[38px]
-          items-center justify-between
-          gap-2 border-t
-          border-black/[0.06]
-          bg-[#fafbfa]
-          px-3.5 py-2 sm:px-4
-        "
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="
-              flex size-5 shrink-0
-              items-center justify-center
-              rounded-md bg-[#eaf3ec]
-            "
-          >
-            <Sparkles className="size-3 text-[#508361]" />
-          </span>
-
-          <div className="min-w-0">
-            <p
-              className="
-                text-[9px] font-medium
-                text-[#929a94]
-              "
-            >
-              Top-performing post
-            </p>
-
-            <p
-              className="
-                truncate text-[10px]
-                font-medium text-[#3b423c]
-              "
-            >
-              {metrics.topPost}
-            </p>
-          </div>
-        </div>
-
-        <div
-          className="
-            flex shrink-0 items-center
-            gap-0.5 text-[10px]
-            font-semibold text-[#548765]
-          "
-        >
-          {metrics.topEngagement}
-
-          <ArrowUpRight className="size-3" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Feature Card Three                                                         */
-/* -------------------------------------------------------------------------- */
+/* ---------------------------------- card ----------------------------------- */
 
 export function FeatureCardThree() {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const plotRef = useRef<HTMLDivElement>(null);
+  const inView = useInView(rootRef, { once: true, margin: "-80px" });
+  const reduced = useReducedMotion();
+  const show = inView || !!reduced;
+  const init = <T extends object>(v: T) => (reduced ? false : v);
+
+  const [active, setActive] = useState(BEST);
+
+  const value = DATA[active];
+  const [x, y] = points[active];
+  const tipX = Math.min(76, Math.max(24, x));
+  const below = y < 45; // tooltip drops under the point near the top of the chart
+
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = plotRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    setActive(Math.round(frac * (n - 1)));
+  };
+
   return (
-    <BentoCard
-      className="
-      !h-[460px] sm:!h-[480px]
-        group relative isolate
-        flex z!h-[455px] min-w-0
-        flex-col overflow-hidden
-        !border-black/[0.07]
-        !bg-white
-        text-[#171717]
-      "
-    >
-      {/* Background */}
+    <BentoCard className="relative flex !h-[460px] flex-col overflow-hidden bg-background sm:!h-[500px]">
+      <BentoHeader
+        icon={BarChart3}
+        badge="Analytics"
+        title="Know what works. Grow faster."
+        description="Track engagement, understand your audience, and discover which content performs best."
+        linkText="Explore analytics ↗"
+        href="/register"
+      />
 
-      <div
-        aria-hidden="true"
-        className="
-          pointer-events-none
-          absolute inset-0 overflow-hidden
-        "
-      >
-        {/* Ambient glow */}
+      {/* Fills the space under the header. Anything that ever overflows is clipped. */}
+      <div className="relative min-h-0 flex-1 select-none overflow-hidden px-3 pb-4 sm:px-6 sm:pb-6">
+        <motion.div
+          ref={rootRef}
+          initial={init({ opacity: 0, y: 18 })}
+          animate={show ? { opacity: 1, y: 0 } : undefined}
+          transition={{ duration: 0.7, ease }}
+          className="relative z-10 mx-auto w-full max-w-[560px]"
+        >
+          <div className="overflow-hidden rounded-[16px] border border-border/70 bg-background shadow-[0_18px_40px_-28px_rgba(15,23,42,.28)]">
+            {/* Headline numbers count up once in view */}
+            <div className="grid grid-cols-3 divide-x divide-border/60 border-b border-border/60">
+              {KPIS.map((k) => (
+                <div key={k.label} className="min-w-0 px-3 py-2 sm:px-4">
+                  <p className="font-subheading truncate text-[10.5px] font-medium leading-4 text-muted-foreground">
+                    {k.label}
+                  </p>
+                  <div className="mt-0.5 flex items-baseline gap-1.5">
+                    <span className="font-heading truncate text-sm font-bold leading-[18px] tracking-tight tabular-nums text-foreground sm:text-[15px]">
+                      <Counter to={k.to} run={show} format={k.format} />
+                    </span>
+                    <span
+                      className="font-subheading hidden items-center text-[10px] font-semibold leading-none sm:inline-flex"
+                      style={{ color: DEEP }}
+                    >
+                      <ArrowUpRight className="size-3" aria-hidden="true" />
+                      {k.delta}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
 
-        <div
-          className="
-            absolute bottom-[-150px]
-            left-1/2 h-[300px]
-            w-[85%] -translate-x-1/2
-            rounded-full
-            bg-[#edf1ed]/75
-            blur-[95px]
-          "
-        />
+            {/* Impressions over time */}
+            <div className="px-3 pb-2 pt-2.5 sm:px-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-heading text-xs font-semibold leading-4 text-foreground">
+                  Impressions
+                  <span className="font-subheading ml-1.5 font-normal text-muted-foreground">
+                    · last 28 days
+                  </span>
+                </p>
+                <p className="font-subheading shrink-0 text-[10px] leading-4 text-muted-foreground">
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {compact.format(AVG)}
+                  </span>{" "}
+                  avg. / day
+                </p>
+              </div>
 
-        {/* Soft neutral radial gradient */}
+              <div className="mt-2 flex gap-1.5">
+                <div
+                  aria-hidden
+                  className={`font-subheading flex ${CHART_H} shrink-0 flex-col justify-between py-0.5 text-right text-[9.5px] leading-none text-muted-foreground/70`}
+                >
+                  <span>10K</span>
+                  <span>5K</span>
+                  <span>0</span>
+                </div>
 
-        <div
-          className="
-            absolute inset-0
-            bg-[radial-gradient(ellipse_at_50%_100%,rgba(0,0,0,0.018),transparent_65%)]
-          "
-        />
-      </div>
+                <div className="min-w-0 flex-1">
+                  <div
+                    ref={plotRef}
+                    onPointerMove={onMove}
+                    onPointerDown={onMove}
+                    onPointerLeave={() => setActive(BEST)}
+                    onPointerCancel={() => setActive(BEST)}
+                    role="img"
+                    aria-label={`Daily impressions over 28 days. ${value.toLocaleString("en-US")} impressions on ${dateAt(active)}.`}
+                    className={`relative ${CHART_H} cursor-crosshair touch-pan-y`}
+                  >
+                    {/* The curve wipes in from the left */}
+                    <motion.svg
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                      aria-hidden
+                      className="absolute inset-0 size-full overflow-visible text-foreground"
+                      initial={init({ clipPath: "inset(-6px 100% -6px -6px)" })}
+                      animate={show ? { clipPath: "inset(-6px 0% -6px -6px)" } : undefined}
+                      transition={{ duration: 1.3, ease, delay: 0.25 }}
+                    >
+                      <defs>
+                        <linearGradient id="analytics-area" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0" stopColor={BRAND} stopOpacity="0.38" />
+                          <stop offset="1" stopColor={BRAND} stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      {[0, 50, 100].map((g) => (
+                        <line
+                          key={g}
+                          x1="0"
+                          x2="100"
+                          y1={g}
+                          y2={g}
+                          stroke="currentColor"
+                          strokeOpacity="0.08"
+                          strokeDasharray="2 3"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      ))}
+                      <line
+                        x1="0"
+                        x2="100"
+                        y1={AVG_Y}
+                        y2={AVG_Y}
+                        stroke={DEEP}
+                        strokeOpacity="0.5"
+                        strokeDasharray="4 4"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <path d={AREA} fill="url(#analytics-area)" />
+                      <path
+                        d={LINE}
+                        fill="none"
+                        stroke={DEEP}
+                        strokeWidth="2"
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </motion.svg>
 
-      {/* Feature heading */}
+                    {/* Cursor, point and readout appear once the curve has drawn */}
+                    <motion.div
+                      className="pointer-events-none absolute inset-0"
+                      initial={init({ opacity: 0 })}
+                      animate={show ? { opacity: 1 } : undefined}
+                      transition={{ duration: 0.4, delay: 1.3 }}
+                    >
+                      <motion.span
+                        aria-hidden
+                        initial={false}
+                        animate={{ left: `${x}%` }}
+                        transition={spring}
+                        className="absolute inset-y-0 w-px bg-foreground/15"
+                      />
+                      <motion.span
+                        aria-hidden
+                        initial={false}
+                        animate={{ left: `${x}%`, top: `${y}%` }}
+                        transition={spring}
+                        className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-[#11120e] shadow ring-4 ring-[#3fda8a]/30"
+                      />
+                      <motion.div
+                        aria-hidden
+                        initial={false}
+                        animate={{ left: `${tipX}%`, top: `${y}%` }}
+                        transition={spring}
+                        className="absolute z-20 w-max -translate-x-1/2"
+                      >
+                        <div
+                          className={`rounded-lg border border-white/[0.08] bg-[#11120e] px-2.5 py-1.5 shadow-lg transition-transform duration-150 ${
+                            below ? "translate-y-3" : "-translate-y-[calc(100%+12px)]"
+                          }`}
+                        >
+                          <p className="font-subheading text-[10px] leading-[14px] text-white/50">
+                            {dateAt(active)}
+                            <span className="hidden sm:inline">
+                              {" · "}
+                              {Math.round(value * ENGAGEMENT_RATE).toLocaleString("en-US")} engagements
+                            </span>
+                          </p>
+                          <p className="font-heading text-xs font-bold leading-4 tabular-nums text-white">
+                            {value.toLocaleString("en-US")} impressions
+                          </p>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  </div>
 
-      <div
-        className="
-          relative z-10 shrink-0
-          px-5 pt-5 sm:px-6 sm:pt-6
-        "
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span
-              className="
-                flex size-7 items-center
-                justify-center rounded-lg
-                border border-black/[0.07]
-                bg-[#f7f8f7]
-              "
-            >
-              <BarChart3 className="size-3.5 text-[#404540]" />
-            </span>
+                  <div
+                    aria-hidden
+                    className="font-subheading mt-1 flex justify-between text-[9.5px] leading-[14px] text-muted-foreground/70"
+                  >
+                    {[0, 7, 14, 20, 27].map((i) => (
+                      <span key={i}>{dateAt(i)}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-            <span
-              className="
-                text-[10px] font-semibold
-                uppercase tracking-[0.12em]
-                text-[#888e89]
-              "
-            >
-              ADVANCED ANALYTICS
-            </span>
+            {/* One-line summary: best post and platform mix (hidden on mobile to save height) */}
+            <div className="hidden items-center justify-between gap-4 border-t border-border/60 px-4 py-2 sm:flex">
+              <motion.div
+                className="flex min-w-0 items-center gap-2"
+                initial={init({ opacity: 0, x: -6 })}
+                animate={show ? { opacity: 1, x: 0 } : undefined}
+                transition={{ duration: 0.5, ease, delay: 0.5 }}
+              >
+                <span className="font-subheading shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Top post
+                </span>
+                <PlatformBadge platform={TOP_POST.platform} />
+                <span className="min-w-0 truncate text-[11px] text-foreground">
+                  {TOP_POST.title}
+                </span>
+                <span
+                  className="font-subheading shrink-0 rounded bg-[#e4fbee] px-1.5 py-px text-[10px] font-semibold tabular-nums"
+                  style={{ color: DEEP }}
+                >
+                  {TOP_POST.rate}% eng.
+                </span>
+              </motion.div>
+
+              <div
+                className="flex shrink-0 items-center gap-2"
+                title={PLATFORM_SUMMARY}
+                aria-label={PLATFORM_SUMMARY}
+              >
+                <div className="flex h-1.5 w-16 gap-0.5 overflow-hidden rounded-full">
+                  {PLATFORMS.map((p, i) => (
+                    <motion.span
+                      key={p.label}
+                      className="h-full rounded-full"
+                      initial={init({ scaleX: 0 })}
+                      animate={show ? { scaleX: 1 } : undefined}
+                      transition={{ duration: 0.9, ease, delay: 0.6 + i * 0.1 }}
+                      style={{ originX: 0, width: `${p.value}%`, backgroundColor: p.color }}
+                    />
+                  ))}
+                </div>
+                <span className="font-subheading text-[10px] text-muted-foreground">
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {PLATFORMS[0].value}%
+                  </span>{" "}
+                  {PLATFORMS[0].label}
+                </span>
+              </div>
+            </div>
           </div>
+        </motion.div>
 
-          <span
-            className="
-              flex shrink-0 items-center
-              gap-1.5 rounded-full
-              border border-black/[0.07]
-              bg-[#f9faf9]
-              px-2.5 py-1.5
-            "
-          >
-            <TrendingUp className="size-3 text-[#608c6c]" />
-
-            <span className="text-[9px] font-medium text-[#737b75]">
-              Insights
-            </span>
-          </span>
-        </div>
-
-        {/* Title */}
-
-        <h3
-          className="
-            font-heading mt-4 max-w-[370px]
-            text-[22px] font-semibold
-            leading-[1.16]
-            tracking-[-0.04em]
-            text-[#181b19]
-            sm:text-[25px]
-          "
-        >
-          Know what works.
-          <br />
-
-          <span className="text-[#9b9f9c]">
-            Grow faster.
-          </span>
-        </h3>
-
-        {/* Description */}
-
-        <p
-          className="
-            font-subheading mt-2
-            max-w-[370px]
-            text-[12px] leading-[1.65]
-            text-[#848b86]
-          "
-        >
-          Track engagement, understand your audience,
-          and discover which content performs best.
-        </p>
-      </div>
-
-      {/* Analytics preview */}
-
-      <div
-        className="
-          relative z-10 mt-auto
-          min-h-0 px-3.5
-          pb-4 pt-3 sm:px-5
-        "
-      >
-        {/* Preview glow */}
-
-        <div
-          aria-hidden="true"
-          className="
-            pointer-events-none
-            absolute left-1/2 top-3
-            h-[160px] w-[75%]
-            -translate-x-1/2
-            rounded-full
-            bg-[#e8eee9]/60
-            blur-[55px]
-          "
-        />
-
-        {/* Dashboard */}
-
-        <div className="relative">
-          <AnalyticsDashboard />
-        </div>
-
-        {/* Footer */}
-
-        <div
-          className="
-            mt-2.5 flex items-center
-            justify-between gap-3 px-1
-          "
-        >
-          <div
-            className="
-              flex items-center gap-1.5
-              text-[10px] text-[#959b96]
-            "
-          >
-            <Sparkles className="size-3" />
-
-            Insights that help you grow.
-          </div>
-
-          <span className="text-[9px] text-[#a3a9a4]">
-            Illustrative data
-          </span>
-        </div>
+        <CardBottomFade height="h-5" />
       </div>
     </BentoCard>
   );

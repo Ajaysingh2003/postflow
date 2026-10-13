@@ -66,7 +66,7 @@ def mock_account():
         encrypted_access_token=encrypt_token("x_access_token_abc"),
         encrypted_refresh_token=encrypt_token("x_refresh_token_xyz"),
         token_expires_at=datetime.now(UTC) + timedelta(hours=2),
-        granted_scopes=["tweet.read", "tweet.write", "users.read", "offline.access"],
+        granted_scopes=["tweet.read", "tweet.write", "users.read", "media.write", "offline.access"],
         status="active",
         account_metadata={"username": "testx"},
     )
@@ -104,6 +104,8 @@ async def test_build_auth_url():
     assert "code_challenge=challenge_s256_hash" in res.auth_url
     assert "code_challenge_method=S256" in res.auth_url
     assert "tweet.write" in res.auth_url
+    assert "media.write" in res.auth_url
+    assert "media.write" in res.metadata["requested_scopes"]
     assert res.state == "my_state"
 
 
@@ -158,6 +160,7 @@ async def test_handle_callback_success():
     assert decrypt_token(account.encrypted_refresh_token) == "new_refresh_token_456"
     assert account.account_metadata["username"] == "draftva_ai"
     assert "public_metrics" not in account.account_metadata
+    assert "media.write" not in account.granted_scopes
 
 
 @pytest.mark.anyio

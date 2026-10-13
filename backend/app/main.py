@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.core.config import get_settings
+from app.core.logging import configure_safe_logging
 from app.core.rate_limit import RateLimiter
 from app.db import models as _models  # noqa: F401
 from app.db.base import Base
@@ -28,6 +29,7 @@ from app.modules.media.router import router as media_router
 from app.modules.publishing.router import router as publishing_router
 from app.modules.workspaces.router import router as workspaces_router
 
+configure_safe_logging()
 settings = get_settings()
 logger = logging.getLogger("api")
 rate_limiter = RateLimiter(settings)

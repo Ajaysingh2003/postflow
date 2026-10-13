@@ -16,15 +16,16 @@ function PricingSection() {
         {/* ── Typography Header Block ── */}
         <div className="flex flex-col items-center text-center max-w-3xl mx-auto mb-10 sm:mb-14">
           <div className="inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-[#fbfbf9] px-3.5 py-1 text-xs font-semibold text-neutral-800 shadow-2xs">
-            <span className="size-1.5 rounded-full bg-[#82a80c] animate-pulse" />
+            <span className="size-1.5 rounded-full bg-[#4ff576] animate-pulse" />
             <span className="font-heading">Predictable Tier Pricing</span>
             <span className="text-neutral-300">•</span>
             <span className="font-subheading text-neutral-500">3 Days Free Trial</span>
           </div>
+          
           <h2 className="mt-4 font-heading text-3xl sm:text-5xl lg:text-[36px] font-bold tracking-[-0.04em] text-[#11120e] leading-[1.08]">
             Transparent pricing for{" "}
             <span className="relative inline-block whitespace-nowrap">
-              <span className="relative z-10 text-[#11120e]">every scale</span>
+              <span className="relative z-10 bg-[#98f9ae3c] text-[#11120e]">every scale</span>
               <span
                 aria-hidden="true"
                 className="absolute -inset-x-1.5 bottom-1 top-2 -z-0 rounded-[5px] bg-[#e7f6b8]"

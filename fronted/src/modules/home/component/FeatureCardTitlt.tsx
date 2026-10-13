@@ -4,7 +4,7 @@ import { BentoHeader } from "./FeatureSection";
 
 function FeatureCardTilt() {
   return (
-    <div className="flex  items-start bg-white shadow-md    rounded-md rotate-2 justify-end px-2 py-3 sm:px-3">
+    <div className="flex  items-start bg-white shadow-md mt-3  rounded-md rotate-2 justify-end px-2 py-3 sm:px-3">
       <BentoHeader
         icon={ShieldCheck}
         badge="DRM & Security"

@@ -17,6 +17,7 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -271,6 +272,45 @@ def create_test_post_and_variant(
     db.refresh(variant)
     db.refresh(account)
     return post, variant, account
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("code", [401, 403, 429, 500, 503, 504])
+async def test_media_failure_retains_action_and_status_before_posting(
+    code, test_setup, mock_adapter, monkeypatch
+):
+    message = (
+        "Reconnect your X account to allow uploads (media.write permission)."
+        if code == 401
+        else f"X media upload failed (HTTP {code})."
+    )
+
+    async def failed_upload(*args):
+        raise HTTPException(code, message, headers={"Retry-After": "90"})
+
+    monkeypatch.setattr("app.modules.media.publishing.prepare_media", failed_upload)
+    with SessionLocal() as db:
+        _, variant, account = create_test_post_and_variant(
+            db, test_setup["workspace_id"], test_setup["user_id"]
+        )
+        attempt = await publish_variant_job(variant.id, db)
+        assert attempt.status_code == code
+        assert message in variant.last_error
+        assert message in attempt.error
+        assert mock_adapter.publish_count == 0
+        assert not (variant.publish_state or {}).get("outcome_unknown")
+        if code == 401:
+            assert account.status == "needs_reauth"
+            assert attempt.result == "auth_error"
+            assert variant.status == "failed"
+        elif code == 403:
+            assert account.status == "active"
+            assert attempt.result == "fatal_error"
+            assert variant.status == "failed"
+        else:
+            assert account.status == "active"
+            assert attempt.result == "retryable_error"
+            assert variant.status == "scheduled"
 
 
 # ==============================================================================

@@ -62,6 +62,7 @@ import { containsPostLink, X_LINK_MESSAGE } from "../xLinks";
 import {
   getOverflowSplit,
   profileFor,
+  publishedPostMediaIds,
   splitPostText,
   threadItems,
   updateThread,
@@ -210,6 +211,8 @@ export default function XEditor({
   onMedia,
   media,
   mediaAssets,
+  mediaIds,
+  status,
 }: EditorProps) {
   const isThreads = account.platform === "threads";
   const platform = isThreads ? "threads" : "x";
@@ -253,6 +256,9 @@ export default function XEditor({
           const itemText = String(item.text ?? "");
           const isOver = textLength(itemText, platform) > limit;
           const split = isThreads ? {valid: [...itemText].slice(0, limit).join(""), overflow: [...itemText].slice(limit).join("")} : getOverflowSplit(itemText, limit);
+          const displayedMediaIds = status === "published"
+            ? publishedPostMediaIds(payload, mediaIds ?? [], index)
+            : Array.isArray(item.media_ids) ? item.media_ids as string[] : [];
 
           return (
             <article className="relative pb-6" key={index}>
@@ -354,13 +360,11 @@ export default function XEditor({
                 )}
 
                 {/* Media preview per post */}
-                {item.media_ids &&
-                Array.isArray(item.media_ids) &&
-                item.media_ids.length > 0 ? (
+                {displayedMediaIds.length > 0 ? (
                   <div className="mt-2.5">
                     <MediaPreview
                       assets={mediaAssets ?? []}
-                      ids={item.media_ids}
+                      ids={displayedMediaIds}
                       readOnly={Boolean(readOnly || preview)}
                       onRemove={(id) => {
                         const nextMedia = (item.media_ids as string[]).filter(
@@ -378,7 +382,7 @@ export default function XEditor({
                     />
                   </div>
                 ) : (
-                  index === 0 &&
+                  status !== "published" && index === 0 &&
                   media &&
                   !items.some(
                     (it) =>

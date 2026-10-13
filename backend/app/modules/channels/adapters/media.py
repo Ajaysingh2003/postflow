@@ -5,6 +5,7 @@ import io
 import logging
 from urllib.parse import quote
 
+import httpx
 from fastapi import HTTPException
 from PIL import Image
 
@@ -52,6 +53,11 @@ def bind_uploaded_media(variant, assets, uploaded, field):
 
 
 async def upload_x(self, account, variant, assets):
+    if assets and "media.write" not in (getattr(account, "granted_scopes", None) or []):
+        raise HTTPException(
+            401,
+            "Reconnect your X account to allow image and video uploads (media.write permission).",
+        )
     client = await self._get_client()
     headers = {"Authorization": f"Bearer {decrypt_token(account.encrypted_access_token)}"}
     ids = list((variant.publish_state or {}).get("uploaded_media", []))
@@ -123,6 +129,25 @@ async def upload_x(self, account, variant, assets):
                 )
             await save_state(variant, x_processing_media=None)
         bind_uploaded_media(variant, assets, ids, "media_ids")
+    except httpx.HTTPStatusError as exc:
+        code = exc.response.status_code
+        if code == 401:
+            message = "X rejected media upload authentication. Reconnect your X account."
+        elif code == 403:
+            message = (
+                "X denied the media upload (403). Reconnect your X account to grant media.write. "
+                "If it still fails, check your X developer app's API access."
+            )
+        elif code == 402:
+            message = "X media upload requires available API credits. Check X developer billing."
+        elif code == 429:
+            message = "X media upload rate limit reached. The upload will be retried."
+        else:
+            message = f"X media upload failed (HTTP {code})."
+        retry_after = exc.response.headers.get("Retry-After", "")
+        headers = {"Retry-After": retry_after} if retry_after.isdigit() else None
+        # Do not expose response bodies or request URLs containing credentials.
+        raise HTTPException(code, message, headers=headers) from None
     finally:
         if self._http_client is None:
             await client.aclose()

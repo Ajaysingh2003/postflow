@@ -526,7 +526,7 @@ export function FeatureCardOne() {
       : true);
 
   return (
-    <BentoCard className="relative flex !h-[460px] sm:!h-[480px] min-h-0 min-w-0 flex-col overflow-hidden !bg-[#fffefe] ">
+    <BentoCard className="relative flex !h-[460px] sm:!h-[540px] min-h-0 min-w-0 flex-col overflow-hidden !bg-[#fffefe] ">
       {/* Compact heading */}
       {/* <div className="relative z-10 shrink-0 px-5 pt-5 sm:px-6 sm:pt-6">
         <div className="flex items-center gap-2">

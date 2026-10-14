@@ -11,6 +11,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowUp,
+  ArrowLeft,
   Check,
   Clock3,
   Lightbulb,
@@ -37,8 +38,13 @@ import { CommandDialog } from "./CommandDialog";
 import { DEFAULT_COMMANDS, getCommandIcon, type CommandItem } from "../types";
 import GenerateAvatar from "@/modules/user/component/GenerateAvartar";
 import { AiUsageNotice } from "@/modules/billing/component/AiUsageNotice";
-import { useAiAllowance, useRefreshUsage } from "@/modules/billing/useAiAllowance";
+import {
+  useAiAllowance,
+  useRefreshUsage,
+} from "@/modules/billing/useAiAllowance";
 import { PersonaDialog } from "./PersonaDialog";
+import { AssistantHistory, HistorySkeleton } from "./AssistantHistory";
+import { profileFor } from "../studio/model";
 
 const SHIMMER_BASE = "#8a929c";
 
@@ -173,36 +179,60 @@ function ComposerSidecarContent({
     ? { ...composerState, content: sidecarBridge.content }
     : composerState;
   const workspace = useSuspenseQuery(trpc.workspace.current.queryOptions());
-  const allowance = useAiAllowance(workspace.data?.id);
-  const refreshUsage = useRefreshUsage();
-  const account = useQuery(
-    trpc.workspace.getLinkedInConnection.queryOptions(
-      {
-        connectionId: state.composer.connection_id ?? undefined,
-      },
-      { enabled: !sidecarBridge },
+  const viewer = useSuspenseQuery(trpc.user.me.queryOptions());
+  const brandProfile = useQuery(
+    trpc.persona.brand.queryOptions(
+      { workspaceId: workspace.data.id },
+      { staleTime: 60000 },
     ),
   );
-  const accountName = [account.data?.first_name, account.data?.last_name]
-    .filter(Boolean)
-    .join(" ");
+  const allowance = useAiAllowance(workspace.data?.id);
+  const refreshUsage = useRefreshUsage();
+  const accounts = useQuery(
+    trpc.studio.accounts.queryOptions(undefined, { enabled: !sidecarBridge }),
+  );
+  const account = accounts.data?.find(
+    (item) =>
+      item.platform === state.platform &&
+      item.status === "active" &&
+      (!state.composer.connection_id ||
+        item.id === state.composer.connection_id),
+  );
+  const accountName = account?.display_name ?? "";
   const writingStyleOwner =
     styleOwner ||
     sidecarBridge?.styleOwner ||
     accountName ||
-    account.data?.public_identifier ||
     workspace.data?.name ||
     "Workspace";
   const query = useSuspenseQuery(trpc.content.getCommands.queryOptions());
   const scope =
     sidecarBridge?.scope ??
-    `${workspace.data?.id ?? "loading"}:${state.localId}:${account.data?.id ?? "no-account"}`;
-  const agent = useAgentChat(state, scope, sidecarBridge);
+    `${workspace.data?.id ?? "loading"}:${state.localId}:${account?.id ?? state.platform}`;
+  const agent = useAgentChat(state, scope, sidecarBridge, account?.id, {
+    workspaceId: workspace.data.id,
+    viewerId: viewer.data.id,
+  });
   const files = useAssetQueue(scope);
   const fileInput = useRef<HTMLInputElement>(null);
-  const contextReady = sidecarBridge
+  const currentContextReady = sidecarBridge
     ? sidecarBridge.ready
-    : isHydrated && !account.isPending && !!workspace.data;
+    : isHydrated &&
+      !accounts.isPending &&
+      !accounts.isError &&
+      !!workspace.data;
+
+  const contextReady = agent.restored
+    ? !!agent.conversation && !agent.error && agent.conversation.can_continue
+    : currentContextReady;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  function newConversation() {
+    if (agent.busy) return;
+    agent.newChat();
+    files.clear();
+    setInput("");
+    setHistoryOpen(false);
+  }
 
   const [openPersona, setOpenPersona] = useState(false);
 
@@ -240,7 +270,7 @@ function ComposerSidecarContent({
     )
       return;
     if (!prompt.trim() && files.assets.length)
-      prompt = "Write a LinkedIn post based on these attached files.";
+      prompt = "Write a post based on these attached files.";
     if (prompt.trim().length < 3) return;
     const assets = previousAssets ?? files.assets;
     if (!previousAssets) {
@@ -248,7 +278,11 @@ function ComposerSidecarContent({
       setInput("");
     }
     follow.current = true;
-    try { await agent.send(prompt, assets); } finally { void refreshUsage(); }
+    try {
+      await agent.send(prompt, assets);
+    } finally {
+      void refreshUsage();
+    }
   }
 
   function rate(id: Run["id"], value: Rating) {
@@ -285,7 +319,17 @@ function ComposerSidecarContent({
       {/* Header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b-[0.5px] border-black/10 px-3.5">
         <div className="flex items-center gap-2">
-          {onClose && (
+          {historyOpen && (
+            <button
+              type="button"
+              aria-label="Back to conversation"
+              onClick={() => setHistoryOpen(false)}
+              className={ICON_BUTTON}
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          {!historyOpen && onClose && (
             <button
               type="button"
               onClick={onClose}
@@ -296,7 +340,7 @@ function ComposerSidecarContent({
             </button>
           )}
           <h2 className="font-heading text-[16px] font-semibold tracking-tight text-neutral-900">
-            Assistant
+            {historyOpen ? "History" : "Assistant"}
           </h2>
         </div>
 
@@ -320,6 +364,8 @@ function ComposerSidecarContent({
           </button>
           <button
             type="button"
+            onClick={() => setHistoryOpen((value) => !value)}
+            aria-pressed={historyOpen}
             aria-label="History"
             title="History"
             className={ICON_BUTTON}
@@ -329,7 +375,7 @@ function ComposerSidecarContent({
           <button
             type="button"
             disabled={agent.busy}
-            onClick={() => agent.clear()}
+            onClick={newConversation}
             className="secondary-btn ml-1 !min-h-8 !rounded-lg !px-3 !text-[14px] disabled:pointer-events-none disabled:opacity-40"
           >
             <Plus className="size-4 stroke-[2]" />
@@ -338,293 +384,359 @@ function ComposerSidecarContent({
         </div>
       </header>
 
-      {/* Conversation */}
-      <div
-        ref={scroll}
-        onScroll={() => {
-          const el = scroll.current;
-          if (el) {
-            follow.current =
-              el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          }
-        }}
-        aria-label="Assistant work feed"
-        aria-busy={agent.busy}
-        className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-6 [mask-image:linear-gradient(to_bottom,transparent,#000_16px)] [scrollbar-color:rgba(0,0,0,0.14)_transparent] [scrollbar-width:thin]"
-      >
-        {agent.runs.length === 0 ? (
-          <div className="flex min-h-full flex-col justify-end">
-            <div className="mb-6 px-1">
-              <h3 className="font-heading text-[22px] font-semibold leading-tight tracking-tight text-neutral-900">
-                What are we writing?
-              </h3>
-              <p className="font-subheading mt-1.5 text-[15px] leading-relaxed text-[#7d858f]">
-                Pick a command or describe what you need.
+      {historyOpen ? (
+        <AssistantHistory
+          workspaceId={workspace.data.id}
+          viewerId={viewer.data.id}
+          activeId={agent.activeId}
+          busy={agent.busy}
+          onNew={newConversation}
+          onOpen={(id) => {
+            agent.open(id);
+            files.clear();
+            setInput("");
+            setHistoryOpen(false);
+            follow.current = true;
+          }}
+        />
+      ) : (
+        <>
+          {agent.conversation && (
+            <div className="shrink-0 border-b border-black/[0.06] px-4 py-3">
+              <p className="truncate text-[12px] font-medium">
+                {agent.conversation.title}
               </p>
+              <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                {profileFor(agent.conversation.platform).name}
+                {agent.conversation.context.account_name
+                  ? ` · ${agent.conversation.context.account_name}`
+                  : ""}
+                {agent.restored ? " · Saved conversation context" : ""}
+              </p>
+              {agent.conversation.continue_notice && (
+                <p
+                  role="status"
+                  className="mt-2 text-xs leading-5 text-amber-700"
+                >
+                  {agent.conversation.continue_notice}
+                </p>
+              )}
+              {agent.restored && agent.conversation.context.source_text && (
+                <details className="mt-2 text-[11px] text-muted-foreground">
+                  <summary className="cursor-pointer">
+                    Original draft context
+                  </summary>
+                  <p className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-border/70 bg-background p-3 leading-5">
+                    {agent.conversation.context.source_text}
+                  </p>
+                </details>
+              )}
             </div>
-
-            <ul className="space-y-2">
-              {commandsList.map((cmd) => {
-                const Icon =
-                  typeof cmd.icon === "string"
-                    ? getCommandIcon(cmd.icon)
-                    : cmd.icon;
-                return (
-                  <li
-                    key={cmd.id || cmd.label}
-                    className={`group flex items-center rounded-xl bg-white pr-1.5 transition-all hover:-translate-y-px hover:shadow-[0_3px_8px_rgba(16,24,40,0.08),0_0_0_0.5px_rgba(16,24,40,0.12)] ${CARD_SHADOW}`}
-                  >
-                    <button
-                      type="button"
-                      disabled={!contextReady || allowance.blocked}
-                      onClick={() => void send(cmd.prompt)}
-                      className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-xl px-3.5 text-left text-[15px] font-medium text-[#2f3640] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 disabled:opacity-40"
-                    >
-                      <Icon className="size-[18px] shrink-0 stroke-[1.6] text-[#7d858f]" />
-                      <span className="truncate">{cmd.label}</span>
-                      {cmd.isCustom && (
-                        <span
-                          className="size-1.5 shrink-0 rounded-full bg-sky-400"
-                          title="Custom command"
-                        />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Edit ${cmd.label}`}
-                      onClick={() => openCommands(cmd)}
-                      className="flex size-7 shrink-0 items-center justify-center rounded-md text-neutral-400 opacity-0 transition hover:bg-black/[0.06] hover:text-neutral-700 focus-visible:opacity-100 group-hover:opacity-100"
-                    >
-                      <MoreHorizontal className="size-4" />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            <button
-              type="button"
-              onClick={() => openCommands(null)}
-              className="mt-3 px-1 text-left text-[14px] text-[#8a929c] transition-colors hover:text-neutral-900"
-            >
-              Add and edit commands
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-9">
-            {agent.runs.map((run, index) => {
-              const isLast = index === agent.runs.length - 1;
-              const running = run.status === "running";
-              const hasContent = Boolean(run.text || run.artifact);
-              const hasTrace = run.activities.length > 0;
-              const status = running ? (
-                <StatusRow label={statusLabel(run)} />
-              ) : null;
-              const rated = ratings[String(run.id)];
-
-              return (
-                <article key={run.id} className="space-y-5">
-                  {/* You */}
-                  <div className="flex justify-end">
-                    <div className="max-w-[88%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-[#eceef1] px-4 py-2.5 text-[15px] leading-[1.6] text-[#1d2126]">
-                      {run.prompt}
-                      {run.attachments.length > 0 && (
-                        <AssetCards assets={run.attachments} />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Assistant */}
-                  <div className="space-y-4">
-                    {(hasTrace || (status && !hasContent)) && (
-                      <ul className="space-y-1">
-                        {hasTrace && (
-                          <li className="flex min-h-7 items-center gap-2.5 text-[14px] text-[#7d858f]">
-                            <Lightbulb className="size-5 shrink-0 stroke-[1.5] p-0.5" />
-                            <span className="font-subheading">Thought</span>
-                          </li>
-                        )}
-                        {run.activities.map((activity) => (
-                          <TraceRow
-                            key={activity.id}
-                            icon={Lightbulb}
-                            active={running && activity.status === "running"}
-                            detail={activity.detail || undefined}
-                          >
-                            {activity.label}
-                          </TraceRow>
-                        ))}
-                        {!hasContent && status}
-                      </ul>
-                    )}
-
-                    {run.artifact &&
-                      run.status !== "failed" &&
-                      run.status !== "cancelled" && (
-                        <DraftArtifactCard
-                          artifact={run.artifact}
-                          content={state.content}
-                          ready={run.status === "succeeded"}
-                          replace={(expected, next) =>
-                            run.replace
-                              ? run.replace(expected, next)
-                              : replaceDraftIfCurrent(
-                                  state.localId,
-                                  expected,
-                                  next,
-                                )
-                          }
-                        />
-                      )}
-
-                    {run.text && (
-                      <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.7] text-[#23272c]">
-                        {run.text}
-                      </p>
-                    )}
-
-                    {hasContent && status && <ul>{status}</ul>}
-
-                    {(run.error || run.status === "cancelled") && (
-                      <div
-                        role={run.error ? "alert" : "status"}
-                        className="rounded-xl bg-rose-50/70 px-4 py-3 text-[14.5px] leading-[1.55] text-rose-900 shadow-[0_0_0_0.5px_rgba(225,29,72,0.25)]"
-                      >
-                        <p className="flex items-start gap-2.5">
-                          <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                          <span>
-                            {run.error || "Stopped. Your draft is unchanged."}
-                          </span>
-                        </p>
-                        <button
-                          type="button"
-                          disabled={agent.busy}
-                          onClick={() => void send(run.prompt, run.attachments)}
-                          className="secondary-btn mt-3 !min-h-8 !rounded-lg !px-3 !text-[13.5px] disabled:opacity-40"
-                        >
-                          <RotateCcw className="size-3.5" />
-                          Retry with current draft
-                        </button>
-                      </div>
-                    )}
-
-                    {run.status === "succeeded" && hasContent && (
-                      <div className="-ml-2 flex items-center gap-0.5">
-                        {isLast && (
-                          <button
-                            type="button"
-                            aria-label="Regenerate response"
-                            title="Regenerate"
-                            disabled={agent.busy}
-                            onClick={() =>
-                              void send(run.prompt, run.attachments)
-                            }
-                            className={ICON_BUTTON}
-                          >
-                            <RefreshCw className="size-4 stroke-[1.6]" />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          aria-label="Good response"
-                          aria-pressed={rated === "up"}
-                          onClick={() => rate(run.id, "up")}
-                          className={`${ICON_BUTTON} aria-pressed:bg-sky-50 aria-pressed:text-sky-600`}
-                        >
-                          <ThumbsUp className="size-4 stroke-[1.6]" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Bad response"
-                          aria-pressed={rated === "down"}
-                          onClick={() => rate(run.id, "down")}
-                          className={`${ICON_BUTTON} aria-pressed:bg-black/[0.06] aria-pressed:text-neutral-900`}
-                        >
-                          <ThumbsDown className="size-4 stroke-[1.6]" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div role="status" aria-live="polite" className="sr-only">
-        {agent.busy ? "Assistant is working" : "Assistant is ready"}
-      </div>
-
-      <div className="shrink-0 px-4"><AiUsageNotice usage={allowance.data} loading={allowance.isPending} error={!!allowance.error} onRetry={() => void allowance.refetch()} /></div>
-
-      {/* Composer */}
-      <div className="shrink-0 px-4 pb-4 pt-1">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send();
-          }}
-          className={dockClass}
-          onDragOver={(event) => {
-            if (event.dataTransfer.types.includes("Files"))
-              event.preventDefault();
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            if (!agent.busy) {
-              try {
-                files.add(Array.from(event.dataTransfer.files));
-              } catch (error) {
-                toast.error(
-                  error instanceof Error
-                    ? error.message
-                    : "Could not add files",
-                );
-              }
-            }
-          }}
-        >
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            accept={SOURCE_ACCEPT}
-            className="hidden"
-            aria-label="Choose assistant reference files"
-            onChange={(event) => {
-              try {
-                files.add(Array.from(event.target.files ?? []));
-              } catch (error) {
-                toast.error(
-                  error instanceof Error
-                    ? error.message
-                    : "Could not add files",
-                );
-              }
-              event.target.value = "";
-            }}
-          />
-          {files.queue.length > 0 && (
-            <PendingAssetCards
-              items={files.queue}
-              onRemove={files.remove}
-              onRetry={files.retry}
-            />
           )}
-          <textarea
-            ref={field}
-            rows={1}
-            value={input}
-            maxLength={10000}
-            onChange={(e) => setInput(e.target.value)}
-            onPaste={(event) => {
-              const pasted = Array.from(event.clipboardData.files);
-              if (pasted.length) {
+          {/* Conversation */}
+          <div
+            ref={scroll}
+            onScroll={() => {
+              const el = scroll.current;
+              if (el) {
+                follow.current =
+                  el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+              }
+            }}
+            aria-label="Assistant work feed"
+            aria-busy={agent.busy}
+            className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-6 [mask-image:linear-gradient(to_bottom,transparent,#000_16px)] [scrollbar-color:rgba(0,0,0,0.14)_transparent] [scrollbar-width:thin]"
+          >
+            {agent.isLoading ? (
+              <HistorySkeleton />
+            ) : agent.error ? (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700"
+              >
+                <p>This conversation couldn’t load.</p>
+                <button
+                  type="button"
+                  className="secondary-btn mt-3"
+                  onClick={() => void agent.retry()}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : agent.runs.length === 0 ? (
+              <div className="flex min-h-full flex-col justify-end">
+                <div className="mb-6 px-1">
+                  <h3 className="font-heading text-[22px] font-semibold leading-tight tracking-tight text-neutral-900">
+                    What are we writing?
+                  </h3>
+                  <p className="font-subheading mt-1.5 text-[15px] leading-relaxed text-[#7d858f]">
+                    Pick a command or describe what you need.
+                  </p>
+                </div>
+
+                <ul className="space-y-2">
+                  {commandsList.map((cmd) => {
+                    const Icon =
+                      typeof cmd.icon === "string"
+                        ? getCommandIcon(cmd.icon)
+                        : cmd.icon;
+                    return (
+                      <li
+                        key={cmd.id || cmd.label}
+                        className={`group flex items-center rounded-xl bg-white pr-1.5 transition-all hover:-translate-y-px hover:shadow-[0_3px_8px_rgba(16,24,40,0.08),0_0_0_0.5px_rgba(16,24,40,0.12)] ${CARD_SHADOW}`}
+                      >
+                        <button
+                          type="button"
+                          disabled={!contextReady || allowance.blocked}
+                          onClick={() => void send(cmd.prompt)}
+                          className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-xl px-3.5 text-left text-[15px] font-medium text-[#2f3640] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 disabled:opacity-40"
+                        >
+                          <Icon className="size-[18px] shrink-0 stroke-[1.6] text-[#7d858f]" />
+                          <span className="truncate">{cmd.label}</span>
+                          {cmd.isCustom && (
+                            <span
+                              className="size-1.5 shrink-0 rounded-full bg-sky-400"
+                              title="Custom command"
+                            />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Edit ${cmd.label}`}
+                          onClick={() => openCommands(cmd)}
+                          className="flex size-7 shrink-0 items-center justify-center rounded-md text-neutral-400 opacity-0 transition hover:bg-black/[0.06] hover:text-neutral-700 focus-visible:opacity-100 group-hover:opacity-100"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                <button
+                  type="button"
+                  onClick={() => openCommands(null)}
+                  className="mt-3 px-1 text-left text-[14px] text-[#8a929c] transition-colors hover:text-neutral-900"
+                >
+                  Add and edit commands
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-9">
+                {agent.hasOlder && (
+                  <button
+                    type="button"
+                    className="secondary-btn w-full justify-center !text-xs"
+                    disabled={agent.loadingOlder}
+                    onClick={() => {
+                      follow.current = false;
+                      void agent.loadOlder();
+                    }}
+                  >
+                    {agent.loadingOlder ? "Loading…" : "Load earlier messages"}
+                  </button>
+                )}
+                {agent.runs.map((run, index) => {
+                  const isLast = index === agent.runs.length - 1;
+                  const running = run.status === "running";
+                  const hasContent = Boolean(run.text || run.artifact);
+                  const hasTrace = run.activities.length > 0;
+                  const status = running ? (
+                    <StatusRow label={statusLabel(run)} />
+                  ) : null;
+                  const rated = ratings[String(run.id)];
+
+                  return (
+                    <article key={run.id} className="space-y-5">
+                      {/* You */}
+                      <div className="flex justify-end">
+                        <div className="max-w-[88%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-[#eceef1] px-4 py-2.5 text-[15px] leading-[1.6] text-[#1d2126]">
+                          {run.prompt}
+                          {run.attachments.length > 0 && (
+                            <AssetCards assets={run.attachments} />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Assistant */}
+                      <div className="space-y-4">
+                        {(hasTrace || (status && !hasContent)) && (
+                          <ul className="space-y-1">
+                            {hasTrace && (
+                              <li className="flex min-h-7 items-center gap-2.5 text-[14px] text-[#7d858f]">
+                                <Lightbulb className="size-5 shrink-0 stroke-[1.5] p-0.5" />
+                                <span className="font-subheading">Thought</span>
+                              </li>
+                            )}
+                            {run.activities.map((activity) => (
+                              <TraceRow
+                                key={activity.id}
+                                icon={Lightbulb}
+                                active={
+                                  running && activity.status === "running"
+                                }
+                                detail={activity.detail || undefined}
+                              >
+                                {activity.label}
+                              </TraceRow>
+                            ))}
+                            {!hasContent && status}
+                          </ul>
+                        )}
+
+                        {run.artifact &&
+                          run.status !== "failed" &&
+                          run.status !== "cancelled" && (
+                            <DraftArtifactCard
+                              artifact={run.artifact}
+                              content={
+                                run.canApply
+                                  ? state.content
+                                  : run.artifact.original
+                              }
+                              readOnlyReason={
+                                run.canApply
+                                  ? undefined
+                                  : "Saved suggestion. Copy it to use in your current draft."
+                              }
+                              ready={
+                                run.status === "succeeded" && !!run.canApply
+                              }
+                              replace={(expected, next) =>
+                                run.replace
+                                  ? run.replace(expected, next)
+                                  : replaceDraftIfCurrent(
+                                      state.localId,
+                                      expected,
+                                      next,
+                                    )
+                              }
+                            />
+                          )}
+
+                        {run.text && (
+                          <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.7] text-[#23272c]">
+                            {run.text}
+                          </p>
+                        )}
+
+                        {hasContent && status && <ul>{status}</ul>}
+
+                        {(run.error || run.status === "cancelled") && (
+                          <div
+                            role={run.error ? "alert" : "status"}
+                            className="rounded-xl bg-rose-50/70 px-4 py-3 text-[14.5px] leading-[1.55] text-rose-900 shadow-[0_0_0_0.5px_rgba(225,29,72,0.25)]"
+                          >
+                            <p className="flex items-start gap-2.5">
+                              <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                              <span>
+                                {run.error ||
+                                  "Stopped. Your draft is unchanged."}
+                              </span>
+                            </p>
+                            <button
+                              type="button"
+                              disabled={agent.busy}
+                              onClick={() =>
+                                void send(run.prompt, run.attachments)
+                              }
+                              className="secondary-btn mt-3 !min-h-8 !rounded-lg !px-3 !text-[13.5px] disabled:opacity-40"
+                            >
+                              <RotateCcw className="size-3.5" />
+                              Retry with current draft
+                            </button>
+                          </div>
+                        )}
+
+                        {run.status === "succeeded" && hasContent && (
+                          <div className="-ml-2 flex items-center gap-0.5">
+                            {isLast && (
+                              <button
+                                type="button"
+                                aria-label="Regenerate response"
+                                title="Regenerate"
+                                disabled={agent.busy}
+                                onClick={() =>
+                                  void send(run.prompt, run.attachments)
+                                }
+                                className={ICON_BUTTON}
+                              >
+                                <RefreshCw className="size-4 stroke-[1.6]" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              aria-label="Good response"
+                              aria-pressed={rated === "up"}
+                              onClick={() => rate(run.id, "up")}
+                              className={`${ICON_BUTTON} aria-pressed:bg-sky-50 aria-pressed:text-sky-600`}
+                            >
+                              <ThumbsUp className="size-4 stroke-[1.6]" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Bad response"
+                              aria-pressed={rated === "down"}
+                              onClick={() => rate(run.id, "down")}
+                              className={`${ICON_BUTTON} aria-pressed:bg-black/[0.06] aria-pressed:text-neutral-900`}
+                            >
+                              <ThumbsDown className="size-4 stroke-[1.6]" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div role="status" aria-live="polite" className="sr-only">
+            {agent.busy ? "Assistant is working" : "Assistant is ready"}
+          </div>
+
+          <div className="shrink-0 px-4">
+            {!sidecarBridge && accounts.isError && (
+              <div
+                role="alert"
+                className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700"
+              >
+                <span>Your account context couldn’t load.</span>
+                <button
+                  type="button"
+                  className="secondary-btn !text-xs"
+                  onClick={() => void accounts.refetch()}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            <AiUsageNotice
+              usage={allowance.data}
+              loading={allowance.isPending}
+              error={!!allowance.error}
+              onRetry={() => void allowance.refetch()}
+            />
+          </div>
+
+          {/* Composer */}
+          <div className="shrink-0 px-4 pb-4 pt-1">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void send();
+              }}
+              className={dockClass}
+              onDragOver={(event) => {
+                if (event.dataTransfer.types.includes("Files"))
+                  event.preventDefault();
+              }}
+              onDrop={(event) => {
                 event.preventDefault();
                 if (!agent.busy) {
                   try {
-                    files.add(pasted);
+                    files.add(Array.from(event.dataTransfer.files));
                   } catch (error) {
                     toast.error(
                       error instanceof Error
@@ -633,94 +745,145 @@ function ComposerSidecarContent({
                     );
                   }
                 }
-              }
-            }}
-            placeholder="Ask anything, or type / for commands"
-            onKeyDown={(e) => {
-              if (
-                e.key === "Enter" &&
-                !e.shiftKey &&
-                !e.nativeEvent.isComposing
-              ) {
-                e.preventDefault();
-                void send();
-              }
-            }}
-            className="block max-h-40 min-h-7 w-full resize-none bg-transparent text-[15px] leading-7 text-[#23272c] placeholder:text-[#a3a9b1] focus:outline-none"
-          />
-
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  setOpenPersona(true);
+              }}
+            >
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                accept={SOURCE_ACCEPT}
+                className="hidden"
+                aria-label="Choose assistant reference files"
+                onChange={(event) => {
+                  try {
+                    files.add(Array.from(event.target.files ?? []));
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "Could not add files",
+                    );
+                  }
+                  event.target.value = "";
                 }}
-                type="button"
-                aria-label="Open LinkedIn persona settings"
-                className="flex h-8 items-center gap-2 rounded-lg pl-1 pr-2 text-[14px] text-[#7d858f] transition-colors hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40"
-              >
-                <GenerateAvatar isCircle={true} seed={writingStyleOwner} />
+              />
+              {files.queue.length > 0 && (
+                <PendingAssetCards
+                  items={files.queue}
+                  onRemove={files.remove}
+                  onRetry={files.retry}
+                />
+              )}
+              <textarea
+                ref={field}
+                rows={1}
+                value={input}
+                maxLength={10000}
+                onChange={(e) => setInput(e.target.value)}
+                onPaste={(event) => {
+                  const pasted = Array.from(event.clipboardData.files);
+                  if (pasted.length) {
+                    event.preventDefault();
+                    if (!agent.busy) {
+                      try {
+                        files.add(pasted);
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not add files",
+                        );
+                      }
+                    }
+                  }
+                }}
+                placeholder="Ask anything, or type / for commands"
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+                className="block max-h-40 min-h-7 w-full resize-none bg-transparent text-[15px] leading-7 text-[#23272c] placeholder:text-[#a3a9b1] focus:outline-none"
+              />
 
-                <span>
-                  <span className="font-medium text-[#23272c]">
-                    {writingStyleOwner}
-                  </span>
-                  &apos;s style
-                </span>
-              </button>
-              <button
-                type="button"
-                aria-label="Attach media"
-                title="Attach images, PDFs, documents, text, audio, or video (up to 5 files)"
-                disabled={
-                  agent.busy || !contextReady || files.queue.length >= 5
-                }
-                onClick={() => fileInput.current?.click()}
-                className={ICON_BUTTON}
-              >
-                <Paperclip className="size-[18px] stroke-[1.6]" />
-              </button>
-            </div>
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      setOpenPersona(true);
+                    }}
+                    type="button"
+                    aria-label="Open brand profile"
+                    className="flex h-8 items-center gap-2 rounded-lg pl-1 pr-2 text-[14px] text-[#7d858f] transition-colors hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40"
+                  >
+                    <GenerateAvatar isCircle={true} seed={writingStyleOwner} />
 
-            {agent.busy ? (
-              <button
-                type="button"
-                onClick={agent.stop}
-                aria-label="Stop assistant"
-                className="secondary-btn !size-9 !min-h-9 !justify-center !rounded-full !p-0"
-              >
-                <Square className="size-3 fill-current" />
-              </button>
-            ) : !input.trim() && !files.queue.length ? (
-              <button
-                type="button"
-                aria-label="Voice dictation"
-                title="Voice dictation"
-                className="secondary-btn !size-9 !min-h-9 !justify-center !rounded-full !p-0"
-              >
-                <Mic className="size-4 stroke-[1.7]" />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={
-                  !contextReady ||
-                  allowance.blocked ||
-                  files.busy ||
-                  files.queue.some((item) => item.stage === "failed") ||
-                  (input.trim().length < 3 &&
-                    !(files.assets.length && !input.trim()))
-                }
-                aria-label="Send to writing assistant"
-                className="primary-btn !size-9 !min-h-9 !justify-center !rounded-full !p-0 disabled:pointer-events-none disabled:opacity-40"
-              >
-                <ArrowUp className="size-4 stroke-[2.6]" />
-              </button>
-            )}
+                    <span className="max-w-40 truncate">
+                      <span className="font-medium text-[#23272c]">
+                        {brandProfile.data?.display_name || "Your brand"}
+                      </span>
+                      <span className="ml-1">voice</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Attach media"
+                    title="Attach images, PDFs, documents, text, audio, or video (up to 5 files)"
+                    disabled={
+                      agent.busy || !contextReady || files.queue.length >= 5
+                    }
+                    onClick={() => fileInput.current?.click()}
+                    className={ICON_BUTTON}
+                  >
+                    <Paperclip className="size-[18px] stroke-[1.6]" />
+                  </button>
+                </div>
+
+                {agent.busy ? (
+                  <button
+                    type="button"
+                    onClick={agent.stop}
+                    aria-label="Stop assistant"
+                    className="secondary-btn !size-9 !min-h-9 !justify-center !rounded-full !p-0"
+                  >
+                    <Square className="size-3 fill-current" />
+                  </button>
+                ) : !input.trim() && !files.queue.length ? (
+                  <button
+                    type="button"
+                    aria-label="Voice dictation"
+                    title="Voice dictation"
+                    className="secondary-btn !size-9 !min-h-9 !justify-center !rounded-full !p-0"
+                  >
+                    <Mic className="size-4 stroke-[1.7]" />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={
+                      !contextReady ||
+                      allowance.blocked ||
+                      files.busy ||
+                      files.queue.some((item) => item.stage === "failed") ||
+                      (input.trim().length < 3 &&
+                        !(files.assets.length && !input.trim()))
+                    }
+                    aria-label="Send to writing assistant"
+                    className="primary-btn !size-9 !min-h-9 !justify-center !rounded-full !p-0 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    <ArrowUp className="size-4 stroke-[2.6]" />
+                  </button>
+                )}
+              </div>
+            </form>
           </div>
-        </form>
-      </div>
-
+        </>
+      )}
       <CommandDialog
         open={commandsOpen}
         setOpen={setCommandsOpen}

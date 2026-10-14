@@ -1,5 +1,7 @@
 "use client";
 
+import { reloadAuthPage } from "../authFlow";
+
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,18 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTRPC } from "@/trpc/client";
 
-
-const loginSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
-});
+import { loginSchema, nextAuthPath, verificationPath } from "../authFlow";
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginForm() {
   const queryClient = useQueryClient();
   const trpc = useTRPC();
-
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -32,16 +29,14 @@ export default function LoginForm() {
 
   const login = useMutation(
     trpc.user.login.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (result) => {
         toast.success("Welcome back");
         await queryClient.clear();
-        const nextPath = new URLSearchParams(window.location.search).get(
-          "next",
-        );
-        window.location.assign(
-          nextPath?.startsWith("/") && !nextPath.startsWith("//")
-            ? nextPath
-            : "/onboarding/connect-account",
+        const next = nextAuthPath(window.location.search);
+        reloadAuthPage(
+          result.verification_required
+            ? verificationPath(result.user.email, next)
+            : next,
         );
       },
       onError: (error) => toast.error(error.message),
@@ -53,6 +48,7 @@ export default function LoginForm() {
   return (
     <div className="w-full ">
       <form
+        method="post"
         onSubmit={form.handleSubmit(onSubmit)}
         className="space-y-4"
         noValidate
@@ -94,10 +90,10 @@ export default function LoginForm() {
               Forgot password?
             </Link>
           </div>
-          
+
           <Input
             id="login-password"
-            type="text"
+            type="password"
             autoComplete="current-password"
             placeholder="Your password"
             className="rounded-md border-border !bg-input/30 text-foreground placeholder:text-muted-foreground focus-visible:ring-1"
@@ -119,8 +115,6 @@ export default function LoginForm() {
           {login.isPending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
-
-     
     </div>
   );
 }

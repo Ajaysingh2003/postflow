@@ -45,7 +45,6 @@ async function backend<T>(
     });
     return response.data;
   } catch (error) {
-    
     return handleBackendError(error, "This action could not be completed.");
   }
 }
@@ -65,24 +64,60 @@ const resources = {
 export const studioRouter = createTRPCRouter({
   usage: authedProcedure
     .input(z.object({ workspace_id: id.optional() }))
-    .query(({ input }) => backend<PlanUsage>("GET", "/analytics/plan-limits", undefined, undefined, input.workspace_id)),
+    .query(({ input }) =>
+      backend<PlanUsage>(
+        "GET",
+        "/analytics/plan-limits",
+        undefined,
+        undefined,
+        input.workspace_id,
+      ),
+    ),
   billingUsage: authedProcedure
     .input(z.object({ workspace_id: id.optional() }))
-    .query(({ input }) => backend<BillingUsage>("GET", "/billing/usage", undefined, undefined, input.workspace_id)),
+    .query(({ input }) =>
+      backend<BillingUsage>(
+        "GET",
+        "/billing/usage",
+        undefined,
+        undefined,
+        input.workspace_id,
+      ),
+    ),
   home: authedProcedure
     .input(z.object({ workspace_id: id.optional() }))
-    .query(({ input }) => backend<HomeSummary>("GET", "/posts/home", undefined, undefined, input.workspace_id)),
+    .query(({ input }) =>
+      backend<HomeSummary>(
+        "GET",
+        "/posts/home",
+        undefined,
+        undefined,
+        input.workspace_id,
+      ),
+    ),
   postLibrary: authedProcedure
-    .input(z.object({
-      connected_account_id: id,
-      category: z.enum(["posts", "scheduled", "drafts"]).default("posts"),
-      offset: z.number().int().min(0).default(0),
-      limit: z.number().int().min(1).max(100).default(50),
-    }))
-    .query(({input}) => backend<PostLibraryPage>("GET", "/posts/library", undefined, input)),
+    .input(
+      z.object({
+        connected_account_id: id,
+        category: z.enum(["posts", "scheduled", "drafts"]).default("posts"),
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+    )
+    .query(({ input }) =>
+      backend<PostLibraryPage>("GET", "/posts/library", undefined, input),
+    ),
   calendar: authedProcedure
-    .input(z.object({ start: z.string().datetime(), end: z.string().datetime(), cursor: z.number().int().min(0).optional() }))
-    .query(({ input }) => backend<CalendarPage>("GET", "/publishing/calendar", undefined, input)),
+    .input(
+      z.object({
+        start: z.string().datetime(),
+        end: z.string().datetime(),
+        cursor: z.number().int().min(0).optional(),
+      }),
+    )
+    .query(({ input }) =>
+      backend<CalendarPage>("GET", "/publishing/calendar", undefined, input),
+    ),
   posts: authedProcedure
     .input(
       z.object({
@@ -101,7 +136,14 @@ export const studioRouter = createTRPCRouter({
     ),
   postSummary: authedProcedure
     .input(z.object({ connected_account_id: id.optional() }))
-    .query(({ input }) => backend<Record<string, number>>("GET", "/posts/summary", undefined, input)),
+    .query(({ input }) =>
+      backend<Record<string, number>>(
+        "GET",
+        "/posts/summary",
+        undefined,
+        input,
+      ),
+    ),
   post: authedProcedure
     .input(z.object({ id }))
     .query(({ input }) => backend<Post>("GET", `/posts/${input.id}`)),
@@ -141,15 +183,24 @@ export const studioRouter = createTRPCRouter({
       backend<VariantMetrics>("GET", `/analytics/variants/${input.id}`),
     ),
   analyticsDashboard: authedProcedure
-    .input(z.object({
-      account_id: id.optional(),
-      start_date: z.string().optional(),
-      end_date: z.string().optional(),
-      limit: z.number().int().min(1).max(100).default(50),
-      offset: z.number().int().min(0).default(0),
-      content_type: z.enum(["posts", "replies", "all"]).default("posts"),
-    }))
-    .query(({ input }) => backend<AnalyticsDashboard>("GET", "/analytics/dashboard", undefined, input)),
+    .input(
+      z.object({
+        account_id: id.optional(),
+        start_date: z.string().optional(),
+        end_date: z.string().optional(),
+        limit: z.number().int().min(1).max(100).default(50),
+        offset: z.number().int().min(0).default(0),
+        content_type: z.enum(["posts", "replies", "all"]).default("posts"),
+      }),
+    )
+    .query(({ input }) =>
+      backend<AnalyticsDashboard>(
+        "GET",
+        "/analytics/dashboard",
+        undefined,
+        input,
+      ),
+    ),
   analyticsOverview: authedProcedure
     .input(
       z
@@ -162,17 +213,12 @@ export const studioRouter = createTRPCRouter({
         .optional(),
     )
     .query(({ input }) =>
-      backend<WorkspaceOverview>(
-        "GET",
-        "/analytics/overview",
-        undefined,
-        {
-          days: input?.days ?? 30,
-          account_id: input?.account_id,
-          start_date: input?.start_date,
-          end_date: input?.end_date,
-        },
-      ),
+      backend<WorkspaceOverview>("GET", "/analytics/overview", undefined, {
+        days: input?.days ?? 30,
+        account_id: input?.account_id,
+        start_date: input?.start_date,
+        end_date: input?.end_date,
+      }),
     ),
   accountAnalytics: authedProcedure
     .input(
@@ -189,12 +235,9 @@ export const studioRouter = createTRPCRouter({
       ),
     ),
   allAccountsAnalytics: authedProcedure.query(() =>
-    backend<AccountAnalytics[]>(
-      "GET",
-      "/analytics/accounts",
-      undefined,
-      { live: "true" },
-    ),
+    backend<AccountAnalytics[]>("GET", "/analytics/accounts", undefined, {
+      live: "true",
+    }),
   ),
   analyticsFeed: authedProcedure
     .input(
@@ -209,19 +252,14 @@ export const studioRouter = createTRPCRouter({
         .optional(),
     )
     .query(({ input }) =>
-      backend<PostFeedItemAnalytics[]>(
-        "GET",
-        "/analytics/feed",
-        undefined,
-        {
-          account_id: input?.account_id,
-          start_date: input?.start_date,
-          end_date: input?.end_date,
-          limit: input?.limit ?? 50,
-          offset: input?.offset ?? 0,
-          live: "true",
-        },
-      ),
+      backend<PostFeedItemAnalytics[]>("GET", "/analytics/feed", undefined, {
+        account_id: input?.account_id,
+        start_date: input?.start_date,
+        end_date: input?.end_date,
+        limit: input?.limit ?? 50,
+        offset: input?.offset ?? 0,
+        live: "true",
+      }),
     ),
   syncMetrics: authedProcedure.mutation(() =>
     backend<Payload>("POST", "/analytics/sync-now", {}),
@@ -323,7 +361,16 @@ export const studioRouter = createTRPCRouter({
       }),
     ),
   addVariant: authedProcedure
-    .input(z.object({ post_id: id, platform: z.string(), connected_account_id: id, payload: fields, media_asset_ids: z.array(id), idempotency_key: z.string().min(1).max(128) }))
+    .input(
+      z.object({
+        post_id: id,
+        platform: z.string(),
+        connected_account_id: id,
+        payload: fields,
+        media_asset_ids: z.array(id),
+        idempotency_key: z.string().min(1).max(128),
+      }),
+    )
     .mutation(({ input }) => {
       const { post_id, ...data } = input;
       return backend<Variant>("POST", `/posts/${post_id}/variants`, data);
@@ -368,6 +415,11 @@ export const studioRouter = createTRPCRouter({
         voice_profile_id: id.optional(),
         writing_instructions: z.string().max(2000).optional(),
         output_language: z.string().max(80).optional(),
+        conversation_id: id.optional(),
+        request_id: id.optional(),
+        conversation_prompt: z.string().max(10000).optional(),
+        conversation_source: z.string().max(10000).optional(),
+        workspace_id: id.optional(),
       }),
     )
     .mutation(({ input }) =>
@@ -390,7 +442,13 @@ export const studioRouter = createTRPCRouter({
           voice_profile_id: input.voice_profile_id,
           writing_instructions: input.writing_instructions,
           output_language: input.output_language,
+          conversation_id: input.conversation_id,
+          request_id: input.request_id,
+          conversation_prompt: input.conversation_prompt,
+          conversation_source: input.conversation_source,
         },
+        undefined,
+        input.workspace_id,
       ),
     ),
   resource: authedProcedure

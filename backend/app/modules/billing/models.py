@@ -79,3 +79,30 @@ class Plan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(100))
     limits: Mapped[dict] = mapped_column(JSON, default=dict)
     active: Mapped[bool] = mapped_column(default=True)
+
+
+class BillingReconciliationState(TimestampMixin, Base):
+    __tablename__ = "billing_reconciliation_states"
+
+    provider: Mapped[str] = mapped_column(String(40), primary_key=True)
+    cursor_id: Mapped[str | None] = mapped_column(String(36))
+    upper_bound_id: Mapped[str | None] = mapped_column(String(36))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_request_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_owner: Mapped[str | None] = mapped_column(String(36))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    provider_failures: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class BillingReconciliationRetry(TimestampMixin, Base):
+    __tablename__ = "billing_reconciliation_retries"
+
+    subscription_id: Mapped[str] = mapped_column(
+        ForeignKey("subscriptions.id", ondelete="CASCADE"), primary_key=True
+    )
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    last_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    error_code: Mapped[str] = mapped_column(String(80))

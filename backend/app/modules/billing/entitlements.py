@@ -29,35 +29,35 @@ PLAN_DEFAULTS = {
     },
     "starter": {
         "ai_credits": 250,
-        "scheduled_posts": 50,
+        "scheduled_posts": None,
         "seats": 3,
         "workspaces": 3,
         "connected_accounts": 5,
     },
     "creator": {
         "ai_credits": 250,
-        "scheduled_posts": 50,
+        "scheduled_posts": None,
         "seats": 1,
         "workspaces": 1,
         "connected_accounts": 5,
     },
     "pro": {
         "ai_credits": 1000,
-        "scheduled_posts": 250,
+        "scheduled_posts": None,
         "seats": 5,
         "workspaces": 5,
         "connected_accounts": 15,
     },
     "business": {
         "ai_credits": 5000,
-        "scheduled_posts": 1000,
+        "scheduled_posts": None,
         "seats": 15,
         "workspaces": 10,
         "connected_accounts": 50,
     },
     "agency": {
         "ai_credits": 5000,
-        "scheduled_posts": 1000,
+        "scheduled_posts": None,
         "seats": 25,
         "workspaces": 25,
         "connected_accounts": 100,
@@ -65,11 +65,22 @@ PLAN_DEFAULTS = {
 }
 
 
+def plan_limits(plan_code: str, plan: Plan | None = None) -> dict[str, int | None]:
+    """Paid publishing is unlimited, including plans with legacy stored quotas."""
+    values = {
+        **PLAN_DEFAULTS.get(plan_code, PLAN_DEFAULTS["free"]),
+        **(plan.limits if plan else {}),
+    }
+    if plan_code != "free" and (plan_code in PLAN_DEFAULTS or plan is not None):
+        values["scheduled_posts"] = None
+    return values
+
+
 def current_subscription(db: Session, workspace_id: str) -> Subscription | None:
     return db.scalar(
         select(Subscription)
         .where(Subscription.workspace_id == workspace_id)
-        .order_by(Subscription.updated_at.desc())
+        .order_by(Subscription.created_at.desc(), Subscription.id.desc())
     )
 
 
@@ -111,10 +122,7 @@ def sync_entitlements(
     db: Session, workspace_id: str, plan_code: str, quantity: int | None = None
 ) -> None:
     plan = db.scalar(select(Plan).where(Plan.code == plan_code, Plan.active.is_(True)))
-    values = {
-        **PLAN_DEFAULTS.get(plan_code, PLAN_DEFAULTS["free"]),
-        **(plan.limits if plan else {}),
-    }
+    values = plan_limits(plan_code, plan)
     db.execute(
         delete(EntitlementGrant).where(
             EntitlementGrant.workspace_id == workspace_id, EntitlementGrant.source == "plan"
@@ -131,6 +139,10 @@ def sync_entitlements(
 
 
 def entitlement_limit(db: Session, workspace_id: str, capability: str) -> int | None:
+    code = effective_plan(db, workspace_id)
+    if capability == "scheduled_posts" and code != "free":
+        # Old plan grants and custom limits must not reintroduce a paid post cap.
+        return None
     grant = db.scalar(
         select(EntitlementGrant)
         .where(
@@ -143,15 +155,10 @@ def entitlement_limit(db: Session, workspace_id: str, capability: str) -> int | 
         )
         .order_by((EntitlementGrant.source != "plan").desc(), EntitlementGrant.created_at.desc())
     )
-    if grant and (
-        grant.source != "plan" or has_paid_access(current_subscription(db, workspace_id))
-    ):
+    if grant and (grant.source != "plan" or code != "free"):
         return grant.limit_value
-    code = effective_plan(db, workspace_id)
     plan = db.scalar(select(Plan).where(Plan.code == code, Plan.active.is_(True)))
-    return {**PLAN_DEFAULTS.get(code, PLAN_DEFAULTS["free"]), **(plan.limits if plan else {})}.get(
-        capability
-    )
+    return plan_limits(code, plan).get(capability)
 
 
 def usage_window(subscription, now=None):
@@ -307,7 +314,7 @@ def get_plan_limits_summary(db: Session, workspace_id: str, now=None) -> dict[st
     plan = db.scalar(select(Plan).where(Plan.code == code, Plan.active.is_(True)))
     if not plan and code not in PLAN_DEFAULTS:
         code = "free"
-    limits = {**PLAN_DEFAULTS.get(code, PLAN_DEFAULTS["free"]), **(plan.limits if plan else {})}
+    limits = plan_limits(code, plan)
     grants = db.scalars(
         select(EntitlementGrant).where(
             EntitlementGrant.workspace_id == workspace_id,
@@ -315,7 +322,9 @@ def get_plan_limits_summary(db: Session, workspace_id: str, now=None) -> dict[st
         )
     )
     for grant in grants:
-        if grant.source != "plan" or paid:
+        if grant.capability == "scheduled_posts" and code != "free":
+            continue
+        if grant.source != "plan" or code != "free":
             limits[grant.capability] = grant.limit_value
     start, end = usage_window(subscription, now)
     accounts = (

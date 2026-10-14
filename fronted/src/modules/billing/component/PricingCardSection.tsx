@@ -28,7 +28,10 @@ export function planFeatures(plan: PlanConfig): FeatureItem[] {
       icon: AiVideoIcon,
     },
     {
-      label: `${allowance("scheduled_posts")} posts / month`,
+      label:
+        limits.scheduled_posts === null
+          ? "Unlimited posts"
+          : `${allowance("scheduled_posts")} posts / month`,
       icon: ArrowDataTransferVerticalIcon,
     },
     {
@@ -39,7 +42,10 @@ export function planFeatures(plan: PlanConfig): FeatureItem[] {
     { label: `${allowance("workspaces")} workspaces`, icon: WorkIcon },
     { label: "Account analytics", icon: AnalysisTextLinkIcon },
     {
-      label: "One post across its selected channels uses one slot",
+      label:
+        limits.scheduled_posts === null
+          ? "Publish now or schedule across your connected channels"
+          : "One post across its selected channels uses one slot",
       icon: ArrowDataTransferVerticalIcon,
     },
   ];
@@ -64,9 +70,7 @@ function PricingCardSection({
   timeLine: "monthly" | "quarterly" | "annually";
 }) {
   const trpc = useTRPC();
-  const { data } = useSuspenseQuery(
-    trpc.billing.getPlans.queryOptions(),
-  );
+  const { data } = useSuspenseQuery(trpc.billing.getPlans.queryOptions());
 
   const plans = data as BillingConfigResponse;
 

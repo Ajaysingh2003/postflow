@@ -1,20 +1,12 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-
 import ForgotPasswordForm from "../component/ForgotPasswordForm";
 
 function ForgetPasswordView() {
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] w-full flex-col">
       <div className="flex h-full flex-1 w-full items-center justify-center p-4">
-        <div className="card-shadow relative z-10 mt-4 block w-full rounded-lg bg-background p-6 card sm:w-98">
-          {/* Back link */}
-         
-
-          {/* Heading */}
+        <div className="card card-shadow relative z-10 mt-4 w-full max-w-sm rounded-lg bg-background p-6">
           <div className="space-y-1">
             <h2 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
               Reset your password
@@ -25,12 +17,9 @@ function ForgetPasswordView() {
             </p>
           </div>
 
-          {/* Primary Form */}
           <div className="mt-6 w-full">
             <ForgotPasswordForm />
           </div>
-
-          
         </div>
       </div>
     </div>

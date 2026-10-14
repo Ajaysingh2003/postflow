@@ -1,24 +1,18 @@
-import InteractiveAuthScreen from "@/modules/micro-interactions/Authanimation";
-import React from "react";
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { CardWrapper } from "@/components/base/AuthCardWrapper";
-import ConnectionAnimation from "@/modules/micro-interactions/ConnectionAnimation";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false, noarchive: true, nosnippet: true },
 };
-
-function layout({ children }: { children: React.ReactNode }) {
+export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="grid bg-primary ">
-      
-      <div className="flex items-center justify-center w-full  overflow-hidden">
-        <div className=" w-full border border-border rounded-xl shadow-sm ">
+    <div className="grid bg-primary">
+      <div className="flex w-full items-center justify-center overflow-hidden">
+        <div className="w-full rounded-xl border border-border shadow-sm">
           <CardWrapper>{children}</CardWrapper>
         </div>
       </div>
     </div>
   );
 }
-
-export default layout;

@@ -17,9 +17,13 @@ class XThreadWriterInput(BaseModel):
 
 
 class XThreadWriterOutput(BaseModel):
-    tweets: list[str] = Field(description="Only publishable post text, without editing notes or explanations")
+    tweets: list[str] = Field(
+        description="Only publishable post text, without editing notes or explanations"
+    )
     total_tweets: int
-    notes: str = Field(default="", description="Optional editing explanation; never part of the posts")
+    notes: str = Field(
+        default="", description="Optional editing explanation; never part of the posts"
+    )
 
 
 class XHookVariantsInput(BaseModel):
@@ -449,8 +453,12 @@ class RewriteWithToneInput(BaseModel):
 
 
 class RewriteWithToneOutput(BaseModel):
-    rewritten_text: str = Field(description="Only the publishable draft text, without editing notes or explanations")
-    notes: str = Field(default="", description="Optional editing explanation; never part of the draft")
+    rewritten_text: str = Field(
+        description="Only the publishable draft text, without editing notes or explanations"
+    )
+    notes: str = Field(
+        default="", description="Optional editing explanation; never part of the draft"
+    )
 
 
 class RepurposeContentInput(BaseModel):
@@ -503,6 +511,10 @@ class ExecuteFeatureRequest(BaseModel):
     validation_context: dict[str, Any] = Field(default_factory=dict)
     writing_instructions: str = Field(default="", max_length=2000)
     output_language: str = Field(default="", max_length=80)
+    conversation_id: str | None = Field(default=None, min_length=36, max_length=36)
+    request_id: str | None = Field(default=None, min_length=36, max_length=36)
+    conversation_prompt: str = Field(default="", max_length=10000)
+    conversation_source: str = Field(default="", max_length=10000)
 
 
 class ExecuteFeatureResponse(BaseModel):

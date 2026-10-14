@@ -1,3 +1,8 @@
+export type AuthProviderConfig = {
+  google_client_id: string | null;
+  x_login_enabled: boolean;
+};
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -15,15 +20,23 @@ export type AuthResponse = {
   expires_in: number;
   user_id: string;
   workspace_id: string;
+  email: string;
+  name: string;
+  email_verified: boolean;
+  verification_sent?: boolean;
+  retry_after?: number;
   user?: AuthUser;
   verification_required?: boolean;
   // Backwards compatibility:
   refresh_token?: string;
 };
 
-export type TokenResponse = AuthResponse;
+export type TokenResponse = Omit<
+  AuthResponse,
+  "access_token" | "refresh_token" | "email" | "name" | "email_verified"
+> & { user: AuthUser };
 
-export type RegisterResponse = AuthResponse & {
+export type RegisterResponse = TokenResponse & {
   user: AuthUser;
   verification_required: boolean;
 };
@@ -31,6 +44,10 @@ export type RegisterResponse = AuthResponse & {
 export type MessageResponse = {
   message: string;
   development_token?: string | null;
+  retry_after?: number;
+  expires_in?: number | null;
+  authenticated?: boolean;
+  already_verified?: boolean;
   // Backwards compatibility:
   detail?: string;
 };
@@ -74,4 +91,3 @@ export type Plan = {
   scans_per_month?: number | null;
   api_keys_limit?: number | null;
 };
-

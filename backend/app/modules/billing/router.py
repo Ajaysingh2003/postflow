@@ -18,8 +18,13 @@ from app.db.session import get_db
 from app.modules.billing import service
 from app.modules.billing.entitlements import (
     PLAN_DEFAULTS,
+    effective_plan,
     get_plan_limits_summary,
+    plan_limits,
     sync_entitlements,
+)
+from app.modules.billing.entitlements import (
+    current_subscription as latest_subscription,
 )
 from app.modules.billing.models import BillingCustomer, BillingWebhookEvent, Plan, Subscription
 from app.modules.billing.schemas import (
@@ -29,6 +34,7 @@ from app.modules.billing.schemas import (
     PortalResponse,
     SubscriptionResponse,
 )
+from app.modules.billing.usage import lock_workspace
 from app.modules.identity.models import User, Workspace
 
 router = APIRouter(tags=["billing"])
@@ -131,7 +137,7 @@ def get_plans(db: Session = Depends(get_db)) -> dict:
 
     configured = {plan.code: plan for plan in db.scalars(select(Plan).where(Plan.active.is_(True)))}
     for code, details in plans.items():
-        details["limits"] = {**PLAN_DEFAULTS[code], **(configured[code].limits if code in configured else {})}
+        details["limits"] = plan_limits(code, configured.get(code))
     return plans
 
 
@@ -280,10 +286,11 @@ async def dodo_webhook(
             db.add(BillingCustomer(user_id=user_id, provider_customer_id=str(customer_id)))
 
     if event_type.startswith("subscription.") and user_id and workspace_id and subscription_id:
+        lock_workspace(db, str(workspace_id))
         subscription = db.scalar(
-            select(Subscription).where(
-                Subscription.provider_subscription_id == str(subscription_id)
-            )
+            select(Subscription)
+            .where(Subscription.provider_subscription_id == str(subscription_id))
+            .with_for_update()
         )
         if subscription is None:
             subscription = Subscription(
@@ -320,13 +327,13 @@ async def dodo_webhook(
         plan_code = str(metadata.get("plan_code") or subscription.plan_code)
         if plan_code in PLAN_DEFAULTS:
             subscription.plan_code = plan_code
+        db.flush()
+        current = latest_subscription(db, str(workspace_id))
         sync_entitlements(
             db,
             str(workspace_id),
-            subscription.plan_code
-            if event_type not in {"subscription.failed", "subscription.expired"}
-            else "free",
-            subscription.quantity,
+            effective_plan(db, str(workspace_id)),
+            current.quantity if current else 1,
         )
 
     if event_type.startswith(("refund.", "dispute.")):
@@ -342,8 +349,16 @@ async def dodo_webhook(
                 "dispute.opened",
                 "dispute.lost",
             }:
+                lock_workspace(db, subscription.workspace_id)
                 subscription.status = "revoked"
                 subscription.grace_until = None
-                sync_entitlements(db, subscription.workspace_id, "free")
+                db.flush()
+                current = latest_subscription(db, subscription.workspace_id)
+                sync_entitlements(
+                    db,
+                    subscription.workspace_id,
+                    effective_plan(db, subscription.workspace_id),
+                    current.quantity if current else 1,
+                )
     event.processed_at = utcnow()
     db.commit()

@@ -1,368 +1,1171 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  BookOpen, Check, ExternalLink, Loader2, PenLine,
-  Plus, Trash2, Users, X,
+  Component,
+  Suspense,
+  useId,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import {
+  QueryErrorResetBoundary,
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import {
+  AlertCircle,
+  BookOpen,
+  Check,
+  ChevronRight,
+  Fingerprint,
+  Globe2,
+  Loader2,
+  Plus,
+  RefreshCw,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+  X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Linkedin } from "@/lib/icons";
 import { useTRPC } from "@/trpc/client";
-import { useComposer } from "../context/ComposerContext";
-import type { BrandProfile } from "../personaTypes";
+import {
+  BRAND_CHANNELS,
+  VOICE_TRAITS,
+  brandProgress,
+  brandSchema,
+  brandValues,
+  type BrandDraft,
+} from "../personaTypes";
 
-type Section = "guide" | "samples" | "accounts";
-type BrandDraft = Pick<BrandProfile,
-  "niche" | "persona" | "target_audience" | "style_guide" | "writing_rules" |
-  "linkedin_instructions" | "goals" | "voice_traits" | "preferred_formats" |
-  "calls_to_action" | "restricted_topics"
->;
-type Action = { kind: "close" } | { kind: "account"; connectionId: string | null } |
-  { kind: "navigate"; url: string };
-type Confirmation = { kind: "discard"; action: Action } | { kind: "disconnect"; id: string };
+/* -------------------------------------------------------------------------- */
+/*  Config                                                                    */
+/* -------------------------------------------------------------------------- */
 
-const emptyBrand: BrandDraft = {
-  niche: null, persona: null, target_audience: null, style_guide: null,
-  writing_rules: null, linkedin_instructions: null, goals: [], voice_traits: [],
-  preferred_formats: [], calls_to_action: [], restricted_topics: [],
-};
-const sections = [
-  { id: "guide", label: "Writing guide", icon: PenLine },
-  { id: "samples", label: "Writing samples", icon: BookOpen },
-  { id: "accounts", label: "Connected accounts", icon: Users },
-] as const;
-const guideTextFields = [
-  { key: "persona", label: "Persona", hint: "Who are you professionally, and what do you want to be known for?", max: 2000, placeholder: "I build B2B tools and share practical lessons from shipping them…" },
-  { key: "niche", label: "Focus area", hint: "Your main professional niche.", max: 240, single: true },
-  { key: "target_audience", label: "Audience", hint: "Who should your posts speak to, and what matters to them?", max: 5000 },
-  { key: "style_guide", label: "Style and vocabulary", hint: "Describe sentence length, rhythm, phrasing, and point of view.", max: 2000 },
-  { key: "writing_rules", label: "Writing rules", hint: "Dos and don'ts for hooks, emoji, hashtags, claims, and formatting.", max: 2000 },
-  { key: "linkedin_instructions", label: "LinkedIn instructions", hint: "Guidance specific to your LinkedIn posts and professional conversations.", max: 2000 },
-] as const;
-const guideLists = [
-  { key: "voice_traits", label: "Voice traits", hint: "How your writing should sound.", max: 20 },
-  { key: "goals", label: "Content goals", hint: "What your content should achieve.", max: 20 },
-  { key: "preferred_formats", label: "Preferred formats", hint: "For example: personal story, practical lesson, opinion, case study.", max: 20 },
-  { key: "calls_to_action", label: "Calls to action", hint: "How you prefer to invite discussion or a next step.", max: 20 },
-  { key: "restricted_topics", label: "Topics and claims to avoid", hint: "Boundaries to respect across drafts.", max: 50 },
-] as const;
-const lines = (text: string) => [...new Set(text.split("\n").map((line) => line.trim()).filter(Boolean))];
-function message(error: unknown, fallback: string) {
-  if (!(error instanceof Error)) return fallback;
-  return /^[\[{]/.test(error.message) ? "Check the field limits and try again." : error.message;
-}
-function brandValues(profile: BrandProfile | null): BrandDraft {
-  return profile ? Object.fromEntries(Object.keys(emptyBrand).map((key) =>
-    [key, profile[key as keyof BrandDraft] ?? emptyBrand[key as keyof BrandDraft]],
-  )) as BrandDraft : emptyBrand;
-}
-function Notice({ text, retry }: { text: string; retry?: () => void }) {
+type Section = "identity" | "voice" | "samples" | "channels";
+
+const SECTIONS = [
+  {
+    id: "identity",
+    label: "Brand & audience",
+    icon: Fingerprint,
+    caption: "The person behind the posts",
+    title: "Tell your story.",
+    description:
+      "Give Draftva the context to write about your work without guessing who you are.",
+    fields: [
+      "display_name",
+      "role",
+      "bio",
+      "niche",
+      "audience",
+      "expertise",
+      "goals",
+      "values",
+    ],
+  },
+  {
+    id: "voice",
+    label: "Voice & style",
+    icon: SlidersHorizontal,
+    caption: "Words that feel like you",
+    title: "Make it sound like you.",
+    description:
+      "Set your everyday voice. A specific request can change the tone of a draft while keeping your brand’s context.",
+    fields: [
+      "voice_traits",
+      "style_guide",
+      "writing_rules",
+      "output_language",
+      "preferred_formats",
+      "calls_to_action",
+      "restricted_topics",
+    ],
+  },
+  {
+    id: "samples",
+    label: "Writing samples",
+    icon: BookOpen,
+    caption: "Show, don’t just tell",
+    title: "Your voice, in your own words.",
+    description:
+      "Add up to five posts you wrote. Draftva uses them as style references across channels, without copying them into new posts.",
+    fields: ["sample_posts"],
+  },
+  {
+    id: "channels",
+    label: "Channel preferences",
+    icon: Globe2,
+    caption: "One brand, different rhythms",
+    title: "A little nuance for each channel.",
+    description:
+      "Add optional guidance for each platform. Your brand profile applies everywhere; platform limits and community rules still take priority.",
+    fields: ["platform_instructions"],
+  },
+] as const satisfies ReadonlyArray<{
+  id: Section;
+  label: string;
+  icon: typeof Fingerprint;
+  caption: string;
+  title: string;
+  description: string;
+  fields: ReadonlyArray<keyof BrandDraft>;
+}>;
+
+const LIMITS = {
+  item: 240,
+  traits: 8,
+  samples: 5,
+  sample: 3000,
+  channel: 1000,
+} as const;
+
+const modalClass =
+  "flex h-[min(810px,calc(100dvh-2rem))] w-[min(1080px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden rounded-2xl bg-background p-0 text-foreground sm:max-w-none";
+const fieldClass =
+  "rounded-lg border-border/80 bg-background text-sm transition-shadow focus-visible:ring-2 focus-visible:ring-emerald-200 dark:focus-visible:ring-emerald-500/30";
+
+const cx = (...parts: Array<string | false | null | undefined>) =>
+  parts.filter(Boolean).join(" ");
+
+const sectionOfField = (field: string): Section =>
+  SECTIONS.find((s) => (s.fields as readonly string[]).includes(field))?.id ??
+  "identity";
+
+/* -------------------------------------------------------------------------- */
+/*  Chrome: header, loading, error boundary                                   */
+/* -------------------------------------------------------------------------- */
+
+function Header({
+  close,
+  busy = false,
+}: {
+  close: () => void;
+  busy?: boolean;
+}) {
   return (
-    <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-      <span>{text}</span>
-      {retry && <Button type="button" variant="outline" size="sm" className="secondary-btn" onClick={retry}>Retry</Button>}
+    <DialogHeader className="flex-row items-center justify-between gap-4 border-b border-border/70 px-5 py-4 sm:px-7 sm:py-5">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-violet-100 bg-violet-50 text-violet-500 dark:border-violet-500/20 dark:bg-violet-500/10">
+          <Fingerprint size={20} />
+        </span>
+        <div className="min-w-0">
+          <DialogTitle className="font-heading text-xl font-semibold">
+            Your brand profile
+          </DialogTitle>
+          <DialogDescription className="mt-0.5 truncate text-xs">
+            Help Draftva understand your story, audience, and voice.
+          </DialogDescription>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        disabled={busy}
+        aria-label="Close brand profile"
+        onClick={close}
+      >
+        <X size={17} />
+      </Button>
+    </DialogHeader>
+  );
+}
+
+export function BrandProfileSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="Loading brand profile"
+      className="flex flex-1 flex-col gap-6 p-5 sm:grid sm:grid-cols-[224px_1fr] sm:p-0"
+    >
+      <div className="space-y-3 sm:border-r sm:border-border/70 sm:bg-muted/15 sm:p-4">
+        <Skeleton className="hidden h-32 rounded-xl sm:block" />
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} className="h-10 rounded-lg" />
+        ))}
+      </div>
+      <div className="space-y-6 sm:p-8">
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-3/4" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Skeleton className="h-16" />
+          <Skeleton className="h-16" />
+        </div>
+        <Skeleton className="h-32" />
+        <Skeleton className="h-16" />
+        <Skeleton className="h-32" />
+        <span className="sr-only">Loading your saved brand profile</span>
+      </div>
     </div>
   );
 }
-function Loading({ label }: { label: string }) {
-  return <p className="flex items-center gap-2 py-8 text-sm text-neutral-500"><Loader2 className="size-4 animate-spin" />{label}</p>;
-}
-function TextField({ id, label, hint, value, change, max, single = false, placeholder }: {
-  id: string; label: string; hint?: string; value: string | null;
-  change: (value: string) => void; max: number; single?: boolean; placeholder?: string;
+
+function LoadingDialog({
+  close,
+  error,
+  retry,
+}: {
+  close: () => void;
+  error?: Error;
+  retry?: () => void;
 }) {
   return (
-    <Field className="gap-2">
-      <div className="flex justify-between gap-3">
-        <Label htmlFor={id} className="font-subheading text-sm">{label}</Label>
-        <span className="text-xs tabular-nums text-neutral-400">{(value ?? "").length}/{max}</span>
-      </div>
-      {hint && <p id={`${id}-hint`} className="text-sm leading-5 text-neutral-500">{hint}</p>}
-      {single ? (
-        <Input id={id} value={value ?? ""} maxLength={max} placeholder={placeholder}
-          aria-describedby={hint ? `${id}-hint` : undefined}
-          onChange={(event) => change(event.target.value)}
-          className="rounded-lg border-neutral-200 bg-white focus-visible:ring-2 focus-visible:ring-sky-200" />
-      ) : (
-        <Textarea id={id} value={value ?? ""} maxLength={max} rows={4} placeholder={placeholder}
-          aria-describedby={hint ? `${id}-hint` : undefined}
-          onChange={(event) => change(event.target.value)}
-          className="min-h-28 resize-y rounded-lg border-neutral-200 bg-white p-3 focus-visible:ring-2 focus-visible:ring-sky-200" />
-      )}
-    </Field>
-  );
-}
-function ListField({ id, label, hint, value, change, max }: {
-  id: string; label: string; hint: string; value: string[];
-  change: (value: string[]) => void; max: number;
-}) {
-  const [text, setText] = useState(value.join("\n"));
-  const invalid = value.length > max || value.some((item) => item.length > 500);
-  return (
-    <Field className="gap-2">
-      <Label htmlFor={id} className="font-subheading text-sm">{label}</Label>
-      <p id={`${id}-hint`} className="text-sm text-neutral-500">{hint} One item per line (max {max}).</p>
-      <Textarea id={id} value={text} rows={3} aria-invalid={invalid} aria-describedby={`${id}-hint`}
-        onChange={(event) => { setText(event.target.value); change(lines(event.target.value)); }}
-        className="min-h-24 resize-y rounded-lg border-neutral-200 bg-white p-3 focus-visible:ring-2 focus-visible:ring-sky-200" />
-      {invalid && <p className="text-xs text-red-600">Use up to {max} items, each under 500 characters.</p>}
-    </Field>
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) close();
+      }}
+    >
+      <DialogContent className={modalClass} showCloseButton={false}>
+        <Header close={close} />
+        {error ? (
+          <div
+            role="alert"
+            className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center"
+          >
+            <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+              <AlertCircle className="size-6 text-muted-foreground" />
+            </span>
+            <h2 className="font-heading text-xl">Your profile couldn’t load</h2>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              {error.message}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Button className="secondary-btn" onClick={close}>
+                Close
+              </Button>
+              <Button className="primary-btn" onClick={retry}>
+                <RefreshCw size={14} />
+                Try again
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <BrandProfileSkeleton />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
-export function PersonaDialog({ open, setOpen }: { open: boolean; setOpen: (open: boolean) => void }) {
-  const trpc = useTRPC();
-  const router = useRouter();
-  const { state: composer, setSettings } = useComposer();
-  const cache = useQueryClient();
-  const [section, setSection] = useState<Section>("guide");
-  const [brandEdit, setBrand] = useState<BrandDraft | null>(null);
-  const [sampleEdit, setSamples] = useState<{ connectionId: string; samples: string[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  const workspaceQuery = useQuery({ ...trpc.workspace.current.queryOptions(), enabled: open });
-  const brandQuery = useQuery({ ...trpc.persona.brand.queryOptions(), enabled: open });
-  const accountsQuery = useQuery({ ...trpc.workspace.listLinkedInConnections.queryOptions(), enabled: open });
-  const activeAccount = composer.composer.connection_id
-    ? accountsQuery.data?.find((account) => account.id === composer.composer.connection_id)
-    : accountsQuery.data?.find((account) => account.is_primary) ?? accountsQuery.data?.[0];
-  const accountName = activeAccount
-    ? [activeAccount.first_name, activeAccount.last_name].filter(Boolean).join(" ") || activeAccount.public_identifier
-    : "";
-  const sampleAccount = sampleEdit
-    ? accountsQuery.data?.find((account) => account.id === sampleEdit.connectionId)
-    : activeAccount;
-  const sampleAccountName = sampleAccount
-    ? [sampleAccount.first_name, sampleAccount.last_name].filter(Boolean).join(" ") || sampleAccount.public_identifier
-    : "";
-  const sampleInput = { connectionId: sampleAccount?.id };
-  const samplesQuery = useQuery({ ...trpc.persona.samples.queryOptions(sampleInput), enabled: open && !!sampleAccount && section === "samples" });
-  const saveBrand = useMutation(trpc.persona.saveBrand.mutationOptions());
-  const saveSamples = useMutation(trpc.persona.saveSamples.mutationOptions());
-  const setPrimary = useMutation(trpc.workspace.setPrimaryLinkedInConnection.mutationOptions());
-  const disconnect = useMutation(trpc.workspace.disconnectLinkedIn.mutationOptions());
-  const brand = brandEdit ?? brandValues(brandQuery.data ?? null);
-  const samples = sampleEdit?.samples ?? samplesQuery.data?.writing_samples ?? [];
-  const brandDirty = brandEdit !== null && JSON.stringify(brand) !== JSON.stringify(brandValues(brandQuery.data ?? null));
-  const sampleDirty = sampleEdit !== null && JSON.stringify(samples) !== JSON.stringify(samplesQuery.data?.writing_samples ?? []);
-  const busy = saveBrand.isPending || saveSamples.isPending || setPrimary.isPending || disconnect.isPending;
-  const canSave = !busy && (section === "guide"
-    ? brandQuery.isSuccess && brandDirty
-    : section === "samples" && !!sampleAccount && samplesQuery.isSuccess && sampleDirty);
-  function editSamples(next: string[]) {
-    if (!sampleAccount) return;
-    setSamples({ connectionId: sampleAccount.id, samples: next }); setSaved(false); setError(null);
+class BrandBoundary extends Component<
+  { children: ReactNode; retry: () => void; close: () => void },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
   }
-  function perform(action: Action) {
-    setConfirmation(null);
-    if (action.kind === "account") {
-      setSettings({ connection_id: action.connectionId }); setSamples(null); setError(null); setSaved(false);
-    } else {
-      setOpen(false);
-      if (action.kind === "navigate") router.push(action.url);
+  render() {
+    return this.state.error ? (
+      <LoadingDialog
+        close={this.props.close}
+        error={this.state.error}
+        retry={() => {
+          this.props.retry();
+          this.setState({ error: null });
+        }}
+      />
+    ) : (
+      this.props.children
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Field primitives                                                          */
+/* -------------------------------------------------------------------------- */
+
+export function BrandTextField({
+  name,
+  label,
+  hint,
+  value,
+  onChange,
+  max,
+  multiline = false,
+  placeholder,
+}: {
+  name: string;
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+  max: number;
+  multiline?: boolean;
+  placeholder?: string;
+}) {
+  const id = `brand-${name}`;
+  const hintId = hint ? `${id}-hint` : undefined;
+  const nearLimit = value.length >= max * 0.9;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <Label htmlFor={id} className="text-xs font-medium">
+          {label}
+        </Label>
+        <span
+          className={cx(
+            "text-[10px] tabular-nums",
+            nearLimit
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-muted-foreground",
+          )}
+        >
+          {value.length.toLocaleString()} / {max.toLocaleString()}
+        </span>
+      </div>
+      {hint && (
+        <p id={hintId} className="text-xs leading-5 text-muted-foreground">
+          {hint}
+        </p>
+      )}
+      {multiline ? (
+        <Textarea
+          id={id}
+          value={value}
+          maxLength={max}
+          placeholder={placeholder}
+          rows={4}
+          aria-describedby={hintId}
+          onChange={(e) => onChange(e.target.value)}
+          className={cx(fieldClass, "min-h-28 resize-y p-3 leading-6")}
+        />
+      ) : (
+        <Input
+          id={id}
+          value={value}
+          maxLength={max}
+          placeholder={placeholder}
+          aria-describedby={hintId}
+          onChange={(e) => onChange(e.target.value)}
+          className={fieldClass}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Chip-style list input: Enter (or blur) adds an item, Backspace removes the last. */
+function ChipListField({
+  name,
+  label,
+  hint,
+  value,
+  max,
+  onChange,
+  placeholder = "Type and press Enter",
+}: {
+  name: string;
+  label: string;
+  hint?: string;
+  value: string[];
+  max: number;
+  onChange: (items: string[]) => void;
+  placeholder?: string;
+}) {
+  const uid = useId();
+  const id = `brand-${name}`;
+  const hintId = `${uid}-hint`;
+  const [text, setText] = useState("");
+  const full = value.length >= max;
+
+  function commit(raw: string) {
+    const parts = raw
+      .split("\n")
+      .map((part) => part.trim().slice(0, LIMITS.item))
+      .filter(Boolean);
+    if (!parts.length) return;
+    const seen = new Set(value.map((item) => item.toLowerCase()));
+    const next = [...value];
+    for (const part of parts) {
+      if (next.length >= max) break;
+      if (seen.has(part.toLowerCase())) continue;
+      seen.add(part.toLowerCase());
+      next.push(part);
+    }
+    onChange(next);
+    setText("");
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commit(text);
+    } else if (event.key === "Backspace" && !text && value.length) {
+      onChange(value.slice(0, -1));
     }
   }
-  function request(action: Action) {
-    if (busy) return;
-    if (action.kind === "account" && action.connectionId === composer.composer.connection_id) return;
-    const dirty = action.kind === "account" ? sampleDirty : brandDirty || sampleDirty;
-    if (dirty) setConfirmation({ kind: "discard", action });
-    else perform(action);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <Label htmlFor={id} className="text-xs font-medium">
+          {label}
+        </Label>
+        <span
+          className={cx(
+            "text-[10px] tabular-nums",
+            full
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-muted-foreground",
+          )}
+        >
+          {value.length} / {max}
+        </span>
+      </div>
+      {hint && (
+        <p id={hintId} className="text-xs leading-5 text-muted-foreground">
+          {hint}
+        </p>
+      )}
+      <div
+        className={cx(
+          "flex flex-wrap gap-1.5 rounded-lg border border-border/80 bg-background p-2 transition-shadow focus-within:ring-2 focus-within:ring-emerald-200 dark:focus-within:ring-emerald-500/30",
+        )}
+      >
+        {value.map((item) => (
+          <span
+            key={item}
+            className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 py-1 pl-2.5 pr-1 text-xs"
+          >
+            <span className="break-words">{item}</span>
+            <button
+              type="button"
+              aria-label={`Remove ${item}`}
+              className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:pointer-events-none disabled:opacity-50"
+              onClick={() => onChange(value.filter((v) => v !== item))}
+            >
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+        <input
+          id={id}
+          value={text}
+          maxLength={LIMITS.item}
+          disabled={full}
+          placeholder={
+            full ? `Limit of ${max} reached` : value.length ? "Add another" : placeholder
+          }
+          aria-describedby={hint ? hintId : undefined}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKeyDown}
+          onBlur={() => commit(text)}
+          onPaste={(e) => {
+            const pasted = e.clipboardData.getData("text");
+            if (pasted.includes("\n")) {
+              e.preventDefault();
+              commit(`${text}${pasted}`);
+            }
+          }}
+          className="min-w-32 flex-1 bg-transparent px-1.5 py-1 text-sm outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed"
+        />
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Section bodies                                                            */
+/* -------------------------------------------------------------------------- */
+
+export function BrandFields({
+  section,
+  draft,
+  change,
+}: {
+  section: Section;
+  draft: BrandDraft;
+  change: (draft: BrandDraft) => void;
+}) {
+  const text = (
+    name: "display_name" | "role" | "bio" | "niche" | "audience" | "style_guide" | "writing_rules" | "output_language",
+    label: string,
+    max: number,
+    options: { hint?: string; multiline?: boolean; placeholder?: string } = {},
+  ) => (
+    <BrandTextField
+      name={name}
+      label={label}
+      value={String(draft[name] ?? "")}
+      onChange={(value) => change({ ...draft, [name]: value })}
+      max={max}
+      {...options}
+    />
+  );
+
+  const list = (
+    name:
+      | "expertise"
+      | "goals"
+      | "values"
+      | "preferred_formats"
+      | "calls_to_action"
+      | "restricted_topics",
+    label: string,
+    hint: string,
+    placeholder: string,
+    max = 10,
+  ) => (
+    <ChipListField
+      name={name}
+      label={label}
+      hint={hint}
+      placeholder={placeholder}
+      value={draft[name]}
+      max={max}
+      onChange={(items) => change({ ...draft, [name]: items })}
+    />
+  );
+
+  if (section === "identity")
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-5 sm:grid-cols-2">
+          {text("display_name", "Name or brand", 120, {
+            placeholder: "e.g. Jamie Parker",
+          })}
+          {text("role", "What you do", 240, {
+            placeholder: "e.g. Founder, designer, independent writer",
+          })}
+        </div>
+        {text("bio", "Your story", 2000, {
+          hint: "Your background, work, and experiences the AI can reference. Include only details you want used in your content.",
+          multiline: true,
+          placeholder: "I’m building… Before this, I… What I’ve learned is…",
+        })}
+        {text("niche", "Your focus", 240, {
+          placeholder: "e.g. Building useful software and sharing the process",
+        })}
+        {text("audience", "Who you’re writing for", 1500, {
+          hint: "Who are they, what do they care about, and how do you help?",
+          multiline: true,
+          placeholder: "I write for… They struggle with… I help them…",
+        })}
+        {list(
+          "expertise",
+          "Topics you know",
+          "Your areas of expertise and recurring content themes.",
+          "e.g. Product design",
+        )}
+        {list(
+          "goals",
+          "What your content should do",
+          "For example: teach practical skills, share your progress, build trust.",
+          "e.g. Share progress openly",
+        )}
+        {list(
+          "values",
+          "What you stand for",
+          "Beliefs and principles you want your writing to reflect.",
+          "e.g. Clarity over cleverness",
+        )}
+      </div>
+    );
+
+  if (section === "voice") {
+    const presets = VOICE_TRAITS as readonly string[];
+    const custom = draft.voice_traits.filter((t) => !presets.includes(t));
+    const traitsFull = draft.voice_traits.length >= LIMITS.traits;
+    return (
+      <div className="space-y-6">
+        <div className="space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <Label className="text-xs font-medium">Your everyday tone</Label>
+            <span className="text-[10px] tabular-nums text-muted-foreground">
+              {draft.voice_traits.length} / {LIMITS.traits}
+            </span>
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Choose a few traits that feel natural. Add your own below.
+          </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Voice traits">
+            {VOICE_TRAITS.map((trait) => {
+              const active = draft.voice_traits.includes(trait);
+              return (
+                <button
+                  key={trait}
+                  type="button"
+                  aria-pressed={active}
+                  disabled={!active && traitsFull}
+                  className={cx(
+                    "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:opacity-40",
+                    active
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300"
+                      : "border-border/80 text-muted-foreground hover:bg-muted/30 hover:text-foreground",
+                  )}
+                  onClick={() =>
+                    change({
+                      ...draft,
+                      voice_traits: active
+                        ? draft.voice_traits.filter((v) => v !== trait)
+                        : [...draft.voice_traits, trait],
+                    })
+                  }
+                >
+                  {active && <Check size={12} />}
+                  {trait}
+                </button>
+              );
+            })}
+          </div>
+          <ChipListField
+            name="custom_voice_traits"
+            label="Your own traits"
+            hint="Anything the presets miss."
+            placeholder="e.g. Dry wit"
+            value={custom}
+            max={Math.max(custom.length, LIMITS.traits - (draft.voice_traits.length - custom.length))}
+            onChange={(items) =>
+              change({
+                ...draft,
+                voice_traits: [
+                  ...draft.voice_traits.filter((t) => presets.includes(t)),
+                  ...items,
+                ],
+              })
+            }
+          />
+        </div>
+        {text("style_guide", "How your writing flows", 1500, {
+          hint: "Sentence length, vocabulary, point of view, emoji, and formatting.",
+          multiline: true,
+          placeholder:
+            "Short sentences. First person. Plain language. A little humor, without sounding forced.",
+        })}
+        {text("writing_rules", "Your writing dos and don’ts", 1500, {
+          hint: "Examples: no exaggerated claims, no buzzwords, never open with a rhetorical question.",
+          multiline: true,
+        })}
+        {text("output_language", "Default language", 80, {
+          hint: "Leave blank to follow the language of your request.",
+          placeholder: "e.g. English, Hindi, Spanish",
+        })}
+        {list(
+          "preferred_formats",
+          "Formats you enjoy",
+          "For example: personal lessons, short observations, how-to threads.",
+          "e.g. Short observations",
+        )}
+        {list(
+          "calls_to_action",
+          "How you like to finish",
+          "For example: ask a thoughtful question, offer a practical next step.",
+          "e.g. Ask a thoughtful question",
+        )}
+        {list(
+          "restricted_topics",
+          "Topics and claims to avoid",
+          "Sensitive subjects, phrases, or claims that don’t belong in your content.",
+          "e.g. Income guarantees",
+          20,
+        )}
+      </div>
+    );
   }
-  function editBrand(next: BrandDraft) { setBrand(next); setSaved(false); setError(null); }
-  function invalidList(items: string[], max: number) {
-    return items.length > max || items.some((item) => item.length > 500);
+
+  if (section === "samples")
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4 text-xs leading-5 text-violet-800 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300">
+          Choose posts that feel most like you. A mix of short and longer pieces
+          helps Draftva understand your rhythm. No connected account is needed.
+        </div>
+
+        {draft.sample_posts.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center">
+            <BookOpen className="mx-auto mb-3 size-6 text-muted-foreground" />
+            <p className="text-sm font-medium">A few words go a long way.</p>
+            <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">
+              Paste an original post, caption, or short piece of writing to get
+              started.
+            </p>
+          </div>
+        )}
+
+        {draft.sample_posts.map((sample, index) => (
+          <div
+            key={index}
+            className="rounded-xl border border-border/70 p-4 transition-colors focus-within:border-border"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <Label htmlFor={`brand-sample-${index}`} className="text-xs font-medium">
+                Sample {index + 1}
+              </Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="size-7 text-muted-foreground hover:text-red-600"
+                aria-label={`Remove sample ${index + 1}`}
+                onClick={() =>
+                  change({
+                    ...draft,
+                    sample_posts: draft.sample_posts.filter((_, at) => at !== index),
+                  })
+                }
+              >
+                <Trash2 size={13} />
+              </Button>
+            </div>
+            <Textarea
+              id={`brand-sample-${index}`}
+              value={sample}
+              maxLength={LIMITS.sample}
+              rows={6}
+              className={cx(fieldClass, "min-h-36 resize-y p-3 leading-6")}
+              placeholder="Paste something you wrote…"
+              onChange={(e) =>
+                change({
+                  ...draft,
+                  sample_posts: draft.sample_posts.map((value, at) =>
+                    at === index ? e.target.value : value,
+                  ),
+                })
+              }
+            />
+            <p className="mt-2 text-right text-[10px] tabular-nums text-muted-foreground">
+              {sample.length.toLocaleString()} / {LIMITS.sample.toLocaleString()}
+            </p>
+          </div>
+        ))}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            className="secondary-btn"
+            disabled={draft.sample_posts.length >= LIMITS.samples}
+            onClick={() =>
+              change({ ...draft, sample_posts: [...draft.sample_posts, ""] })
+            }
+          >
+            <Plus size={14} />
+            Add writing sample
+          </Button>
+          <p className="text-[11px] text-muted-foreground">
+            {draft.sample_posts.length} of {LIMITS.samples} samples · Used as
+            references, without training a custom model.
+          </p>
+        </div>
+      </div>
+    );
+
+  return (
+    <div className="space-y-4">
+      {BRAND_CHANNELS.map((channel) => (
+        <div key={channel.id} className="rounded-xl border border-border/70 p-4">
+          <BrandTextField
+            name={`channel-${channel.id}`}
+            label={channel.name}
+            hint={channel.hint}
+            value={draft.platform_instructions[channel.id] ?? ""}
+            max={LIMITS.channel}
+            multiline
+            placeholder="Use the brand defaults, or add a little guidance…"
+            onChange={(value) =>
+              change({
+                ...draft,
+                platform_instructions: {
+                  ...draft.platform_instructions,
+                  [channel.id]: value,
+                },
+              })
+            }
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Editor                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function BrandEditor({
+  workspaceId,
+  workspaceName,
+  setOpen,
+}: {
+  workspaceId: string;
+  workspaceName: string;
+  setOpen: (open: boolean) => void;
+}) {
+  const trpc = useTRPC();
+  const cache = useQueryClient();
+  const input = { workspaceId };
+  const query = useSuspenseQuery(trpc.persona.brand.queryOptions(input));
+  const save = useMutation(trpc.persona.saveBrand.mutationOptions());
+
+  const [edit, setEdit] = useState<{
+    draft: BrandDraft;
+    updatedAt: string | null;
+  } | null>(null);
+  const [section, setSection] = useState<Section>("identity");
+  const [confirmation, setConfirmation] = useState<"close" | "reload" | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const baseline = brandValues(query.data);
+  const draft = edit?.draft ?? baseline;
+  const canEdit = query.data.can_edit;
+  const dirty = edit !== null && JSON.stringify(draft) !== JSON.stringify(baseline);
+  const progress = brandProgress(draft);
+  const current = SECTIONS.find((item) => item.id === section)!;
+
+  const dirtySections = new Set<Section>(
+    dirty
+      ? SECTIONS.filter((s) =>
+          s.fields.some(
+            (f) => JSON.stringify(draft[f]) !== JSON.stringify(baseline[f]),
+          ),
+        ).map((s) => s.id)
+      : [],
+  );
+
+  function close() {
+    if (save.isPending) return;
+    if (dirty) setConfirmation("close");
+    else setOpen(false);
   }
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!canSave) return;
-    setError(null); setSaved(false);
-    if (section === "guide") {
-      const invalid = guideLists.find((field) => invalidList(brand[field.key], field.max));
-      if (invalid) { setError(`${invalid.label}: use up to ${invalid.max} items, each under 500 characters.`); return; }
-      try {
-        const result = await saveBrand.mutateAsync(brand);
-        cache.setQueryData(trpc.persona.brand.queryKey(), result);
-        setBrand(null); setSaved(true);
-      } catch (cause) { setError(message(cause, "Could not save writing guide")); }
+
+  function change(next: BrandDraft) {
+    setEdit({
+      draft: next,
+      updatedAt: edit ? edit.updatedAt : query.data.updated_at,
+    });
+    setSaved(false);
+    setError(null);
+  }
+
+  async function submit(event?: FormEvent) {
+    event?.preventDefault();
+    if (!dirty || save.isPending || !canEdit) return;
+
+    const checked = brandSchema.safeParse(draft);
+    if (!checked.success) {
+      const issue = checked.error.issues[0];
+      const field = String(issue.path[0] ?? "");
+      setSection(sectionOfField(field));
+      setError(
+        `${issue.path.join(" ").replaceAll("_", " ")}: ${issue.message}`,
+      );
       return;
     }
-    if (!sampleAccount) return;
-    const invalidSample = samples.findIndex((sample) => !sample.trim() || sample.length > 10000);
-    if (invalidSample >= 0) { setError(`Sample ${invalidSample + 1} needs text under 10,000 characters.`); return; }
-    try {
-      const result = await saveSamples.mutateAsync({ connectionId: sampleAccount.id, writing_samples: samples });
-      cache.setQueryData(trpc.persona.samples.queryKey(sampleInput), result);
-      setSamples(null); setSaved(true);
-    } catch (cause) { setError(message(cause, "Could not save writing samples")); }
-  }
-  async function confirm() {
-    if (!confirmation || busy) return;
-    if (confirmation.kind === "discard") { perform(confirmation.action); return; }
+
     setError(null);
     try {
-      await disconnect.mutateAsync({ connectionId: confirmation.id });
-      if (composer.composer.connection_id === confirmation.id) setSettings({ connection_id: null });
-      if (sampleEdit?.connectionId === confirmation.id) setSamples(null);
-      await cache.invalidateQueries({ queryKey: trpc.workspace.listLinkedInConnections.queryKey() });
-      await cache.invalidateQueries({ queryKey: trpc.workspace.getLinkedInConnection.queryKey() });
-      setConfirmation(null);
+      const result = await save.mutateAsync({
+        workspaceId,
+        profile: checked.data,
+        expectedUpdatedAt: edit ? edit.updatedAt : query.data.updated_at,
+      });
+      cache.setQueryData(trpc.persona.brand.queryKey(input), result);
+      setEdit(null);
+      setSaved(true);
     } catch (cause) {
-      setConfirmation(null); setError(message(cause, "Could not complete this action"));
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not save your brand profile. Your edits are still here.",
+      );
     }
   }
+
+  const status = saved
+    ? "Saved · Ready for your next AI draft"
+    : dirty
+      ? `Unsaved changes in ${dirtySections.size} ${dirtySections.size === 1 ? "section" : "sections"}`
+      : "Applies to every channel in this workspace";
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(next) => next ? setOpen(true) : request({ kind: "close" })}>
-        <DialogContent showCloseButton={false} className="flex h-[min(780px,calc(100dvh-2rem))] w-[min(1050px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden rounded-2xl bg-white p-0 text-neutral-900 sm:max-w-none">
-          <DialogHeader className="flex-row items-center justify-between border-b border-neutral-200 px-5 py-4 sm:px-7">
-            <div className="min-w-0">
-              <DialogTitle className="font-heading text-xl font-semibold">LinkedIn persona settings</DialogTitle>
-              <DialogDescription className="mt-1">{workspaceQuery.data?.name ?? "Your workspace"} · Guide how Outlify writes for you</DialogDescription>
-            </div>
-            <Button type="button" variant="ghost" size="icon-sm" disabled={busy} aria-label="Close settings" onClick={() => request({ kind: "close" })}><X className="size-4" /></Button>
-          </DialogHeader>
+      <Dialog
+        open
+        onOpenChange={(next) => {
+          if (!next) close();
+        }}
+      >
+        <DialogContent className={modalClass} showCloseButton={false}>
+          <Header close={close} busy={save.isPending} />
           <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-            <nav aria-label="Persona settings" className="flex shrink-0 gap-1 overflow-x-auto border-b border-neutral-200 bg-neutral-50 p-3 sm:w-56 sm:flex-col sm:border-b-0 sm:border-r sm:p-4">
-              {sections.map(({ id, label, icon: Icon }) => (
-                <Button key={id} type="button" variant="ghost" disabled={busy}
-                  onClick={() => { setSection(id); setError(null); setSaved(false); }}
-                  className={`h-10 justify-start gap-2 rounded-lg px-3 text-sm ${section === id ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-600"}`}
-                  aria-current={section === id ? "page" : undefined}>
-                  <Icon className="size-4" />{label}
-                </Button>
-              ))}
+            {/* Sidebar / tab strip */}
+            <nav
+              aria-label="Brand profile sections"
+              className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/70 bg-muted/15 p-2.5 sm:w-56 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r sm:p-4"
+            >
+              <div className="mb-3 hidden rounded-xl border border-border/60 bg-background p-3.5 sm:block">
+                <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Workspace brand
+                </span>
+                <p className="mt-1 truncate text-sm font-medium">
+                  {draft.display_name || workspaceName}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  {draft.role || "Your next chapter starts here"}
+                </p>
+                <div
+                  role="img"
+                  className="mt-3 flex items-center gap-1"
+                  aria-label={`${progress.completed} of ${progress.total} profile details added`}
+                >
+                  {Array.from({ length: progress.total }, (_, i) => (
+                    <span
+                      key={i}
+                      className={cx(
+                        "h-1 flex-1 rounded-full transition-colors duration-300",
+                        i < progress.completed ? "bg-emerald-400" : "bg-muted",
+                      )}
+                    />
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  {progress.completed === progress.total
+                    ? "A strong foundation for your writing"
+                    : `${progress.completed} of ${progress.total} details added`}
+                </p>
+              </div>
+
+              {SECTIONS.map((item) => {
+                const active = section === item.id;
+                return (
+                  <Button
+                    key={item.id}
+                    type="button"
+                    variant="ghost"
+                    disabled={save.isPending}
+                    onClick={() => setSection(item.id)}
+                    aria-current={active ? "page" : undefined}
+                    className={cx(
+                      "h-10 shrink-0 justify-start gap-2.5 rounded-lg px-3 text-xs",
+                      active
+                        ? "border border-border/60 bg-background text-foreground shadow-xs"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    <item.icon size={15} />
+                    {item.label}
+                    {dirtySections.has(item.id) && (
+                      <>
+                        <span
+                          aria-hidden
+                          className="size-1.5 rounded-full bg-amber-400"
+                        />
+                        <span className="sr-only">(unsaved changes)</span>
+                      </>
+                    )}
+                    {active && (
+                      <ChevronRight className="ml-auto hidden size-3 sm:block" />
+                    )}
+                  </Button>
+                );
+              })}
+
+              <div className="mt-auto hidden px-3 pb-2 pt-8 text-[11px] leading-5 text-muted-foreground sm:block">
+                {/* <Sparkles className="mb-2 size-4 text-violet-400" /> */}
+                Your saved profile is used automatically when Draftva writes or
+                refines a post.
+              </div>
             </nav>
-            <form onSubmit={(event) => void submit(event)} className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <main className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-7">
-                <fieldset disabled={busy} className="mx-auto min-w-0 max-w-2xl space-y-6">
-                  {section === "guide" && (
-                    <>
-                      <div><h2 className="font-heading text-2xl font-semibold">Writing guide</h2><p className="mt-1 text-sm text-neutral-500">Workspace-wide guidance for LinkedIn posts. Choose a different tone for an individual draft.</p></div>
-                      {activeAccount && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-sky-100 bg-sky-50 px-4 py-3">
-                        <div className="min-w-0 flex-1"><p className="font-subheading text-sm">Writing as {accountName}</p><p className="mt-1 text-xs text-neutral-500">{activeAccount.headline || "Profile details come from your connected LinkedIn account."}</p></div>
-                        <Button type="button" variant="outline" size="sm" className="secondary-btn" onClick={() => setSection("accounts")}>Change account</Button>
-                      </div>}
-                      {brandQuery.isPending ? <Loading label="Loading guide…" /> : brandQuery.isError ? (
-                        <Notice text={message(brandQuery.error, "Could not load guide")} retry={() => void brandQuery.refetch()} />
-                      ) : (
-                        <FieldGroup className="gap-6">
-                          {guideTextFields.map(({ key, ...field }) => <TextField key={key} id={`guide-${key}`} {...field} value={brand[key]} change={(value) => editBrand({ ...brand, [key]: value })} />)}
-                          {guideLists.map(({ key, ...field }) => <ListField key={key} id={`guide-${key}`} {...field} value={brand[key]} change={(value) => editBrand({ ...brand, [key]: value })} />)}
-                        </FieldGroup>
-                      )}
-                    </>
+
+            {/* Form */}
+            <form
+              onSubmit={(event) => void submit(event)}
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === "s") {
+                  event.preventDefault();
+                  void submit();
+                }
+              }}
+              className="flex min-h-0 min-w-0 flex-1 flex-col"
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8">
+                <div className="mx-auto max-w-2xl">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-violet-500">
+                    {current.caption}
+                  </p>
+                  <h2 className="mt-2 font-heading text-2xl font-medium tracking-tight">
+                    {current.title}
+                  </h2>
+                  <p className="mb-7 mt-2 max-w-xl text-xs leading-6 text-muted-foreground">
+                    {current.description}
+                  </p>
+
+                  {!canEdit && (
+                    <p className="mb-5 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                      You can view this profile. An owner, admin, or editor can
+                      update it.
+                    </p>
                   )}
-                  {section === "samples" && (
-                    <>
-                      <div><h2 className="font-heading text-2xl font-semibold">Writing samples</h2><p className="mt-1 text-sm text-neutral-500">Paste LinkedIn posts you wrote to help the assistant match your voice. It reads the first five samples.</p></div>
-                      {accountsQuery.isPending ? <Loading label="Loading LinkedIn account…" /> : accountsQuery.isError ? (
-                        <Notice text={message(accountsQuery.error, "Could not load LinkedIn accounts")} retry={() => void accountsQuery.refetch()} />
-                      ) : !sampleAccount ? (
-                        <div className="space-y-3 rounded-xl border border-dashed border-neutral-300 p-5">
-                          <p className="text-sm text-neutral-500">{composer.composer.connection_id ? "The account selected for this draft is no longer connected. Choose a connected account." : "Connect LinkedIn to add writing samples. Your account details will be used automatically."}</p>
-                          <Button type="button" className="primary-btn" onClick={() => accountsQuery.data?.length ? setSection("accounts") : request({ kind: "navigate", url: "/onboarding/status" })}>{accountsQuery.data?.length ? "Choose account" : "Connect LinkedIn"}</Button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-sky-100 bg-sky-50 px-4 py-3">
-                            <div className="min-w-0 flex-1"><p className="font-subheading text-sm">{sampleAccountName}</p><p className="mt-1 text-xs text-neutral-500">Samples for this LinkedIn account.</p></div>
-                            <Button type="button" variant="outline" size="sm" className="secondary-btn" onClick={() => setSection("accounts")}>Change account</Button>
-                          </div>
-                          {samplesQuery.isPending ? <Loading label="Loading writing samples…" /> : samplesQuery.isError ? (
-                            <Notice text={message(samplesQuery.error, "Could not load writing samples")} retry={() => void samplesQuery.refetch()} />
-                          ) : (
-                            <div className="space-y-4">
-                              {samples.length === 0 && <p className="rounded-xl border border-dashed border-neutral-300 p-6 text-sm text-neutral-500">No writing samples yet. Add a LinkedIn post that sounds like you.</p>}
-                              {samples.map((sample, index) => (
-                                <div key={index} className="rounded-xl border border-neutral-200 p-4">
-                                  <div className="mb-2 flex items-center justify-between">
-                                    <Label htmlFor={`sample-${index}`} className="font-subheading">Sample {index + 1}</Label>
-                                    <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove sample ${index + 1}`} onClick={() => editSamples(samples.filter((_, at) => at !== index))}><Trash2 className="size-4" /></Button>
-                                  </div>
-                                  <Textarea id={`sample-${index}`} value={sample} maxLength={10000} rows={6}
-                                    onChange={(event) => editSamples(samples.map((text, at) => at === index ? event.target.value : text))}
-                                    className="min-h-36 resize-y rounded-lg border-neutral-200 p-3 focus-visible:ring-2 focus-visible:ring-sky-200" />
-                                  <p className="mt-1 text-right text-xs text-neutral-400">{sample.length}/10000</p>
-                                </div>
-                              ))}
-                              <Button type="button" variant="outline" className="secondary-btn" disabled={samples.length >= 30} onClick={() => editSamples([...samples, ""])}><Plus className="size-4" />Add sample</Button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )}
-                  {section === "accounts" && (
-                    <>
-                      <div><h2 className="font-heading text-2xl font-semibold">Connected LinkedIn accounts</h2><p className="mt-1 text-sm text-neutral-500">The assistant uses the account selected for your draft, or your primary account automatically.</p></div>
-                      {accountsQuery.isPending ? <Loading label="Loading accounts…" /> : accountsQuery.isError ? (
-                        <Notice text={message(accountsQuery.error, "Could not load accounts")} retry={() => void accountsQuery.refetch()} />
-                      ) : accountsQuery.data?.length ? (
-                        <div className="space-y-3">
-                          {accountsQuery.data.map((account) => (
-                            <div key={account.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 p-4">
-                              <div className="flex size-10 items-center justify-center rounded-full bg-[#e8f3fb] text-[#0a66c2]"><Linkedin className="size-5" /></div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2"><span className="font-subheading font-medium">{[account.first_name, account.last_name].filter(Boolean).join(" ") || account.public_identifier}</span>{account.is_primary && <Badge variant="secondary">Primary</Badge>}{activeAccount?.id === account.id && <Badge variant="outline">Current draft</Badge>}</div>
-                                <a href={account.profile_url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 text-sm text-neutral-500 hover:text-sky-700"><span className="truncate">{account.public_identifier}</span><ExternalLink className="size-3 shrink-0" /></a>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                {activeAccount?.id !== account.id && <Button type="button" variant="outline" size="sm" className="secondary-btn" onClick={() => request({ kind: "account", connectionId: account.id })}>Use for draft</Button>}
-                                {!account.is_primary && <Button type="button" variant="outline" size="sm" className="secondary-btn" disabled={sampleDirty} onClick={async () => {
-                                  setError(null);
-                                  try { await setPrimary.mutateAsync({ connectionId: account.id }); await cache.invalidateQueries({ queryKey: trpc.workspace.listLinkedInConnections.queryKey() }); await cache.invalidateQueries({ queryKey: trpc.workspace.getLinkedInConnection.queryKey() }); }
-                                  catch (cause) { setError(message(cause, "Could not set primary account")); }
-                                }}>Set primary</Button>}
-                                <Button type="button" size="icon-sm" variant="ghost" aria-label={`Disconnect ${account.public_identifier}`} disabled={sampleDirty && activeAccount?.id === account.id} onClick={() => setConfirmation({ kind: "disconnect", id: account.id })}><Trash2 className="size-4" /></Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : <p className="rounded-xl border border-dashed border-neutral-300 p-6 text-sm text-neutral-500">No LinkedIn accounts are connected to this workspace.</p>}
-                      {composer.composer.connection_id && <Button type="button" variant="outline" className="secondary-btn" onClick={() => request({ kind: "account", connectionId: null })}>Use primary account automatically</Button>}
-                      {sampleDirty && <p className="text-xs text-neutral-500">Save or discard your writing samples before changing the primary account or disconnecting it.</p>}
-                      <Button type="button" className="primary-btn" onClick={() => request({ kind: "navigate", url: "/onboarding/status" })}><Plus className="size-4" />Manage LinkedIn connections</Button>
-                    </>
-                  )}
-                </fieldset>
-              </main>
-              <footer className="shrink-0 space-y-3 border-t border-neutral-200 bg-neutral-50/60 px-5 py-4 sm:px-8">
-                {error && <Notice text={error} />}
+
+                  <fieldset
+                    disabled={save.isPending || !canEdit}
+                    className="min-w-0 border-0 p-0"
+                  >
+                    <legend className="sr-only">{current.label}</legend>
+                    <BrandFields section={section} draft={draft} change={change} />
+                  </fieldset>
+                </div>
+              </div>
+
+              <footer className="shrink-0 border-t border-border/70 bg-muted/10 px-5 py-4 sm:px-8">
+                {error && (
+                  <div
+                    role="alert"
+                    className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                  >
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span className="min-w-0 flex-1">{error}</span>
+                    {save.error?.data?.code === "CONFLICT" && (
+                      <Button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => setConfirmation("reload")}
+                      >
+                        Reload saved profile
+                      </Button>
+                    )}
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
-                  <span role="status" className="mr-auto text-xs text-neutral-500">{saved ? "Saved" : brandDirty || sampleDirty ? "Unsaved changes" : "Changes apply to this workspace"}</span>
-                  <Button type="button" variant="outline" className="secondary-btn" disabled={busy} onClick={() => request({ kind: "close" })}>Done</Button>
-                  {section !== "accounts" && <Button type="submit" className="primary-btn" disabled={!canSave}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}Save {section === "guide" ? "guide" : "samples"}</Button>}
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className={cx(
+                      "mr-auto flex items-center gap-1.5 text-[11px]",
+                      saved
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {saved && <Check size={12} />}
+                    {status}
+                  </p>
+                  <Button
+                    type="button"
+                    className="secondary-btn"
+                    disabled={save.isPending}
+                    onClick={close}
+                  >
+                    {dirty ? "Cancel" : "Done"}
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="primary-btn"
+                    disabled={!dirty || save.isPending || !canEdit}
+                  >
+                    {save.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Check size={14} />
+                    )}
+                    {save.isPending ? "Saving…" : "Save profile"}
+                  </Button>
                 </div>
               </footer>
             </form>
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={confirmation !== null} onOpenChange={(next) => { if (!next && !busy) setConfirmation(null); }}>
-        <DialogContent showCloseButton={!busy}>
+
+      {/* Confirm discard / reload */}
+      <Dialog
+        open={confirmation !== null}
+        onOpenChange={(next) => {
+          if (!next) setConfirmation(null);
+        }}
+      >
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-heading">{confirmation?.kind === "discard" ? "Discard unsaved changes?" : "Disconnect this LinkedIn account?"}</DialogTitle>
-            <DialogDescription>{confirmation?.kind === "discard" ? "Your unsaved edits will be lost." : "This account will no longer be available for publishing in this workspace."}</DialogDescription>
+            <DialogTitle>
+              {confirmation === "reload"
+                ? "Reload the saved profile?"
+                : "Discard your changes?"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmation === "reload"
+                ? "Your unsaved edits will be discarded and replaced with the latest saved brand profile."
+                : "You have unsaved brand profile details. Keep editing to save them, or discard this edit."}
+            </DialogDescription>
           </DialogHeader>
-          <div className="mt-2 flex justify-end gap-2">
-            <Button type="button" variant="outline" className="secondary-btn" disabled={busy} onClick={() => setConfirmation(null)}>{confirmation?.kind === "discard" ? "Keep editing" : "Cancel"}</Button>
-            <Button type="button" variant="destructive" disabled={busy} onClick={() => void confirm()}>{busy && <Loader2 className="size-4 animate-spin" />}{confirmation?.kind === "discard" ? "Discard changes" : "Disconnect"}</Button>
+          <div className="mt-3 flex justify-end gap-2">
+            <Button className="secondary-btn" onClick={() => setConfirmation(null)}>
+              Keep editing
+            </Button>
+            <Button
+              className="primary-btn"
+              onClick={() => {
+                const reload = confirmation === "reload";
+                setConfirmation(null);
+                if (reload) {
+                  setEdit(null);
+                  setError(null);
+                  void query.refetch();
+                } else setOpen(false);
+              }}
+            >
+              {confirmation === "reload" ? "Discard and reload" : "Discard changes"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Entry points                                                              */
+/* -------------------------------------------------------------------------- */
+
+function WorkspaceBrand({ setOpen }: { setOpen: (open: boolean) => void }) {
+  const trpc = useTRPC();
+  const { data: workspace } = useSuspenseQuery(
+    trpc.workspace.current.queryOptions(),
+  );
+  return (
+    <BrandEditor
+      key={workspace.id}
+      workspaceId={workspace.id}
+      workspaceName={workspace.name}
+      setOpen={setOpen}
+    />
+  );
+}
+
+export function PersonaDialog({
+  open,
+  setOpen,
+}: {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}) {
+  if (!open) return null;
+  return (
+    <QueryErrorResetBoundary>
+      {({ reset }) => (
+        <BrandBoundary retry={reset} close={() => setOpen(false)}>
+          <Suspense fallback={<LoadingDialog close={() => setOpen(false)} />}>
+            <WorkspaceBrand setOpen={setOpen} />
+          </Suspense>
+        </BrandBoundary>
+      )}
+    </QueryErrorResetBoundary>
   );
 }

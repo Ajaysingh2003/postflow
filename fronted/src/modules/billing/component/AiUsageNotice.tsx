@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SettingsLink } from "@/modules/settings/SettingsProvider";
 import { Sparkles } from "lucide-react";
 import { aiExhausted, usageReset, type PlanUsage } from "../usageModel";
 import { UsageMeter } from "./UsageMeter";
@@ -57,9 +57,9 @@ export function AiUsageNotice({
             Your workspace’s allowance resets {usageReset(usage.cycle_end)}{" "}
             (UTC). You can keep writing. Publishing follows your post allowance.
           </p>
-          <Link href="/settings/billing" className="primary-btn mt-3 !text-xs">
+          <SettingsLink section="billing" className="primary-btn mt-3 !text-xs">
             View plan & usage
-          </Link>
+          </SettingsLink>
         </>
       ) : (
         <>
@@ -68,12 +68,12 @@ export function AiUsageNotice({
             value={usage.ai_credits}
             note={`Resets ${usageReset(usage.cycle_end)} (UTC)`}
           />
-          <Link
-            href="/settings/billing"
+          <SettingsLink
+            section="billing"
             className="mt-2 inline-block text-xs text-muted-foreground underline underline-offset-4"
           >
             View usage
-          </Link>
+          </SettingsLink>
         </>
       )}
     </section>

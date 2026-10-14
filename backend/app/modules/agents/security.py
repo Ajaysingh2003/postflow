@@ -9,6 +9,7 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.core.dependencies import membership_for
 from app.core.security import token_hash, utcnow
 from app.db.session import SessionLocal
@@ -51,7 +52,11 @@ class AgentTokenVerifier:
             if not connection:
                 return None
             user = db.get(User, connection.user_id)
-            if not user or not user.is_active:
+            if (
+                not user
+                or not user.is_active
+                or (get_settings().email_verification_required and not user.email_verified)
+            ):
                 return None
             try:
                 membership_for(db, connection.workspace_id, connection.user_id)
@@ -77,7 +82,11 @@ def agent_context(scope: str = "draftva:read"):
         if not connection or scope not in connection.scopes:
             raise HTTPException(403, "This agent connection does not have that permission")
         user = db.get(User, connection.user_id)
-        if not user or not user.is_active:
+        if (
+            not user
+            or not user.is_active
+            or (get_settings().email_verification_required and not user.email_verified)
+        ):
             raise HTTPException(401, "This connection is no longer active")
         membership = membership_for(db, connection.workspace_id, user.id)
         if scope != "draftva:read" and membership.role not in EDIT_ROLES:

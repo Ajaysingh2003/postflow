@@ -715,7 +715,7 @@ def test_plan_upgrade_relaxes_limits(test_setup):
         summary = get_plan_limits_summary(db, ws_id)
         assert summary["plan_code"] == "pro"
         assert summary["connected_accounts"]["limit"] == 15
-        assert summary["scheduled_posts"]["limit"] == 250
+        assert summary["scheduled_posts"]["limit"] is None
         assert summary["ai_credits"]["limit"] == 1000
 
 

@@ -2,9 +2,16 @@
 
 from app.modules.agents.models import AgentAuthorization, AgentClient, AgentConnection
 from app.modules.analytics.models import MetricSnapshot
-from app.modules.assistant.models import AssistantRun, VoiceProfile
+from app.modules.assistant.models import (
+    AssistantConversation,
+    AssistantRun,
+    AssistantTurn,
+    VoiceProfile,
+)
 from app.modules.billing.models import (
     BillingCustomer,
+    BillingReconciliationRetry,
+    BillingReconciliationState,
     BillingWebhookEvent,
     EntitlementGrant,
     Plan,
@@ -25,6 +32,7 @@ from app.modules.content.models import (
 )
 from app.modules.identity.models import (
     AuthIdentity,
+    AuthOAuthState,
     EmailVerificationToken,
     PasswordCredential,
     PasswordResetToken,
@@ -43,9 +51,14 @@ __all__ = [
     "AgentAuthorization",
     "AgentClient",
     "AgentConnection",
+    "AssistantConversation",
     "AssistantRun",
+    "AssistantTurn",
     "AuthIdentity",
+    "AuthOAuthState",
     "BillingCustomer",
+    "BillingReconciliationRetry",
+    "BillingReconciliationState",
     "BillingWebhookEvent",
     "ConnectedAccount",
     "ContentTemplate",

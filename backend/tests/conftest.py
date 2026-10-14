@@ -20,6 +20,9 @@ os.environ["APP_SECRET"] = "test-secret-that-is-long-enough-for-tests"
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["LLM_MOCK_ENABLED"] = "true"
 os.environ["SMTP_HOST"] = ""
+os.environ["RESEND_API_KEY"] = ""
+# Feature tests use existing unverified fixtures; auth tests explicitly exercise enforcement.
+os.environ["EMAIL_VERIFICATION_REQUIRED"] = "false"
 
 from app.db import models as _models  # noqa: F401
 from app.db.base import Base

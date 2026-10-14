@@ -3,6 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import token_hash, utcnow
 from app.db.session import get_db
 from app.modules.identity.models import SessionToken, User
@@ -20,6 +21,7 @@ def _raw_bearer(credentials: HTTPAuthorizationCredentials | None) -> str:
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
 ) -> User:
@@ -36,6 +38,12 @@ def get_current_user(
     user = db.get(User, session.user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
+    if (
+        get_settings().email_verification_required
+        and not user.email_verified
+        and not request.url.path.startswith("/api/v1/auth/")
+    ):
+        raise HTTPException(403, "Verify your email before accessing your workspace")
     return user
 
 
@@ -44,6 +52,8 @@ def get_current_workspace(
     workspace_header: str | None = Header(default=None, alias="X-Workspace-ID"),
     db: Session = Depends(get_db),
 ) -> Workspace:
+    if get_settings().email_verification_required and not user.email_verified:
+        raise HTTPException(403, "Verify your email before accessing your workspace")
     query = select(WorkspaceMembership).where(WorkspaceMembership.user_id == user.id)
     if workspace_header:
         query = query.where(WorkspaceMembership.workspace_id == workspace_header)

@@ -3,7 +3,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -18,6 +18,7 @@ from app.modules.agents.router import oauth_router as agent_oauth_router
 from app.modules.agents.router import router as agents_router
 from app.modules.agents.server import AgentTransport, create_mcp_application
 from app.modules.analytics.router import router as analytics_router
+from app.modules.assistant.conversations import router as conversations_router
 from app.modules.assistant.router import router as assistant_router
 from app.modules.billing.router import router as billing_router
 from app.modules.channels.reddit_router import router as reddit_router
@@ -72,7 +73,18 @@ app.add_middleware(
 async def request_context(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or secrets.token_hex(12)
     started = time.perf_counter()
-    allowed, remaining, retry_after = await rate_limiter.check(request)
+    try:
+        allowed, remaining, retry_after = await rate_limiter.check(request)
+    except HTTPException as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Request-ID": request_id,
+                **(exc.headers or {}),
+            },
+        )
     if not allowed:
         return JSONResponse(
             status_code=429,
@@ -84,12 +96,14 @@ async def request_context(request: Request, call_next):
             },
         )
     response = await call_next(request)
+    if request.url.path.startswith("/api/v1/auth/"):
+        response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    if remaining:
+    if rate_limiter.enabled and rate_limiter.policy(request.url.path) is not None:
         response.headers["X-RateLimit-Remaining"] = str(remaining)
     logger.info(
         "request completed",
@@ -128,6 +142,7 @@ for module_router in (
     media_router,
     publishing_router,
     assistant_router,
+    conversations_router,
     analytics_router,
 ):
     app.include_router(module_router, prefix="/api/v1")

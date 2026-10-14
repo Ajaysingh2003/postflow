@@ -6,6 +6,7 @@ import {
   BillingSkeleton,
 } from "../src/modules/billing/component/BillingView";
 import { AiUsageNotice } from "../src/modules/billing/component/AiUsageNotice";
+import { UsageMeter } from "../src/modules/billing/component/UsageMeter";
 import { planFeatures } from "../src/modules/billing/component/PricingCardSection";
 import { HomeOverview } from "../src/modules/dashboard/view/HomeView";
 import {
@@ -71,7 +72,7 @@ test("AI sidecar explains exhausted, unlimited, loading and failed refresh state
   expect(html).toContain("Your AI credits are used up");
   expect(html).toContain("keep writing");
   expect(html).toContain("Publishing follows your post allowance");
-  expect(html).toContain('href="/settings/billing"');
+  expect(html).toContain('href="/dashboard?settings=billing"');
   expect(aiExhausted(usage)).toBe(true);
   const unlimited = {
     ...usage,
@@ -119,7 +120,7 @@ test("Home includes real connections and AI quota alongside its three original s
   expect(html).toContain("AI allowance used up");
   expect(html).toContain("credits remaining");
   expect(html).toContain('aria-valuetext="20 of 20 credits used"');
-  expect(html).toContain('href="/settings/billing"');
+  expect(html).toContain('href="/dashboard?settings=billing"');
 });
 
 test("plan comparison shows configured social allowances without video-service promises", () => {
@@ -135,4 +136,45 @@ test("plan comparison shows configured social allowances without video-service p
   expect(features.map((f) => f.label)).toContain("123 AI credits / month");
   expect(features.map((f) => f.label)).toContain("50 posts / month");
   expect(features.map((f) => f.label).join(" ")).not.toContain("Video Storage");
+});
+
+test("unlimited post plans have no monthly cap or slot-based pricing copy", () => {
+  const features = planFeatures({
+    limits: {
+      ai_credits: 250,
+      scheduled_posts: null,
+      connected_accounts: 5,
+      seats: 3,
+      workspaces: 3,
+    },
+  });
+  const labels = features.map((f) => f.label);
+  expect(labels).toContain("Unlimited posts");
+  expect(labels).toContain("250 AI credits / month");
+  expect(labels.join(" ")).not.toContain("uses one slot");
+  const html = renderToStaticMarkup(
+    <UsageMeter
+      title="Posts"
+      value={{ used: 1001, limit: null, remaining: null }}
+    />,
+  );
+  expect(html).toContain("Unlimited");
+  expect(html).not.toContain('role="progressbar"');
+  expect(html).not.toContain("remaining");
+  const billing = renderToStaticMarkup(
+    <BillingOverview
+      data={{
+        usage: {
+          ...usage,
+          plan_code: "starter",
+          scheduled_posts: { used: 1001, limit: null, remaining: null },
+        },
+        subscription: { status: "active" },
+        can_manage_billing: true,
+      }}
+    />,
+  );
+  expect(billing).toContain("AI credits reset");
+  expect(billing).not.toContain("AI and post allowances reset");
+  expect(billing).not.toContain("One post across all selected channels");
 });

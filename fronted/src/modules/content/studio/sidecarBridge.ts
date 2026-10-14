@@ -1,3 +1,4 @@
+import type { ChatContext, ConversationTurnContext } from "../chatTypes";
 import type { SourceAsset } from "../assets";
 import type { DraftArtifact } from "../agentStream";
 import type { Payload } from "@/modules/studio/types";
@@ -24,10 +25,14 @@ export type SidecarBridge = {
   content: string;
   styleOwner: string;
   ready: boolean;
+  platform?: string;
+  accountId?: string;
+  context?: ChatContext;
   send: (
     prompt: string,
     attachments: SourceAsset[],
     signal: AbortSignal,
+    conversation?: ConversationTurnContext,
   ) => Promise<SidecarReply>;
 };
 

@@ -252,7 +252,9 @@ export function AgentsOverview({
           <ShieldCheck className="size-4" />
         </span>
         <span className="flex-1">
-          <span className="block text-[12px] font-semibold">Connection access</span>
+          <span className="block text-[12px] font-semibold">
+            Connection access
+          </span>
           <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
             {count
               ? `${count} active ${count === 1 ? "connection" : "connections"}. Review permissions or revoke access.`
@@ -302,7 +304,9 @@ export function AgentSetup({
   if (id === "skills")
     return (
       <div>
-        <h2 className="font-heading text-[20px] font-semibold tracking-tight">Give your agent the context.</h2>
+        <h2 className="font-heading text-[20px] font-semibold tracking-tight">
+          Give your agent the context.
+        </h2>
         <p className="mt-2 text-[12px] leading-[1.65] text-muted-foreground">
           A ready-to-use skill for working with Draftva: finding the right
           account, adapting drafts, checking limits, and asking before
@@ -359,8 +363,8 @@ export function AgentSetup({
       </h2>
       <p className="mt-2 text-[12px] leading-[1.65] text-muted-foreground">
         Create drafts, plan your schedule and review post performance from your
-        conversations. Draftva’s writing assistant is available through the
-        same connection.
+        conversations. Draftva’s writing assistant is available through the same
+        connection.
       </p>
       {isCloud && isLocalEndpoint(url) && (
         <div
@@ -420,9 +424,7 @@ export function AgentSetup({
           <>
             <p>
               Add this to your Codex MCP configuration, then sign in with{" "}
-              <code className="font-mono text-xs">
-                codex mcp login draftva
-              </code>
+              <code className="font-mono text-xs">codex mcp login draftva</code>
               .
             </p>
             <CopyField
@@ -519,7 +521,10 @@ export function AgentGuide() {
               "Which posts performed best on this account in the last 30 days?",
           },
         ].map(({ icon: Icon, title, text, prompt }) => (
-          <section key={title} className="rounded-lg border border-border/70 p-3.5">
+          <section
+            key={title}
+            className="rounded-lg border border-border/70 p-3.5"
+          >
             <h3 className="flex items-center gap-2 text-sm font-semibold">
               <Icon className="size-4 text-[#7C5CFC]" />
               {title}
@@ -582,7 +587,9 @@ function ConnectionAccess({
   );
   return (
     <div>
-      <h2 className="font-heading text-[20px] font-semibold tracking-tight">You’re in control.</h2>
+      <h2 className="font-heading text-[20px] font-semibold tracking-tight">
+        You’re in control.
+      </h2>
       <p className="mt-2 text-[12px] leading-[1.65] text-muted-foreground">
         Manage your agent connections for this workspace. Revoking access stops
         both the connection and its refresh tokens.
@@ -668,7 +675,9 @@ function ConnectionAccess({
         ) : (
           <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center">
             <Plug className="mx-auto size-6 text-muted-foreground" />
-            <p className="mt-2 text-[12px] font-medium">No agents connected yet</p>
+            <p className="mt-2 text-[12px] font-medium">
+              No agents connected yet
+            </p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               Connect an agent with OAuth, or create a scoped token below.
             </p>
@@ -828,7 +837,8 @@ function ConnectedDialog({
               aria-current={section === "overview" ? "page" : undefined}
               className={cn(
                 "flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-left text-[11px] transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                section === "overview" && "bg-foreground/[0.07] font-semibold text-foreground",
+                section === "overview" &&
+                  "bg-foreground/[0.07] font-semibold text-foreground",
               )}
             >
               <Plug className="size-4" />
@@ -844,7 +854,8 @@ function ConnectedDialog({
                 aria-current={section === agent.id ? "page" : undefined}
                 className={cn(
                   "flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-left text-[11px] transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  section === agent.id && "bg-foreground/[0.07] font-semibold text-foreground",
+                  section === agent.id &&
+                    "bg-foreground/[0.07] font-semibold text-foreground",
                 )}
               >
                 <AgentMark id={agent.id} small />
@@ -857,7 +868,8 @@ function ConnectedDialog({
               aria-current={section === "connections" ? "page" : undefined}
               className={cn(
                 "flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-left text-[11px] transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                section === "connections" && "bg-foreground/[0.07] font-semibold text-foreground",
+                section === "connections" &&
+                  "bg-foreground/[0.07] font-semibold text-foreground",
               )}
             >
               <KeyRound className="size-4" />
@@ -871,14 +883,14 @@ function ConnectedDialog({
               aria-current={section === "guide" ? "page" : undefined}
               className={cn(
                 "flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-left text-[11px] transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                section === "guide" && "bg-foreground/[0.07] font-semibold text-foreground",
+                section === "guide" &&
+                  "bg-foreground/[0.07] font-semibold text-foreground",
               )}
             >
               <CircleHelp className="size-4" />
               Quick guide
             </button>
           </nav>
-          
         </aside>
         <div
           key={`${workspace.id}:${section}`}
@@ -908,6 +920,70 @@ function ConnectedDialog({
         </div>
       </div>
     </>
+  );
+}
+export function EmbeddedAgentsSettings() {
+  const [section, setSection] = useState<AgentSection>("overview");
+  const trpc = useTRPC();
+  const { data: workspace } = useSuspenseQuery(
+    trpc.workspace.current.queryOptions(),
+  );
+  const { data: settings } = useSuspenseQuery(
+    trpc.agents.settings.queryOptions(
+      { workspace_id: workspace.id },
+      { staleTime: 30000, retry: 1 },
+    ),
+  );
+  return (
+    <div className="space-y-5">
+      {section !== "overview" && (
+        <Button
+          variant="outline"
+          className="secondary-btn"
+          onClick={() => setSection("overview")}
+        >
+          <ArrowLeft className="size-4" />
+          All integrations
+        </Button>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          className="secondary-btn"
+          onClick={() => setSection("connections")}
+        >
+          Connection access
+        </Button>
+        <Button
+          variant="outline"
+          className="secondary-btn"
+          onClick={() => setSection("guide")}
+        >
+          Quick guide
+        </Button>
+      </div>
+      {section === "overview" ? (
+        <AgentsOverview
+          onSelect={setSection}
+          count={settings.connections.length}
+        />
+      ) : section === "connections" ? (
+        <ConnectionAccess
+          key={workspace.id}
+          workspaceId={workspace.id}
+          settings={settings}
+        />
+      ) : section === "guide" ? (
+        <AgentGuide />
+      ) : (
+        <AgentSetup
+          key={section}
+          id={section}
+          settings={settings}
+          onSelect={setSection}
+        />
+      )}
+    </div>
   );
 }
 export default function AgentsDialog({

@@ -2,7 +2,11 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useMutation, useQueryClient,useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { ArrowUpRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
@@ -79,7 +83,7 @@ function AccountTargets({ account }: { account: Account }) {
   );
 }
 
-function ChannelsViewContent() {
+function ChannelsViewContent({ compact = false }: { compact?: boolean }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
@@ -228,6 +232,7 @@ function ChannelsViewContent() {
   return (
     <>
       <ChannelsPanel
+        compact={compact}
         accounts={accounts}
         error={accountQuery.error?.message}
         refreshing={accountQuery.isFetching}
@@ -295,10 +300,14 @@ function ChannelsViewContent() {
   );
 }
 
-export default function ChannelsView() {
+export default function ChannelsView({
+  compact = false,
+}: {
+  compact?: boolean;
+}) {
   return (
     <Suspense fallback={<ChannelSkeleton />}>
-      <ChannelsViewContent />
+      <ChannelsViewContent compact={compact} />
     </Suspense>
   );
 }

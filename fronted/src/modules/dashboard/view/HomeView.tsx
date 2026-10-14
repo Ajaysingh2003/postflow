@@ -368,9 +368,9 @@ export function HomeOverview({
     >
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-muted-foreground">
+          {/* <p className="truncate text-xs font-medium text-muted-foreground">
             {data.workspace_name}
-          </p>
+          </p> */}
           <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight">
             Home
           </h1>

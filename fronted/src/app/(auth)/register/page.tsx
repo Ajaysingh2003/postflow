@@ -1,12 +1,16 @@
-// import RegisterForm from '@/modules/auth/component/RegisterForm'
-// import RegisterView from '@/modules/auth/view/RegisterView'
-import RegisterView from '@/modules/user/view/RegisterView'
-import React from 'react'
+import { connection } from "next/server";
+import { redirect } from "next/navigation";
+import { caller } from "@/trpc/server";
+import RegisterView from "@/modules/user/view/RegisterView";
+import { verificationPath } from "@/modules/user/authFlow";
 
-function page() {
-  return (
-   <RegisterView/>
-  )
+export default async function RegisterPage() {
+  await connection();
+  const [user, authConfig] = await Promise.all([
+    caller.user.profile(),
+    caller.user.authConfig().catch(() => null),
+  ]);
+  if (user)
+    redirect(user.email_verified ? "/dashboard" : verificationPath(user.email));
+  return <RegisterView authConfig={authConfig} />;
 }
-
-export default page

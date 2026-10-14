@@ -7,7 +7,7 @@ if [ "${1:-}" = "api" ]; then
     --port "${PORT:-8000}" \
     --workers "${WEB_CONCURRENCY:-2}" \
     --proxy-headers \
-    --forwarded-allow-ips "${FORWARDED_ALLOW_IPS:-*}" \
+    --forwarded-allow-ips "${FORWARDED_ALLOW_IPS:-}" \
     --no-access-log
 fi
 

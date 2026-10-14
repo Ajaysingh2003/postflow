@@ -122,7 +122,6 @@ def run(kind: str) -> None:
     )
     action = (lambda: 0) if kind == "scheduler" else process_queue
     logger.info("draftva %s started", kind)
-    last_reconciliation = 0.0
     last_subreddit_refresh = 0.0
     last_token_refresh = 0.0
 
@@ -143,13 +142,12 @@ def run(kind: str) -> None:
                         }
                         _run_sync(refresh_expiring_accounts(db, adapters))
                     last_token_refresh = now_mono
-                # Hourly billing reconciliation
-                if now_mono - last_reconciliation >= 3600:
-                    with SessionLocal() as db:
-                        reconciled = reconcile_subscriptions(settings, db)
-                    last_reconciliation = now_mono
-                    if reconciled:
-                        logger.info("reconciled %s subscriptions", reconciled)
+                # Short, resumable ticks. Pass cadence, retry times and the provider
+                # lease live in the database and survive scheduler restarts.
+                with SessionLocal() as db:
+                    reconciled = reconcile_subscriptions(settings, db)
+                if reconciled:
+                    logger.info("reconciled %s subscriptions", reconciled)
 
                 # Periodic subreddit profiles refresh (every 4 hours)
                 if now_mono - last_subreddit_refresh >= 14400:

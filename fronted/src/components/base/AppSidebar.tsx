@@ -11,6 +11,7 @@ import {
   Calendar,
   ChevronsUpDown,
   CreditCard,
+  Fingerprint,
   LayoutDashboard,
   LogOut,
   LucideIcon,
@@ -41,13 +42,30 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import ProfileMenu from "./ProfileMenu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { settingsUrl } from "@/modules/settings/model";
+import { SettingsLink } from "@/modules/settings/SettingsProvider";
 
-const AgentsDialog = dynamic(() => import("@/modules/agents/AgentsDialog"), {
-  ssr: false,
-});
+const BrandDialog = dynamic(
+  () =>
+    import("@/modules/content/component/PersonaDialog").then(
+      (module) => module.PersonaDialog,
+    ),
+  { ssr: false },
+);
 
 /* -------------------------------------------------------------------------- */
 /*                                   ROUTES                                   */
@@ -64,6 +82,7 @@ const ROUTES = {
   channels: "/dashboard/channels",
   analytics: "/dashboard/analytics",
   agents: "/dashboard/agents",
+  brand: "/dashboard/brand",
   settings: "/dashboard/settings",
   profile: "/dashboard/settings/profile",
   billing: "/settings/billing",
@@ -108,6 +127,7 @@ const manageNavigation: NavItem[] = [
 ];
 
 const extraNavigation: NavItem[] = [
+  { label: "Brand profile", href: ROUTES.brand, icon: Fingerprint },
   { label: "Agents", href: ROUTES.agents, icon: Bot, badge: "New" },
 ];
 
@@ -203,11 +223,15 @@ function NavigationGroup({
   items,
   onAgentsOpen,
   onAgentsIntent,
+  onBrandOpen,
+  onBrandIntent,
 }: {
   label?: string;
   items: NavItem[];
   onAgentsOpen?: () => void;
   onAgentsIntent?: () => void;
+  onBrandOpen?: () => void;
+  onBrandIntent?: () => void;
 }) {
   const pathname = usePathname();
   const { open: desktopOpen, isMobile, setOpenMobile } = useSidebar();
@@ -235,23 +259,36 @@ function NavigationGroup({
             const opensAgents =
               item.href === ROUTES.agents && Boolean(onAgentsOpen);
 
+            const opensBrand =
+              item.href === ROUTES.brand && Boolean(onBrandOpen);
+            const openDialog = opensAgents
+              ? onAgentsOpen
+              : opensBrand
+                ? onBrandOpen
+                : undefined;
+            const preload = opensAgents
+              ? onAgentsIntent
+              : opensBrand
+                ? onBrandIntent
+                : undefined;
+
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   tooltip={item.label}
                   onClick={
-                    opensAgents
+                    openDialog
                       ? () => {
                           if (isMobile) setOpenMobile(false);
-                          onAgentsOpen?.();
+                          openDialog();
                         }
                       : undefined
                   }
-                  onPointerEnter={opensAgents ? onAgentsIntent : undefined}
-                  onFocus={opensAgents ? onAgentsIntent : undefined}
-                  aria-haspopup={opensAgents ? "dialog" : undefined}
+                  onPointerEnter={preload}
+                  onFocus={preload}
+                  aria-haspopup={openDialog ? "dialog" : undefined}
                   render={
-                    opensAgents ? undefined : (
+                    openDialog ? undefined : (
                       <Link
                         href={item.href}
                         aria-current={active ? "page" : undefined}
@@ -299,10 +336,10 @@ function NavigationGroup({
 /* -------------------------------------------------------------------------- */
 
 const ACCOUNT_MENU = [
-  { label: "Profile", href: ROUTES.profile, icon: User },
-  { label: "Connected Channels", href: ROUTES.channels, icon: Plug },
-  { label: "Billing", href: ROUTES.billing, icon: CreditCard },
-  { label: "Settings", href: ROUTES.settings, icon: Settings },
+  { label: "Your profile", section: "profile", icon: User },
+  { label: "Connected accounts", section: "channels", icon: Plug },
+  { label: "Billing", section: "billing", icon: CreditCard },
+  { label: "Settings", section: "profile", icon: Settings },
 ] as const;
 
 export function SidebarUserFooterSkeleton() {
@@ -329,10 +366,6 @@ function SidebarUserFooterContent() {
   const { open } = useSidebar();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useOutsideClick(dropdownRef, isOpen, () => setIsOpen(false));
-
   const trpc = useTRPC();
   const { data } = useSuspenseQuery(trpc.user.me.queryOptions());
   const logout = useMutation(
@@ -343,59 +376,14 @@ function SidebarUserFooterContent() {
       },
     }),
   );
-
-  const name = data?.display_name || "";
-  const email = data?.email || "";
-  const initials = getInitials(name, email);
-
-  function navigate(path: string) {
-    setIsOpen(false);
-    router.push(path);
-  }
-
+  const name = data.name || data.display_name || "";
+  const email = data.email;
   return (
-    <div ref={dropdownRef} className="relative">
-      {isOpen && (
-        <div className={cn(MENU_PANEL, "bottom-full left-0 right-0 mb-2")}>
-          {ACCOUNT_MENU.map(({ label, href, icon: ItemIcon }) => (
-            <button
-              key={href}
-              type="button"
-              onClick={() => navigate(href)}
-              className={MENU_ITEM}
-            >
-              <ItemIcon className="size-4 text-neutral-400 dark:text-neutral-500" />
-              {label}
-            </button>
-          ))}
-
-          <div className="my-1.5 h-px bg-neutral-200 dark:bg-white/[0.08]" />
-
-          <button
-            type="button"
-            disabled={logout.isPending}
-            onClick={() => logout.mutate()}
-            className={cn(
-              MENU_ITEM,
-              "text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-60",
-              "dark:text-red-400 dark:hover:bg-red-500/10 dark:hover:text-red-300",
-            )}
-          >
-            <LogOut className="size-4" />
-            Sign out
-          </button>
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        aria-expanded={isOpen}
-        aria-haspopup="menu"
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenuTrigger
+        aria-label="Account menu"
         className={cn(
-          "flex w-full cursor-pointer items-center gap-2.5 rounded-xl p-2 text-left transition-colors",
-          "hover:bg-neutral-900/[0.05] dark:hover:bg-white/[0.06]",
-          isOpen && "bg-neutral-900/[0.05] dark:bg-white/[0.06]",
+          "flex w-full cursor-pointer items-center gap-2.5 rounded-xl p-2 text-left transition-colors hover:bg-neutral-900/[0.05] dark:hover:bg-white/[0.06]",
           FOCUS_RING,
           !open && "justify-center",
         )}
@@ -403,26 +391,51 @@ function SidebarUserFooterContent() {
         <Avatar className="size-8 shrink-0 border border-neutral-200 dark:border-white/10">
           <AvatarImage alt={name} />
           <AvatarFallback className="bg-[#7C5CFC]/15 text-[11px] font-semibold text-[#7C5CFC]">
-            {initials}
+            {getInitials(name, email)}
           </AvatarFallback>
         </Avatar>
-
         {open && (
           <>
             <div className="min-w-0 flex-1 leading-tight">
               <p className="truncate text-[13px] font-medium text-neutral-900 dark:text-neutral-100">
                 {name || "Account"}
               </p>
-              <p className="mt-0.5 truncate text-[11px] text-neutral-500 dark:text-neutral-500">
+              <p className="mt-0.5 truncate text-[11px] text-neutral-500">
                 {email}
               </p>
             </div>
-
-            <ChevronsUpDown className="size-4 shrink-0 text-neutral-400 dark:text-neutral-500" />
+            <ChevronsUpDown className="size-4 shrink-0 text-neutral-400" />
           </>
         )}
-      </button>
-    </div>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="min-w-56 rounded-xl border border-border bg-popover p-1.5 shadow-lg"
+      >
+        {ACCOUNT_MENU.map(({ label, section, icon: ItemIcon }) => (
+          <DropdownMenuItem
+            key={label}
+            render={<SettingsLink section={section} />}
+            className="h-9 gap-2.5 rounded-lg px-2.5 text-[13px]"
+          >
+            <ItemIcon className="size-4 text-muted-foreground" />
+            {label}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={logout.isPending}
+          onClick={() => logout.mutate()}
+          variant="destructive"
+          className="h-9 gap-2.5 rounded-lg px-2.5 text-[13px]"
+        >
+          <LogOut className="size-4" />
+          {logout.isPending ? "Signing out…" : "Sign out"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -526,9 +539,25 @@ function CreateActionButton() {
 /* -------------------------------------------------------------------------- */
 
 export function AppSidebar() {
-  const [agentsOpen, setAgentsOpen] = useState(false);
+  const [brandOpen, setBrandOpen] = useState(false);
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  function preloadBrand() {
+    void import("@/modules/content/component/PersonaDialog");
+    void queryClient
+      .fetchQuery(
+        trpc.workspace.current.queryOptions(undefined, { staleTime: 30000 }),
+      )
+      .then((workspace) =>
+        queryClient.prefetchQuery(
+          trpc.persona.brand.queryOptions(
+            { workspaceId: workspace.id },
+            { staleTime: 30000 },
+          ),
+        ),
+      )
+      .catch(() => undefined);
+  }
   function preloadAgents() {
     void import("@/modules/agents/AgentsDialog");
     void queryClient
@@ -572,8 +601,16 @@ export function AppSidebar() {
           <NavigationGroup
             label="Extra"
             items={extraNavigation}
-            onAgentsOpen={() => setAgentsOpen(true)}
+            onAgentsOpen={() =>
+              window.history.replaceState(
+                null,
+                "",
+                settingsUrl(new URL(window.location.href), "agents"),
+              )
+            }
             onAgentsIntent={preloadAgents}
+            onBrandOpen={() => setBrandOpen(true)}
+            onBrandIntent={preloadBrand}
           />
         </SidebarContent>
 
@@ -584,7 +621,7 @@ export function AppSidebar() {
           <SidebarUserFooter />
         </SidebarFooter>
       </Sidebar>
-      {agentsOpen && <AgentsDialog open onOpenChange={setAgentsOpen} />}
+      {brandOpen && <BrandDialog open setOpen={setBrandOpen} />}
     </>
   );
 }

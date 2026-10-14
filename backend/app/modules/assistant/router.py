@@ -1,6 +1,6 @@
 """FastAPI router for AI assistant features, platform profiles, and voice training."""
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,14 @@ from app.core.dependencies import (
     require_content_access,
 )
 from app.db.session import get_db
+from app.modules.assistant.brand import (
+    BRAND_KIND,
+    BrandResponse,
+    BrandUpdate,
+    brand_response,
+    save_brand,
+)
+from app.modules.assistant.conversations import execute_turn
 from app.modules.assistant.models import AssistantRun, VoiceProfile
 from app.modules.assistant.registry import assistant_registry
 from app.modules.assistant.schemas import (
@@ -24,12 +32,33 @@ from app.modules.assistant.schemas import (
 )
 from app.modules.assistant.service import execute_feature, train_voice_profile
 from app.modules.identity.models import User, Workspace
+from app.modules.workspaces.models import WorkspaceMembership
 
 router = APIRouter(
     prefix="/assistant",
     tags=["assistant"],
     dependencies=[Depends(require_content_access)],
 )
+
+
+@router.get("/brand-profile", response_model=BrandResponse)
+def get_brand_profile(
+    membership: WorkspaceMembership = Depends(require_content_access),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> BrandResponse:
+    return brand_response(db, workspace.id, membership.role in {"owner", "admin", "editor"})
+
+
+@router.patch("/brand-profile", response_model=BrandResponse)
+def update_brand_profile(
+    payload: BrandUpdate,
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> BrandResponse:
+    save_brand(db, workspace.id, user.id, payload)
+    return brand_response(db, workspace.id, True)
 
 
 @router.get("/features", response_model=list[FeatureInfoResponse])
@@ -76,6 +105,12 @@ async def run_feature_endpoint(
     db: Session = Depends(get_db),
 ) -> ExecuteFeatureResponse:
     """Execute an AI assistant feature with schema validation, adapter checking, and usage tracking."""
+    if payload.conversation_id:
+        return ExecuteFeatureResponse.model_validate(
+            await execute_turn(db, workspace.id, user.id, feature_id, payload)
+        )
+    if payload.request_id:
+        raise HTTPException(422, "A conversation ID is required for this message")
     output_dict, issues, run_record = await execute_feature(
         workspace_id=workspace.id,
         user_id=user.id,
@@ -108,6 +143,8 @@ def create_voice_profile_endpoint(
     db: Session = Depends(get_db),
 ) -> VoiceProfile:
     """Manually create a voice profile for the workspace."""
+    if payload.settings.get("profile_kind") == BRAND_KIND:
+        raise HTTPException(422, "Use brand profile settings to update your workspace brand")
     profile = VoiceProfile(
         workspace_id=workspace.id,
         user_id=user.id,
@@ -131,7 +168,11 @@ def list_voice_profiles_endpoint(
     return list(
         db.scalars(
             select(VoiceProfile)
-            .where(VoiceProfile.workspace_id == workspace.id)
+            .where(
+                VoiceProfile.workspace_id == workspace.id,
+                (VoiceProfile.settings["profile_kind"].as_string().is_(None))
+                | (VoiceProfile.settings["profile_kind"].as_string() != BRAND_KIND),
+            )
             .order_by(VoiceProfile.created_at.desc())
         )
     )
@@ -184,6 +225,9 @@ async def stream_feature(
     from fastapi import HTTPException
     from fastapi.responses import StreamingResponse
 
+    if payload.conversation_id or payload.request_id:
+        raise HTTPException(422, "Use the conversation message endpoint for saved chats")
+
     async def events():
         yield 'event: progress\ndata: {"status":"validating_and_generating"}\n\n'
         try:
@@ -197,6 +241,8 @@ async def stream_feature(
                 db=db,
                 connected_account_id=payload.connected_account_id,
                 validation_context=payload.validation_context,
+                writing_instructions=payload.writing_instructions,
+                output_language=payload.output_language,
             )
             yield (
                 "event: complete\ndata: "

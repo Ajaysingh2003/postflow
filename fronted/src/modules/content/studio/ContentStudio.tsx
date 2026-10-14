@@ -24,7 +24,6 @@ import {
   ChevronLeft,
   ChevronRight,
   FilePenLine,
-  Loader2,
   Plus,
   Scissors,
   Search,
@@ -563,7 +562,14 @@ function AccountStudio({
       content: source,
       styleOwner: account.display_name.replace(/\s*\(@.*\)$/, ""),
       ready: editable && !busy && account.status === "active",
-      async send(prompt, attachments, signal) {
+      platform: account.platform,
+      accountId: account.id,
+      context: {
+        source_text: source,
+        account_name: account.display_name,
+        draft_id: latestVariant?.post_id ?? null,
+      },
+      async send(prompt, attachments, signal, conversation) {
         if (attachments.length) {
           throw new Error(
             "Reference-file drafting is unavailable for this account. Remove the files and retry with pasted text.",
@@ -606,6 +612,11 @@ function AccountStudio({
           ? threadItems(snapshot.payload)[Math.max(0, context.selection.index)]
           : snapshot.payload;
         const result = await runAssistant({
+          conversation_id: conversation?.id,
+          request_id: conversation?.requestId,
+          conversation_prompt: prompt,
+          conversation_source: source,
+          workspace_id: workspaceId,
           feature: wholeThread ? "x_thread_writer" : "rewrite_with_tone",
           platform: account.platform,
           input_data: {

@@ -22,6 +22,7 @@ import ChannelCard, { channelButton } from "./ChannelCard";
 import ChannelToolbar from "./ChannelToolbar";
 
 export default function ChannelsPanel({
+  compact = false,
   accounts,
   loading = false,
   error,
@@ -32,6 +33,7 @@ export default function ChannelsPanel({
   onManage,
   onAdd,
 }: {
+  compact?: boolean;
   accounts: Account[];
   loading?: boolean;
   error?: string;
@@ -61,9 +63,15 @@ export default function ChannelsPanel({
   ];
 
   return (
-    <div className="mx-auto max-w-[1240px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
+    <div
+      className={
+        compact
+          ? "min-w-0 [&_h2]:text-base"
+          : "mx-auto max-w-[1240px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10"
+      }
+    >
       <header className="flex flex-wrap items-center justify-between gap-5">
-        <div>
+        <div className={compact ? "hidden" : undefined}>
           <p className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"></p>
           <h1 className="font-heading !text-[36px] capitalize leading-normalz tracking-[-0.035em] sm:text-5xl">
             manage channels<span className="text-emerald-500">.</span>
@@ -143,16 +151,16 @@ export default function ChannelsPanel({
       )}
 
       <ChannelToolbar
-  filters={filters}
-  filter={filter}
-  onFilterChange={setFilter}
-  search={search}
-  onSearchChange={setSearch}
-  loading={loading}
-  error={!!error}
-  refreshing={refreshing}
-  onRefresh={onRefresh}
-/>
+        filters={filters}
+        filter={filter}
+        onFilterChange={setFilter}
+        search={search}
+        onSearchChange={setSearch}
+        loading={loading}
+        error={!!error}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+      />
       {error ? (
         <div
           role="alert"

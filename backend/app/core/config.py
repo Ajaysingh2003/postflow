@@ -1,7 +1,7 @@
 from functools import lru_cache
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,6 +42,17 @@ class Settings(BaseSettings):
 
     # Identity
     google_client_id: str | None = None
+    # Login uses its own read-only OAuth app, separate from connected publishing accounts.
+    x_login_client_id: str | None = None
+    x_login_client_secret: str | None = None
+    x_login_redirect_uri: str | None = None
+    email_verification_required: bool = True
+    auth_proxy_secret: str | None = None
+    otp_ttl_seconds: int = Field(default=600, ge=60, le=1800)
+    otp_resend_seconds: int = Field(default=60, ge=30, le=600)
+    otp_max_attempts: int = Field(default=5, ge=1, le=10)
+    resend_api_key: str | None = None
+    resend_from_email: str | None = None
 
     # Channels OAuth
     x_client_id: str | None = None
@@ -71,6 +82,14 @@ class Settings(BaseSettings):
     dodo_product_business: str | None = None
     dodo_product_creator: str | None = None
     dodo_product_agency: str | None = None
+    billing_reconcile_interval_seconds: int = Field(default=3600, ge=60)
+    billing_reconcile_batch_size: int = Field(default=200, ge=1, le=1000)
+    billing_reconcile_max_requests: int = Field(default=20, ge=1, le=1000)
+    billing_reconcile_time_budget_seconds: int = Field(default=30, ge=1, le=60)
+    billing_reconcile_request_interval_seconds: float = Field(default=1, ge=0, le=60)
+    billing_reconcile_http_timeout_seconds: int = Field(default=10, ge=1, le=30)
+    billing_reconcile_retry_base_seconds: int = Field(default=60, ge=1)
+    billing_reconcile_retry_max_seconds: int = Field(default=3600, ge=60)
 
     # AI Assistant
     llm_provider_url: str | None = None
@@ -119,6 +138,28 @@ class Settings(BaseSettings):
         return self.app_env in {"development", "test"}
 
     @property
+    def x_login_callback_url(self) -> str:
+        return self.x_login_redirect_uri or self.frontend_url.rstrip("/") + "/api/auth/x/callback"
+
+    @model_validator(mode="after")
+    def login_callback_configuration(self):
+        parts = urlsplit(self.x_login_callback_url)
+        if (
+            parts.scheme not in {"http", "https"}
+            or not parts.hostname
+            or parts.username
+            or parts.password
+            or parts.query
+            or parts.fragment
+            or (parts.scheme == "http" and parts.hostname not in {"localhost", "127.0.0.1", "::1"})
+            or (self.app_env == "production" and parts.scheme != "https")
+        ):
+            raise ValueError(
+                "X login callback must use HTTPS (HTTP localhost is allowed in development)"
+            )
+        return self
+
+    @property
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 
@@ -133,7 +174,11 @@ class Settings(BaseSettings):
         if explicit_uri:
             # Registered provider URIs are exact values: do not normalize or format them.
             return explicit_uri
-        if platform == "bluesky" and self.bluesky_client_id and self.bluesky_client_id.startswith("http"):
+        if (
+            platform == "bluesky"
+            and self.bluesky_client_id
+            and self.bluesky_client_id.startswith("http")
+        ):
             parts = urlsplit(self.bluesky_client_id)
             return f"{parts.scheme}://{parts.netloc}/api/v1/channels/bluesky/callback"
         return self.oauth_redirect_base_url.replace(
@@ -149,6 +194,12 @@ class Settings(BaseSettings):
                 raise ValueError("Production APP_SECRET must contain at least 32 random characters")
             if self.llm_mock_enabled:
                 raise ValueError("Mock AI output cannot be enabled in production")
+            if not self.email_verification_required:
+                raise ValueError("Email verification cannot be disabled in production")
+            if not self.rate_limit_enabled:
+                raise ValueError("Rate limiting cannot be disabled in production")
+            if urlsplit(self.frontend_url).scheme != "https":
+                raise ValueError("Production FRONTEND_URL must use HTTPS for authentication links")
         return self
 
     def dodo_product_id(self, plan_code: str) -> str | None:

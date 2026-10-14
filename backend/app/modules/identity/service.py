@@ -2,7 +2,8 @@ import re
 from datetime import timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -46,11 +47,18 @@ def create_session(db: Session, user: User, workspace: Workspace) -> tuple[str, 
 
 def register(db: Session, email: str, password: str, name: str) -> tuple[User, Workspace, str, int]:
     email = normalize_email(email)
+    name = name.strip()
+    if len(name) < 2:
+        raise HTTPException(422, "Enter at least two characters for your name")
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
     user = User(email=email, name=name.strip(), email_verified=False)
     db.add(user)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "An account with this email already exists") from exc
     db.add(PasswordCredential(user_id=user.id, password_hash=hash_password(password)))
     db.add(
         AuthIdentity(
@@ -77,11 +85,10 @@ def login(db: Session, email: str, password: str) -> tuple[User, Workspace, str,
         if user
         else None
     )
-    if (
-        user is None
-        or credential is None
-        or not verify_password(credential.password_hash, password)
-    ):
+    valid = verify_password(
+        credential.password_hash if credential else _dummy_password_hash, password
+    )
+    if user is None or credential is None or not valid:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is disabled")
@@ -93,6 +100,8 @@ def login(db: Session, email: str, password: str) -> tuple[User, Workspace, str,
 
 
 def login_google(db: Session, claims: dict[str, object]) -> tuple[User, Workspace, str, int]:
+    if not claims.get("sub") or not claims.get("email") or claims.get("email_verified") is not True:
+        raise HTTPException(401, "Google must provide a verified email address")
     subject = str(claims["sub"])
     email = normalize_email(str(claims["email"]))
     identity = db.scalar(
@@ -118,11 +127,18 @@ def login_google(db: Session, claims: dict[str, object]) -> tuple[User, Workspac
             db.add(workspace)
             db.flush()
             db.add(WorkspaceMembership(workspace_id=workspace.id, user_id=user.id, role="owner"))
-        elif not user.email_verified:
-            raise HTTPException(
-                status_code=409,
-                detail="Verify the existing email account before linking Google",
+        if not user.is_active:
+            raise HTTPException(403, "Account is disabled")
+        if not user.email_verified:
+            # A verified Google identity may recover a pre-created email account.
+            # Remove its unverified password and sessions to prevent account pre-hijacking.
+            db.execute(delete(PasswordCredential).where(PasswordCredential.user_id == user.id))
+            db.execute(
+                update(SessionToken)
+                .where(SessionToken.user_id == user.id)
+                .values(revoked_at=utcnow())
             )
+        user.email_verified = True
         db.add(
             AuthIdentity(
                 user_id=user.id,
@@ -134,8 +150,14 @@ def login_google(db: Session, claims: dict[str, object]) -> tuple[User, Workspac
         db.commit()
     if user is None:
         raise HTTPException(status_code=401, detail="Unable to authenticate Google account")
+    if not user.is_active:
+        raise HTTPException(403, "Account is disabled")
+    user.email_verified = True
     workspace = db.scalar(select(Workspace).where(Workspace.owner_user_id == user.id))
     if workspace is None:
         raise HTTPException(status_code=500, detail="Workspace is missing")
     token, ttl = create_session(db, user, workspace)
     return user, workspace, token, ttl
+
+
+_dummy_password_hash = hash_password(new_token())

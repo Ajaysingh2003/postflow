@@ -1,7 +1,8 @@
 "use client";
 
+import { reloadAuthPage } from "../authFlow";
+
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,16 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTRPCClient } from "@/trpc/client";
 
-const registerSchema = z.object({
-  display_name: z.string().trim().min(2, "Enter at least 2 characters").max(160),
-  email: z.string().email("Enter a valid email address"),
-  password: z.string().min(8, "Use at least 8 characters").max(256),
-});
+import { registerSchema, nextAuthPath, verificationPath } from "../authFlow";
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterForm() {
-  const router = useRouter();
   const trpc = useTRPCClient();
 
   const form = useForm<RegisterFormValues>({
@@ -31,16 +27,27 @@ export default function RegisterForm() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: (values: RegisterFormValues) => trpc.user.register.mutate(values),
+    mutationFn: (values: RegisterFormValues) =>
+      trpc.user.register.mutate(values),
     onSuccess: (result) => {
       if (result.verification_required) {
-        toast.success("Check your email to verify your account");
-        router.push(`/verify-otp?email=${encodeURIComponent(result.user.email)}`);
+        toast.success(
+          result.verification_sent
+            ? "Check your email for the verification code"
+            : "Account created. Request a verification code to continue",
+        );
+        reloadAuthPage(
+          verificationPath(
+            result.user.email,
+            nextAuthPath(window.location.search),
+            result.verification_sent,
+          ),
+        );
         return;
       }
 
       toast.success("Account created. You can sign in now.");
-      router.replace("/login");
+      reloadAuthPage(nextAuthPath(window.location.search));
     },
     onError: (error) => toast.error(error.message || "Registration failed"),
   });
@@ -51,9 +58,17 @@ export default function RegisterForm() {
 
   return (
     <div className="w-full max-w-sm">
-      <form onSubmit={form.handleSubmit(submitRegistration)} className="space-y-4" noValidate>
+      <form
+        method="post"
+        onSubmit={form.handleSubmit(submitRegistration)}
+        className="space-y-4"
+        noValidate
+      >
         <div>
-          <label htmlFor="register-name" className="mb-1.5 block text-xs font-medium text-foreground">
+          <label
+            htmlFor="register-name"
+            className="mb-1.5 block text-xs font-medium text-foreground"
+          >
             Name
           </label>
           <Input
@@ -64,12 +79,17 @@ export default function RegisterForm() {
             {...form.register("display_name")}
           />
           {form.formState.errors.display_name && (
-            <p className="mt-1 text-xs text-destructive">{form.formState.errors.display_name.message}</p>
+            <p className="mt-1 text-xs text-destructive">
+              {form.formState.errors.display_name.message}
+            </p>
           )}
         </div>
 
         <div>
-          <label htmlFor="register-email" className="mb-1.5 block text-xs font-medium text-foreground">
+          <label
+            htmlFor="register-email"
+            className="mb-1.5 block text-xs font-medium text-foreground"
+          >
             Email address
           </label>
           <Input
@@ -81,24 +101,31 @@ export default function RegisterForm() {
             {...form.register("email")}
           />
           {form.formState.errors.email && (
-            <p className="mt-1 text-xs text-destructive">{form.formState.errors.email.message}</p>
+            <p className="mt-1 text-xs text-destructive">
+              {form.formState.errors.email.message}
+            </p>
           )}
         </div>
 
         <div>
-          <label htmlFor="register-password" className="mb-1.5 block text-xs font-medium text-foreground">
+          <label
+            htmlFor="register-password"
+            className="mb-1.5 block text-xs font-medium text-foreground"
+          >
             Password
           </label>
           <Input
             id="register-password"
             type="password"
             autoComplete="new-password"
-            placeholder="At least 8 characters"
+            placeholder="At least 10 characters"
             className="rounded-md border-border !bg-input/30 text-foreground placeholder:text-muted-foreground focus-visible:ring-1"
             {...form.register("password")}
           />
           {form.formState.errors.password && (
-            <p className="mt-1 text-xs text-destructive">{form.formState.errors.password.message}</p>
+            <p className="mt-1 text-xs text-destructive">
+              {form.formState.errors.password.message}
+            </p>
           )}
         </div>
 
@@ -116,7 +143,10 @@ export default function RegisterForm() {
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
+        <Link
+          href="/login"
+          className="font-medium text-foreground underline-offset-4 hover:underline"
+        >
           Sign in
         </Link>
       </p>

@@ -20,10 +20,12 @@ from app.modules.billing.entitlements import (
     sync_entitlements,
     usage_window,
 )
-from app.modules.billing.models import Plan, Subscription, UsageLedger
+from app.modules.billing.models import EntitlementGrant, Plan, Subscription, UsageLedger
+from app.modules.channels.base import Capabilities, PublishResult
 from app.modules.channels.models import ConnectedAccount
+from app.modules.channels.registry import channel_registry
 from app.modules.content.models import Post, PostVariant
-from app.modules.publishing.service import schedule_variant
+from app.modules.publishing.service import publish_variant_job, schedule_variant
 from app.modules.workspaces.models import WorkspaceMembership
 
 
@@ -326,3 +328,198 @@ def test_annual_usage_only_counts_current_month_and_public_plans_use_configured_
         assert summary["cycle_start"] == datetime(2026, 9, 30, 10, tzinfo=UTC)
         assert summary["cycle_end"] == datetime(2026, 10, 31, 10, tzinfo=UTC)
     assert client.get("/api/v1/billing/plans").json()["pro"]["limits"]["ai_credits"] == 123
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("plan_code", ["starter", "creator", "pro", "business", "agency", "custom"])
+async def test_paid_posts_are_unlimited_despite_stored_plan_and_grant_caps(
+    workspace, client, auth, monkeypatch, plan_code
+):
+    ws, user = workspace
+
+    class FakeAdapter:
+        capabilities = Capabilities(platform="threads", display_name="Threads", max_text_length=500)
+
+        async def validate(self, variant):
+            return []
+
+        async def publish(self, account, variant):
+            return PublishResult(success=True, external_post_id=f"posted-{variant.id}")
+
+    monkeypatch.setitem(channel_registry._adapters, "threads", FakeAdapter())
+    with SessionLocal() as db:
+        db.add_all(
+            [
+                Plan(
+                    code=plan_code,
+                    name=plan_code,
+                    limits={"scheduled_posts": 1, "ai_credits": 123, "connected_accounts": 4},
+                ),
+                Subscription(
+                    workspace_id=ws,
+                    user_id=user,
+                    provider_subscription_id="paid",
+                    plan_code=plan_code,
+                    status="active",
+                ),
+                EntitlementGrant(
+                    workspace_id=ws, capability="scheduled_posts", limit_value=1, source="plan"
+                ),
+            ]
+        )
+        account = ConnectedAccount(
+            workspace_id=ws,
+            platform="threads",
+            external_account_id="paid-threads",
+            display_name="Paid account",
+            status="active",
+        )
+        db.add(account)
+        db.flush()
+        variants = []
+        for index in range(5):
+            post = Post(workspace_id=ws, author_id=user)
+            db.add(post)
+            db.flush()
+            variant = PostVariant(
+                post_id=post.id,
+                connected_account_id=account.id,
+                platform="threads",
+                status="published" if index < 3 else "draft",
+                payload={"text": "A new idea"},
+                idempotency_key=str(uuid4()),
+                published_at=datetime.now(UTC) if index < 3 else None,
+            )
+            db.add(variant)
+            variants.append(variant)
+        db.commit()
+
+        # Unlimited access overrides old caps without a backfill or renewal.
+        assert entitlement_limit(db, ws, "scheduled_posts") is None
+        assert get_plan_limits_summary(db, ws)["scheduled_posts"] == {
+            "used": 3,
+            "limit": None,
+            "remaining": None,
+        }
+        assert entitlement_limit(db, ws, "ai_credits") == 123
+        await schedule_variant(db, variants[3].id, bypass_validation=True)
+        attempt = await publish_variant_job(variants[4].id, db)
+        assert attempt.result == "success"
+        assert variants[3].status == "scheduled"
+        assert variants[4].status == "published"
+
+        grant = db.scalar(select(EntitlementGrant).where(EntitlementGrant.workspace_id == ws))
+        grant.source = "manual"
+        grant.limit_value = 0
+        db.commit()
+        assert entitlement_limit(db, ws, "scheduled_posts") is None
+        assert get_plan_limits_summary(db, ws)["scheduled_posts"]["limit"] is None
+        grant.source = "plan"
+        db.flush()
+        sync_entitlements(db, ws, plan_code)
+        db.flush()
+        assert (
+            db.scalar(
+                select(EntitlementGrant).where(
+                    EntitlementGrant.workspace_id == ws,
+                    EntitlementGrant.capability == "scheduled_posts",
+                )
+            ).limit_value
+            is None
+        )
+        db.commit()
+
+    for endpoint in (
+        "/api/v1/billing/usage",
+        "/api/v1/posts/home",
+        "/api/v1/analytics/plan-limits",
+    ):
+        response = client.get(endpoint, headers=auth)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        usage = body if endpoint.endswith("plan-limits") else body["usage"]
+        assert usage["scheduled_posts"] == {"used": 5, "limit": None, "remaining": None}
+        assert usage["ai_credits"]["limit"] == 123
+
+
+@pytest.mark.parametrize(
+    "status,plan_code",
+    [
+        ("expired", "pro"),
+        ("failed", "pro"),
+        ("revoked", "pro"),
+        ("on_hold", "pro"),
+        ("cancelled", "pro"),
+        ("active", "unknown"),
+        ("active", "free"),
+    ],
+)
+def test_free_or_ineligible_subscriptions_cannot_keep_unlimited_posts(workspace, status, plan_code):
+    ws, user = workspace
+    with SessionLocal() as db:
+        db.add(
+            Subscription(
+                workspace_id=ws,
+                user_id=user,
+                provider_subscription_id="ended",
+                plan_code=plan_code,
+                status=status,
+                current_period_end=datetime.now(UTC) - timedelta(days=1),
+                grace_until=datetime.now(UTC) - timedelta(days=1),
+            )
+        )
+        # Stale unlimited entitlement from the previous paid subscription.
+        sync_entitlements(db, ws, "pro")
+        for _ in range(5):
+            post = Post(workspace_id=ws, author_id=user)
+            db.add(post)
+            db.flush()
+            db.add(
+                PostVariant(
+                    post_id=post.id,
+                    platform="threads",
+                    status="published",
+                    published_at=datetime.now(UTC),
+                    idempotency_key=str(uuid4()),
+                )
+            )
+        db.commit()
+        assert entitlement_limit(db, ws, "scheduled_posts") == 5
+        summary = get_plan_limits_summary(db, ws)
+        assert summary["plan_code"] == "free"
+        assert summary["scheduled_posts"] == {"used": 5, "limit": 5, "remaining": 0}
+        assert summary["ai_credits"]["limit"] == 20
+        with pytest.raises(HTTPException) as raised:
+            check_scheduled_posts_limit(db, ws)
+        assert raised.value.status_code == 403
+
+
+@pytest.mark.parametrize("status", ["trialing", "on_hold", "cancelled"])
+def test_paid_trial_grace_and_remaining_term_include_unlimited_posts(workspace, status):
+    ws, user = workspace
+    with SessionLocal() as db:
+        db.add(
+            Subscription(
+                workspace_id=ws,
+                user_id=user,
+                provider_subscription_id="eligible",
+                plan_code="starter",
+                status=status,
+                current_period_end=datetime.now(UTC) + timedelta(days=1),
+                grace_until=datetime.now(UTC) + timedelta(days=1),
+            )
+        )
+        db.commit()
+        assert entitlement_limit(db, ws, "scheduled_posts") is None
+        assert get_plan_limits_summary(db, ws)["scheduled_posts"]["limit"] is None
+
+
+def test_public_paid_plans_normalize_old_limits_without_changing_ai_or_prices(client):
+    with SessionLocal.begin() as db:
+        for code in ("starter", "pro", "business"):
+            db.add(Plan(code=code, name=code, limits={"scheduled_posts": 1, "ai_credits": 123}))
+    catalog = client.get("/api/v1/billing/plans").json()
+    for plan in catalog.values():
+        assert plan["limits"]["scheduled_posts"] is None
+        assert plan["limits"]["ai_credits"] == 123
+    assert catalog["starter"]["billing_cycles"]["monthly"]["amount"] == 29

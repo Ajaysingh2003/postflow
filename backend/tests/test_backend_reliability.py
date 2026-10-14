@@ -876,7 +876,7 @@ def test_email_delivery_uses_tls_and_configured_links(monkeypatch):
     assert sent[0] == "tls"
     assert (
         "https://app.draftva.example/invitations/accept?token=one-time-token"
-        in sent[1].get_content()
+        in sent[1].get_body(preferencelist=("plain",)).get_content()
     )
 
 

@@ -26,6 +26,10 @@ Run the publishing worker and maintenance scheduler in separate terminals:
 
 Redis is required in production. Mock AI output is explicitly opt-in and prohibited in production. Real AI requires `LLM_PROVIDER_URL`, `LLM_PROVIDER_API_KEY` and `LLM_MODEL`. Uploads require R2/S3 and ClamAV. Verification, password-reset and invitation emails require SMTP with verified STARTTLS.
 
+Billing reconciliation uses durable keyset progress, a shared scheduler lease and
+per-subscription retries. See [billing recovery operations](docs/billing-reconciliation.md)
+for configuration, migration, inspection commands and its recovery limits.
+
 Set `OAUTH_REDIRECT_BASE_URL` to your public API callback template, ending in `/api/v1/channels/{platform}/callback`. Register the concrete URL for each app. Instagram and Facebook can each set an exact `INSTAGRAM_REDIRECT_URI` or `FACEBOOK_REDIRECT_URI` override. Instagram requires its own Instagram Login app credentials; see the [Instagram Business Login setup](docs/instagram-business-login.md). Bluesky needs a public HTTPS client-metadata URL and a P-256 client signing key; see the report.
 
 Compose runs the migrations before the API, worker and scheduler:

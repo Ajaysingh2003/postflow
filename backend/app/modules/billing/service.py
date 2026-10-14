@@ -2,15 +2,12 @@ import base64
 import hashlib
 import hmac
 import time
-from datetime import UTC, datetime
+from urllib.parse import quote
 
 import httpx
 from fastapi import HTTPException
 
 from app.core.config import Settings
-from app.core.security import utcnow
-from app.modules.billing.entitlements import sync_entitlements
-from app.modules.billing.models import Subscription
 
 
 def _api_headers(settings: Settings) -> dict[str, str]:
@@ -70,52 +67,21 @@ async def create_checkout(
     return response.json()
 
 
-def retrieve_subscription(settings: Settings, subscription_id: str) -> dict:
-    response = httpx.get(
-        f"{settings.dodo_api_base.rstrip('/')}/subscriptions/{subscription_id}",
+def retrieve_subscription(settings: Settings, subscription_id: str, *, client=None) -> dict:
+    request = client.get if client else httpx.get
+    response = request(
+        f"{settings.dodo_api_base.rstrip('/')}/subscriptions/{quote(subscription_id, safe='')}",
         headers=_api_headers(settings),
-        timeout=20,
+        timeout=settings.billing_reconcile_http_timeout_seconds,
     )
     response.raise_for_status()
     return response.json()
 
 
 def reconcile_subscriptions(settings: Settings, db) -> int:
-    if not settings.dodo_api_key:
-        return 0
-    subscriptions = list(
-        db.query(Subscription)
-        .filter(Subscription.status.in_(["active", "trialing", "on_hold", "cancelled"]))
-        .limit(200)
-    )
-    reconciled = 0
-    for subscription in subscriptions:
-        try:
-            remote = retrieve_subscription(settings, subscription.provider_subscription_id)
-            subscription.status = str(remote.get("status") or subscription.status)
-            subscription.quantity = int(remote.get("quantity") or subscription.quantity or 1)
-            next_date = remote.get("next_billing_date")
-            previous_date = remote.get("previous_billing_date")
-            if next_date:
-                subscription.current_period_end = datetime.fromisoformat(
-                    str(next_date).replace("Z", "+00:00")
-                ).astimezone(UTC)
-            if previous_date:
-                subscription.current_period_start = datetime.fromisoformat(
-                    str(previous_date).replace("Z", "+00:00")
-                ).astimezone(UTC)
-            subscription.cancel_at_period_end = bool(
-                remote.get("cancel_at_next_billing_date", False)
-            )
-            subscription.last_reconciled_at = utcnow()
-            sync_entitlements(
-                db, subscription.workspace_id, subscription.plan_code, subscription.quantity
-            )
-            reconciled += 1
-        except Exception:  # noqa: BLE001, S112
-            continue
-    db.commit()
-    return reconciled
+    from app.modules.billing.reconciliation import run_reconciliation
+
+    return run_reconciliation(settings, db)
 
 
 async def create_portal(settings: Settings, customer_id: str) -> dict:

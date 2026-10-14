@@ -8,8 +8,8 @@ import {
   QueryErrorResetBoundary,
 } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { CreditCard, ArrowUpRight, RefreshCw, Sparkles } from "lucide-react";
-import toast from "react-hot-toast";
+import { CreditCard, ArrowUpRight, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +18,8 @@ import {
   usageReset,
   type BillingUsage,
 } from "../usageModel";
-import { UsageMeter } from "./UsageMeter";
+import { UsageCircle } from "./UsageCircle";
+import { cn } from "@/lib/utils";
 
 export function BillingSkeleton() {
   return (
@@ -29,7 +30,11 @@ export function BillingSkeleton() {
     >
       <Skeleton className="h-12 w-64" />
       <Skeleton className="h-40 rounded-2xl" />
-      <Skeleton className="h-80 rounded-2xl" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[1, 2, 3].map((key) => (
+          <Skeleton key={key} className="h-60 rounded-xl" />
+        ))}
+      </div>
     </div>
   );
 }
@@ -63,20 +68,32 @@ class BillingError extends Component<
     return this.props.children;
   }
 }
-export default function BillingView({ workspaceId }: { workspaceId?: string }) {
+export default function BillingView({
+  workspaceId,
+  embedded = false,
+}: {
+  workspaceId?: string;
+  embedded?: boolean;
+}) {
   return (
     <QueryErrorResetBoundary>
       {({ reset }) => (
         <BillingError reset={reset}>
           <Suspense fallback={<BillingSkeleton />}>
-            <BillingContent workspaceId={workspaceId} />
+            <BillingContent workspaceId={workspaceId} embedded={embedded} />
           </Suspense>
         </BillingError>
       )}
     </QueryErrorResetBoundary>
   );
 }
-function BillingContent({ workspaceId }: { workspaceId?: string }) {
+function BillingContent({
+  workspaceId,
+  embedded,
+}: {
+  workspaceId?: string;
+  embedded: boolean;
+}) {
   const trpc = useTRPC();
   const params = useSearchParams();
   const query = useSuspenseQuery(
@@ -97,6 +114,7 @@ function BillingContent({ workspaceId }: { workspaceId?: string }) {
   );
   return (
     <BillingOverview
+      embedded={embedded}
       data={query.data}
       checkoutReturned={params.get("checkout") === "success"}
       refreshing={query.isFetching}
@@ -108,6 +126,7 @@ function BillingContent({ workspaceId }: { workspaceId?: string }) {
   );
 }
 export function BillingOverview({
+  embedded = false,
   data,
   checkoutReturned = false,
   refreshing = false,
@@ -116,6 +135,7 @@ export function BillingOverview({
   openingPortal = false,
   onPortal,
 }: {
+  embedded?: boolean;
   data: BillingUsage;
   checkoutReturned?: boolean;
   refreshing?: boolean;
@@ -135,29 +155,37 @@ export function BillingOverview({
         ? "Cancels at period end"
         : status.replaceAll("_", " ");
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-5 py-8 sm:px-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="mb-2 text-[10px] uppercase tracking-[.18em] text-muted-foreground">
-            Workspace settings
-          </p>
-          <h1 className="font-heading text-3xl font-semibold">Plan & usage</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Your allowance, shared across this workspace.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          className="secondary-btn"
-          disabled={refreshing}
-          onClick={onRefresh}
-        >
-          <RefreshCw
-            className={refreshing ? "size-4 animate-spin" : "size-4"}
-          />
-          Refresh
-        </Button>
-      </header>
+    <div
+      className={
+        embedded ? "space-y-6" : "mx-auto max-w-4xl space-y-6 px-5 py-8 sm:px-8"
+      }
+    >
+      {!embedded && (
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div className={embedded ? "hidden" : undefined}>
+            <p className="mb-2 text-[10px] uppercase tracking-[.18em] text-muted-foreground">
+              Workspace settings
+            </p>
+            <h1 className="font-heading text-3xl font-semibold">
+              Plan & usage
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your plan and usage for this workspace.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            className="secondary-btn"
+            disabled={refreshing}
+            onClick={onRefresh}
+          >
+            <RefreshCw
+              className={refreshing ? "size-4 animate-spin" : "size-4"}
+            />
+            Refresh
+          </Button>
+        </header>
+      )}
       {checkoutReturned && (
         <p
           role="status"
@@ -180,9 +208,33 @@ export function BillingOverview({
               {usage.plan_code}
             </h2>
           </div>
-          <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs capitalize text-emerald-700 dark:text-emerald-400">
-            {statusLabel}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "rounded-full px-3 py-1 text-xs capitalize",
+                ["on_hold", "failed", "expired"].includes(status)
+                  ? "bg-amber-500/10 text-amber-700"
+                  : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+              )}
+            >
+              {statusLabel}
+            </span>
+            {embedded && (
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="secondary-btn !px-2"
+                aria-label="Refresh billing usage"
+                title="Refresh usage"
+                disabled={refreshing}
+                onClick={onRefresh}
+              >
+                <RefreshCw
+                  className={refreshing ? "size-3.5 animate-spin" : "size-3.5"}
+                />
+              </Button>
+            )}
+          </div>
         </div>
         {currentPaid && sub?.current_period_end && (
           <p className="mt-3 text-sm text-muted-foreground">
@@ -222,44 +274,48 @@ export function BillingOverview({
           )}
         </div>
       </section>
-      <section className="rounded-2xl border border-border bg-card p-6 shadow-xs">
-        <h2 className="mb-2 flex items-center gap-2 font-heading text-xl font-semibold">
-          <Sparkles className="size-5 text-violet-500" />
-          Included usage
-        </h2>
+      <section>
+        <h2 className="mb-2 text-sm font-semibold">Monthly usage</h2>
         <p className="mb-6 text-xs leading-5 text-muted-foreground">
-          AI and post allowances reset {usageReset(usage.cycle_end)} (UTC),
-          including on annual plans. Unused credits don’t roll over.
+          {usage.scheduled_posts.limit === null
+            ? "AI credits reset "
+            : "AI and post allowances reset "}
+          {usageReset(usage.cycle_end)} (UTC). Unused credits don’t roll over.
         </p>
-        <div className="space-y-7">
-          <UsageMeter
+        <div className="grid gap-3 sm:grid-cols-3">
+          <UsageCircle
             title="AI credits"
             value={usage.ai_credits}
             note="One credit per successful request"
           />
-          <UsageMeter
+          <UsageCircle
             title="Posts this month"
             value={usage.scheduled_posts}
-            note="One post across all selected channels"
+            note={
+              usage.scheduled_posts.limit === null
+                ? "Publish now or schedule across your connected channels"
+                : "One post across all selected channels"
+            }
           />
-          <UsageMeter
+          <UsageCircle
             title="Connected accounts"
             value={usage.connected_accounts}
             note="Connections needing reconnection keep their slot"
           />
         </div>
         <p className="mt-6 border-t border-border pt-4 text-xs leading-6 text-muted-foreground">
-          Failed AI requests don’t use your allowance. Platform API fees, such
-          as X’s API credits, are handled separately from AI credits.
+          Failed requests don’t use AI credits. Channel API limits still apply.
         </p>
       </section>
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-      >
-        Back to Home
-        <ArrowUpRight className="size-4" />
-      </Link>
+      {!embedded && (
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          Back to Home
+          <ArrowUpRight className="size-4" />
+        </Link>
+      )}
     </div>
   );
 }

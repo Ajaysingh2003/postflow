@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { SettingsProvider } from "@/modules/settings/SettingsProvider";
 
 import { ComposerSidecar } from "@/modules/content/component/ComposerSidecar";
 import {
@@ -120,7 +121,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <ComposerProvider>
-      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+      <SettingsProvider>
+        <DashboardLayoutInner>{children}</DashboardLayoutInner>
+      </SettingsProvider>
     </ComposerProvider>
   );
 }

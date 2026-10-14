@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { SettingsLink } from "@/modules/settings/SettingsProvider";
 import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -118,10 +118,10 @@ export function HomeAiUsageCard({ usage }: { usage: PlanUsage }) {
           variant="outline"
           className="secondary-btn dark:!bg-card dark:!bg-none dark:!text-foreground rounded-lg !text-xs"
         >
-          <Link href="/settings/billing">
+          <SettingsLink section="billing">
             {exhausted ? "View plans" : "Plan & usage"}
             <ArrowUpRight className="size-3.5" />
-          </Link>
+          </SettingsLink>
         </Button>
       </div>
     </section>

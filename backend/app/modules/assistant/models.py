@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -38,4 +38,51 @@ class AssistantRun(UUIDPrimaryKeyMixin, Base):
     )
 
 
-__all__ = ["AssistantRun", "VoiceProfile"]
+class AssistantConversation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "assistant_conversations"
+    __table_args__ = (
+        Index(
+            "ix_assistant_conversations_owner_updated",
+            "workspace_id",
+            "user_id",
+            "updated_at",
+            "id",
+        ),
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    platform: Mapped[str] = mapped_column(String(32))
+    connected_account_id: Mapped[str | None] = mapped_column(
+        ForeignKey("connected_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    context: Mapped[dict] = mapped_column(JSON, default=dict)
+    turn_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AssistantTurn(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "assistant_turns"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id", "request_id", name="uq_assistant_turns_conversation_request"
+        ),
+        UniqueConstraint(
+            "conversation_id", "sequence", name="uq_assistant_turns_conversation_sequence"
+        ),
+    )
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_conversations.id", ondelete="CASCADE"), index=True
+    )
+    request_id: Mapped[str] = mapped_column(String(36))
+    sequence: Mapped[int] = mapped_column(Integer)
+    prompt: Mapped[str] = mapped_column(Text)
+    original_text: Mapped[str] = mapped_column(Text, default="")
+    request_data: Mapped[dict] = mapped_column(JSON)
+    response_data: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+__all__ = ["AssistantConversation", "AssistantRun", "AssistantTurn", "VoiceProfile"]

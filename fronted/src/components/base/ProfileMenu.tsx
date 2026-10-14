@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import WorkspaceDialog from "./WorkspaceDialog";
 import { Input } from "../ui/input";
 import { InviteMemberBox } from "./InviteMembers";
+import { settingsUrl } from "@/modules/settings/model";
 
 export type Workspace = {
   id: string;
@@ -77,7 +78,9 @@ function ProfileMenuContent() {
 
   // Queries
   const { data: profile } = useSuspenseQuery(trpc.user.profile.queryOptions());
-  const { data: workspaces } = useSuspenseQuery(trpc.workspace.list.queryOptions());
+  const { data: workspaces } = useSuspenseQuery(
+    trpc.workspace.list.queryOptions(),
+  );
   const { data: currentWorkspace } = useSuspenseQuery(
     trpc.workspace.current.queryOptions(),
   );
@@ -99,6 +102,16 @@ function ProfileMenuContent() {
     }),
   );
 
+  const logout = useMutation(
+    trpc.user.logout.mutationOptions({
+      onSuccess: () => {
+        queryClient.clear();
+        router.replace("/login");
+        router.refresh();
+      },
+      onError: (err) => toast.error(err.message),
+    }),
+  );
   const createWorkspace = useMutation(
     trpc.workspace.create.mutationOptions({
       onSuccess: async () => {
@@ -190,14 +203,23 @@ function ProfileMenuContent() {
               <span className="truncate font-semibold text-[13px] leading-tight text-neutral-900">
                 {profileData?.email}
               </span>
-              <span className="text-[11px] text-neutral-400">Free Plan</span>
+              <span className="text-[11px] text-neutral-400">
+                {activeWorkspace?.name}
+              </span>
             </div>
           </div>
 
           {/* Quick Actions */}
           <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 text-xs">
             <DropdownMenuItem
-              onClick={() => router.push("/settings")}
+              onClick={() => {
+                setMenuOpen(false);
+                window.history.replaceState(
+                  null,
+                  "",
+                  settingsUrl(new URL(window.location.href), "profile"),
+                );
+              }}
               className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-neutral-50 py-1.5 text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 focus:bg-neutral-100 focus:outline-none"
             >
               <Settings className="size-3.5 text-neutral-500" />
@@ -256,15 +278,27 @@ function ProfileMenuContent() {
                           tabIndex={0}
                           onClick={(e) => {
                             e.stopPropagation();
-                            router.push(
-                              `/workspace/${workspace.slug}/settings`,
+                            setMenuOpen(false);
+                            window.history.replaceState(
+                              null,
+                              "",
+                              settingsUrl(
+                                new URL(window.location.href),
+                                "team",
+                              ),
                             );
                           }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.stopPropagation();
-                              router.push(
-                                `/workspace/${workspace.slug}/settings`,
+                              setMenuOpen(false);
+                              window.history.replaceState(
+                                null,
+                                "",
+                                settingsUrl(
+                                  new URL(window.location.href),
+                                  "team",
+                                ),
                               );
                             }
                           }}
@@ -298,7 +332,8 @@ function ProfileMenuContent() {
 
           {/* Logout Action */}
           <DropdownMenuItem
-            onClick={() => router.push("/api/auth/signout")}
+            disabled={logout.isPending}
+            onClick={() => logout.mutate()}
             className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12px] font-medium text-destructive hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive focus:outline-none"
           >
             <div className="flex size-6 shrink-0 items-center justify-center rounded-md border border-destructive/20 bg-destructive/5">

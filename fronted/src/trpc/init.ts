@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { cookies } from "next/headers";
 import axios from "axios";
 import { getApiBase } from "@/lib/http-error";
+import type { AuthUser } from "@/modules/user/types";
 
 export const createTRPCContext = async (opts?: { req?: Request }) => {
   let tokenFromHeader: string | undefined;
@@ -35,7 +36,13 @@ export const createTRPCContext = async (opts?: { req?: Request }) => {
 
 export type Context = Awaited<ReturnType<typeof createTRPCContext>>;
 
-const t = initTRPC.context<Context>().create({});
+const t = initTRPC.context<Context>().create({
+  errorFormatter({ shape, error }) {
+    const retryAfter = (error.cause as Error & { retryAfter?: number })
+      ?.retryAfter;
+    return { ...shape, data: { ...shape.data, retryAfter } };
+  },
+});
 
 // Base router and procedure helpers
 export const createTRPCRouter = t.router;
@@ -46,32 +53,41 @@ export const baseProcedure = t.procedure.use(async ({ next }) => {
 });
 
 interface CachedUserSession {
-  user: any;
+  user: AuthUser;
   timestamp: number;
 }
 
 // In-memory cache for validated user profiles to prevent hammering the backend
 // /v1/auth/me on every concurrent procedure or rapid navigation.
 const userSessionCache = new Map<string, CachedUserSession>();
-const userSessionInFlight = new Map<string, Promise<any>>();
+const userSessionInFlight = new Map<string, Promise<AuthUser | null>>();
+const userSessionRequestMarkers = new Map<string, symbol>();
 const USER_CACHE_TTL_MS = 60 * 1000; // 60 seconds
 
 export function invalidateUserSession(token?: string) {
   if (token) {
     userSessionCache.delete(token);
     userSessionInFlight.delete(token);
+    userSessionRequestMarkers.delete(token);
   } else {
     userSessionCache.clear();
     userSessionInFlight.clear();
+    userSessionRequestMarkers.clear();
   }
 }
 
-async function fetchUserWithCache(access_token: string, workspace_id?: string) {
+async function fetchUserWithCache(
+  access_token: string,
+  workspace_id?: string,
+): Promise<AuthUser | null> {
   const cached = userSessionCache.get(access_token);
   const now = Date.now();
 
   // Return fresh cached session if still valid
-  if (cached && now - cached.timestamp < USER_CACHE_TTL_MS) {
+  if (
+    cached?.user.email_verified &&
+    now - cached.timestamp < USER_CACHE_TTL_MS
+  ) {
     return cached.user;
   }
 
@@ -81,7 +97,9 @@ async function fetchUserWithCache(access_token: string, workspace_id?: string) {
     return pending;
   }
 
-  const promise = (async () => {
+  const marker = Symbol();
+  userSessionRequestMarkers.set(access_token, marker);
+  const promise: Promise<AuthUser | null> = (async () => {
     try {
       const headers: Record<string, string> = {
         Authorization: `Bearer ${access_token}`,
@@ -100,10 +118,13 @@ async function fetchUserWithCache(access_token: string, workspace_id?: string) {
         display_name: res.data.name,
       };
 
-      userSessionCache.set(access_token, {
-        user,
-        timestamp: Date.now(),
-      });
+      if (userSessionRequestMarkers.get(access_token) === marker) {
+        if (userSessionCache.size >= 1000) {
+          const oldest = userSessionCache.keys().next().value;
+          if (oldest) userSessionCache.delete(oldest);
+        }
+        userSessionCache.set(access_token, { user, timestamp: Date.now() });
+      }
 
       return user;
     } catch (err: unknown) {
@@ -117,7 +138,7 @@ async function fetchUserWithCache(access_token: string, workspace_id?: string) {
 
         // For transient errors (429 rate limit, 502/503/504 gateway, network error, timeout):
         // If we have a previously cached user session, keep using it!
-        if (cached?.user) {
+        if (cached?.user && now - cached.timestamp < 300_000) {
           return cached.user;
         }
 
@@ -131,13 +152,19 @@ async function fetchUserWithCache(access_token: string, workspace_id?: string) {
       }
 
       // If network failed but we have a cached user, serve fallback
-      if (cached?.user) {
+      if (cached?.user && now - cached.timestamp < 300_000) {
         return cached.user;
       }
 
-      return null;
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Could not check your session. Please try again.",
+      });
     } finally {
-      userSessionInFlight.delete(access_token);
+      if (userSessionRequestMarkers.get(access_token) === marker) {
+        userSessionInFlight.delete(access_token);
+        userSessionRequestMarkers.delete(access_token);
+      }
     }
   })();
 
@@ -146,8 +173,8 @@ async function fetchUserWithCache(access_token: string, workspace_id?: string) {
 }
 
 export const getUserProcedure = baseProcedure.use(async ({ ctx, next }) => {
-  let access_token = (ctx as any)?.tokenFromHeader as string | undefined;
-  let workspace_id = (ctx as any)?.workspaceFromHeader as string | undefined;
+  let access_token = ctx.tokenFromHeader;
+  let workspace_id = ctx.workspaceFromHeader;
 
   try {
     const cookieStore = await cookies();
@@ -181,24 +208,30 @@ export const getUserProcedure = baseProcedure.use(async ({ ctx, next }) => {
 });
 
 export const authedProcedure = getUserProcedure.use(async ({ ctx, next }) => {
-  if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
+  if (!ctx.user || !ctx.token) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Authentication required",
+    });
   }
 
   return next({
     ctx: {
       ...ctx,
       user: ctx.user,
-      token: (ctx as any).token as string,
-      workspace_id: (ctx as any).workspace_id as string | undefined,
+      token: ctx.token,
+      workspace_id: ctx.workspace_id,
     },
   });
 });
 
 export const protectedProcedure = (requiredPermissions: string[]) =>
   getUserProcedure.use(async ({ ctx, next }) => {
-    const userRole = (ctx.user as Record<string, any> | null)?.role;
-    if (!ctx.user || (userRole && !requiredPermissions.includes(String(userRole)))) {
+    const userRole = (ctx.user as (AuthUser & { role?: string }) | null)?.role;
+    if (
+      !ctx.user ||
+      (userRole && !requiredPermissions.includes(String(userRole)))
+    ) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
     }
 

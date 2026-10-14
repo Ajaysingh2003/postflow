@@ -35,14 +35,17 @@ export function SocialAuthChoices({
           {error}
         </p>
       )}
+
      <div className="grid grid-cols-2 gap-8 max-w-full ">
        <GoogleAuthButton clientId={googleClientId} loading={loading} />
       {xEnabled && !loading ? (
+        
         <Button asChild className="secondary-btn h-10 w-full rounded-md">
           <a href={xLoginStartPath(next, register)}>
             <SiX className="size-4" /> 
           </a>
         </Button>
+
       ) : (
         <Button
           type="button"

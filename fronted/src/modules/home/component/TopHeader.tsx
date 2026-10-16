@@ -263,17 +263,18 @@ export default function TopHeader() {
         />
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Main hero                                                          */}
-      {/* ------------------------------------------------------------------ */}
-
       <div className="mx-auto w-full">
         <div className="pt-16 sm:pt-20 lg:pt-[118px]">
           <div className="max-w-[930px]">
-            {/* ------------------------------------------------------------ */}
-            {/* Heading                                                      */}
-            {/* ------------------------------------------------------------ */}
+           
 
+          <FadeBlur
+              delay={0.68}
+              duration={1}
+              y={18}
+              blur={10}
+              reducedMotion={reducedMotion}
+            >
             <h1
               className="
                 max-w-[940px]
@@ -358,12 +359,8 @@ export default function TopHeader() {
                 reducedMotion={reducedMotion}
               />
             </h1>
-
-            {/* ------------------------------------------------------------ */}
-            {/* Description                                                  */}
-            {/* ------------------------------------------------------------ */}
-
-            <FadeBlur
+          </FadeBlur>
+          <FadeBlur
               delay={0.68}
               duration={1}
               y={18}
@@ -386,13 +383,9 @@ export default function TopHeader() {
                 Create, schedule, and grow across LinkedIn, X,
                 and Threads — all from one intelligent workspace.
               </p>
-            </FadeBlur>
+          </FadeBlur>
 
-            {/* ------------------------------------------------------------ */}
-            {/* Call to action                                               */}
-            {/* ------------------------------------------------------------ */}
-
-            <FadeBlur
+          <FadeBlur
               delay={0.85}
               duration={0.85}
               y={18}
@@ -403,13 +396,9 @@ export default function TopHeader() {
               <CtaSection />
 
               <CompanyProof />
-            </FadeBlur>
+          </FadeBlur>
 
-            {/* ------------------------------------------------------------ */}
-            {/* Proof items                                                  */}
-            {/* ------------------------------------------------------------ */}
-
-            <FadeBlur
+          <FadeBlur
               delay={1.05}
               duration={0.85}
               y={12}
@@ -459,6 +448,7 @@ export default function TopHeader() {
                 </div>
               </div>
             </FadeBlur>
+
           </div>
 
           {/* ---------------------------------------------------------------- */}
@@ -554,7 +544,7 @@ export default function TopHeader() {
         {/* Product illustration                                              */}
         {/* ---------------------------------------------------------------- */}
 
-        <VideoInfraIllustration />
+       
       </div>
 
       {/* Bottom spacing */}

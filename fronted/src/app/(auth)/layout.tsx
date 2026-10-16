@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 };
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="grid bg-primary">
+    <div className="grid bg-[#faf9f5z]">
       <div className="flex w-full items-center justify-center overflow-hidden">
         <div className="w-full rounded-xl border border-border shadow-sm">
           <CardWrapper>{children}</CardWrapper>

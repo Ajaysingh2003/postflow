@@ -26,6 +26,7 @@ import {
   WandSparkles,
   type LucideIcon,
 } from "lucide-react";
+import { PlatformBadge } from "./PlatformBadge";
 
 const ACCENT = "#3fda8a";
 const STEP_DURATION = 8;
@@ -94,25 +95,6 @@ function GreenBadge({ children }: { children: React.ReactNode }) {
   );
 }
 
-function PlatformBadge({
-  platform,
-}: {
-  platform: "X" | "LinkedIn" | "Threads";
-}) {
-  return (
-    <div
-      className={`flex size-8 shrink-0 items-center justify-center rounded-lg font-heading text-xs font-bold text-white ${
-        platform === "LinkedIn" ? "bg-[#0a66c2]" : "bg-[#171717]"
-      }`}
-    >
-      {platform === "LinkedIn"
-        ? "in"
-        : platform === "Threads"
-          ? "@"
-          : "𝕏"}
-    </div>
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /*                           PREVIEW 01 — VOICE                               */
@@ -383,7 +365,7 @@ function EditorPreview() {
       <div className="mt-5 overflow-hidden rounded-xl border border-neutral-200 bg-white">
         <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
           <div className="flex items-center gap-2">
-            <PlatformBadge platform="X" />
+            <PlatformBadge platform="X" size="lg" />
 
             <span className="font-heading text-xs font-semibold text-neutral-800">
               New post
@@ -561,7 +543,7 @@ function PublishPreview() {
                     : "border-neutral-100 bg-white hover:bg-neutral-50"
                 }`}
               >
-                <PlatformBadge platform={platform} />
+                <PlatformBadge platform={platform} size="lg" />
 
                 <span className="flex-1 font-heading text-xs font-semibold text-neutral-800">
                   {platform}

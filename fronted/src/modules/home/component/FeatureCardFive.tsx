@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 
 import { BentoCard, BentoHeader, CardBottomFade } from "./FeatureSection";
+import { PlatformBadge } from "./PlatformBadge";
 
 const BRAND = "#ff8e4d";
 const ease = [0.16, 1, 0.3, 1] as const;
@@ -38,40 +39,6 @@ const ease = [0.16, 1, 0.3, 1] as const;
 
 type Platform = "linkedin" | "x" | "threads";
 
-const PLATFORM_ASSETS: Record<Platform, { src: string; alt: string }> = {
-  linkedin: { src: "/channels/linkedin.svg", alt: "LinkedIn" },
-  x: { src: "/channels/x.jpeg", alt: "X" },
-  threads: { src: "/channels/threads.svg", alt: "Threads" },
-};
-
-function PlatformBadge({
-  platform,
-  size = "sm",
-}: {
-  platform: Platform;
-  size?: "sm" | "md";
-}) {
-  const isMd = size === "md";
-  const asset = PLATFORM_ASSETS[platform];
-
-  return (
-    <span
-      className={`relative flex  shrink-0 items-center justify-center overflow-hidden border border-black/5 shadow-2xs ${
-        isMd ? "size-6  rounded-lg" : "size-4.5 rounded-md"
-      } ${platform === "linkedin" ? "" : "bg-black"}`}
-    >
-      <Image
-        src={asset.src}
-        alt={asset.alt}
-        // width={100}
-        // height={100}
-        width={isMd ? 24 : 18}
-        height={isMd ? 24 : 18}
-        className="size-full object-cover rounded-lg  z-10"
-      />
-    </span>
-  );
-}
 
 function useSteps(delays: number[], run: boolean, rest: number) {
   const [step, setStep] = useState(rest);

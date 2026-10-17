@@ -17,6 +17,7 @@ function ScheduleView() {
       <MultiChannelScheduleShowcase/>
       <FinalCta/> 
     </div>
+    
   );
 }
 

@@ -39,7 +39,7 @@ export default function AiWriterFeature() {
   const [activeVoice, setActiveVoice] = useState<"founder" | "concise" | "technical">("founder");
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+    <section className="mx-auto w-full max-w-7xl  py-16   lg:py-24">
       {/* Exact Requested Header */}
       <div className="max-w-2xl">
         <div className="inline-flex items-center gap-2 rounded-full border border-[#3fda8a]/40 bg-[#3fda8a]/10 px-3 py-1">

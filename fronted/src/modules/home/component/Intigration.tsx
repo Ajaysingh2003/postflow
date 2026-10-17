@@ -234,7 +234,7 @@ export default function Intigration({
   showTestimonial = true,
 }: IntigrationProps) {
   return (
-    <section className={cn("w-full py-6 sm:py-8 relative overflow-visible", className)}>
+    <section className={cn("w-full py-6 sm:py-8 md:py-12 relative overflow-visible", className)}>
       {/* Heading & Subheading */}
       <div className="relative flex flex-col items-center justify-center text-center gap-2 sm:gap-3 max-w-2xl mx-auto px-4">
         <h2 className="font-heading text-3xl sm:text-4xl lg:text-[42px] font-semibold tracking-tight text-neutral-900 leading-tight">

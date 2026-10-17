@@ -20,10 +20,6 @@ const proofItems = [
   "Content analytics",
 ];
 
-/* -------------------------------------------------------------------------- */
-/* Blur Word                                                                  */
-/* -------------------------------------------------------------------------- */
-
 interface BlurWordProps {
   children: React.ReactNode;
   delay?: number;
@@ -67,10 +63,6 @@ function BlurWord({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Blur Text                                                                  */
-/* -------------------------------------------------------------------------- */
-
 interface BlurTextProps {
   text: string;
   delay?: number;
@@ -108,10 +100,6 @@ function BlurText({
     </span>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/* Fade Blur                                                                  */
-/* -------------------------------------------------------------------------- */
 
 interface FadeBlurProps {
   children: React.ReactNode;
@@ -160,11 +148,7 @@ function FadeBlur({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Top Header                                                                 */
-/* -------------------------------------------------------------------------- */
-
-export default function TopHeader() {
+export default function TopHeader({ header ,description }: { header: React.ReactNode ,description:string}) {
   const reducedMotion = useReducedMotion() === true;
 
   return (
@@ -266,101 +250,16 @@ export default function TopHeader() {
       <div className="mx-auto w-full">
         <div className="pt-16 sm:pt-20 lg:pt-[118px]">
           <div className="max-w-[930px]">
-           
-
-          <FadeBlur
+            <FadeBlur
               delay={0.68}
               duration={1}
               y={18}
               blur={10}
               reducedMotion={reducedMotion}
             >
-            <h1
-              className="
-                max-w-[940px]
-                font-heading
-                text-[36px]
-                font-medium
-                leading-[1.04]
-                tracking-[-0.052em]
-                text-[#11120e]
-                sm:text-[50px]
-                md:text-[58px]
-                lg:text-[54px]
-              "
-            >
-              {/* First line */}
-
-              <BlurWord
-                delay={0.05}
-                duration={0.85}
-                reducedMotion={reducedMotion}
-                className="mr-3 sm:mr-4"
-              >
-                The
-              </BlurWord>
-
-              {/* AI-powered highlighted text */}
-
-              <span className="relative isolate inline-block whitespace-nowrap">
-                <BlurWord
-                  delay={0.13}
-                  duration={0.9}
-                  reducedMotion={reducedMotion}
-                  className="relative z-10"
-                >
-                  AI-powered
-                </BlurWord>
-
-                {/* Animated highlight */}
-
-                <motion.span
-                  aria-hidden="true"
-                  initial={
-                    reducedMotion
-                      ? false
-                      : {
-                          scaleX: 0,
-                          opacity: 0,
-                        }
-                  }
-                  animate={{
-                    scaleX: 1,
-                    opacity: 1,
-                  }}
-                  transition={{
-                    duration: reducedMotion ? 0 : 0.8,
-                    delay: reducedMotion ? 0 : 0.42,
-                    ease: EASE,
-                  }}
-                  className="
-                    absolute
-                    -inset-x-2
-                    bottom-[2px]
-                    top-[4px]
-                    -z-10
-                    origin-left
-                    rounded-[5px]
-                    bg-[#7fedfe5e]
-                    sm:-inset-x-3
-                  "
-                />
-              </span>
-
-              <br />
-
-              {/* Second line */}
-
-              <BlurText
-                text="engine for content & growth."
-                delay={0.2}
-                stagger={0.075}
-                duration={0.9}
-                reducedMotion={reducedMotion}
-              />
-            </h1>
-          </FadeBlur>
-          <FadeBlur
+              {header}
+            </FadeBlur>
+            <FadeBlur
               delay={0.68}
               duration={1}
               y={18}
@@ -379,13 +278,11 @@ export default function TopHeader() {
                   sm:text-[18px]
                 "
               >
-                From your first idea to your next viral post.
-                Create, schedule, and grow across LinkedIn, X,
-                and Threads — all from one intelligent workspace.
+                {description}
               </p>
-          </FadeBlur>
+            </FadeBlur>
 
-          <FadeBlur
+            <FadeBlur
               delay={0.85}
               duration={0.85}
               y={18}
@@ -396,9 +293,9 @@ export default function TopHeader() {
               <CtaSection />
 
               <CompanyProof />
-          </FadeBlur>
+            </FadeBlur>
 
-          <FadeBlur
+            <FadeBlur
               delay={1.05}
               duration={0.85}
               y={12}
@@ -448,7 +345,6 @@ export default function TopHeader() {
                 </div>
               </div>
             </FadeBlur>
-
           </div>
 
           {/* ---------------------------------------------------------------- */}
@@ -499,10 +395,7 @@ export default function TopHeader() {
 
               <div className="flex items-center gap-1">
                 {Array.from({ length: 5 }).map((_, index) => (
-                  <span
-                    key={index}
-                    className="text-[#8a8c83]"
-                  >
+                  <span key={index} className="text-[#8a8c83]">
                     ★
                   </span>
                 ))}
@@ -510,15 +403,13 @@ export default function TopHeader() {
 
               {/* Separator */}
 
-              <span className="hidden text-black/15 sm:inline">
-                •
-              </span>
+              <span className="hidden text-black/15 sm:inline">•</span>
 
               {/* Description */}
 
               <span>
-                Everything you need to create, publish,
-                and grow your personal brand.
+                Everything you need to create, publish, and grow your personal
+                brand.
               </span>
             </div>
 
@@ -543,13 +434,110 @@ export default function TopHeader() {
         {/* ---------------------------------------------------------------- */}
         {/* Product illustration                                              */}
         {/* ---------------------------------------------------------------- */}
-
-       
       </div>
 
       {/* Bottom spacing */}
 
       {/* <div className="h-14 sm:h-20 lg:h-28" /> */}
     </section>
+  );
+}
+
+export function HeroHeading({
+  noColorText,
+  firstLine,
+  lastLine,
+}: {
+  noColorText?:string;
+  firstLine: string;
+  lastLine: string;
+}) {
+  const reducedMotion = useReducedMotion() === true;
+
+  return (
+    <h1
+      className="
+                max-w-[940px]
+                font-heading
+                text-[36px]
+                font-medium
+                leading-[1.04]
+                tracking-[-0.052em]
+                text-[#11120e]
+                sm:text-[50px]
+                md:text-[58px]
+                lg:text-[54px]
+              "
+    >
+      {/* First line */}
+
+      <BlurWord
+        delay={0.05}
+        duration={0.85}
+        reducedMotion={reducedMotion}
+        className="mr-3 sm:mr-4"
+      >
+        {noColorText}
+      </BlurWord>
+
+      {/* AI-powered highlighted text */}
+
+      <span className="relative isolate inline-block whitespace-nowrap">
+        <BlurWord
+          delay={0.13}
+          duration={0.9}
+          reducedMotion={reducedMotion}
+          className="relative z-10"
+        >
+          {firstLine}
+        </BlurWord>
+
+        {/* Animated highlight */}
+
+        <motion.span
+          aria-hidden="true"
+          initial={
+            reducedMotion
+              ? false
+              : {
+                  scaleX: 0,
+                  opacity: 0,
+                }
+          }
+          animate={{
+            scaleX: 1,
+            opacity: 1,
+          }}
+          transition={{
+            duration: reducedMotion ? 0 : 0.8,
+            delay: reducedMotion ? 0 : 0.42,
+            ease: EASE,
+          }}
+          className="
+                    absolute
+                    -inset-x-2
+                    bottom-[2px]
+                    top-[4px]
+                    -z-10
+                    origin-left
+                    rounded-[5px]
+                    bg-[#7fedfe5e]
+                    sm:-inset-x-3
+                  "
+        />
+      </span>
+
+      <br />
+
+      {/* Second line */}
+
+      <BlurText
+        text={lastLine}
+        delay={0.2}
+        stagger={0.075}
+        duration={0.9}
+        reducedMotion={reducedMotion}
+      />
+    </h1>
   );
 }

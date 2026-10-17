@@ -14,7 +14,7 @@ export default function FinalCta() {
   return (
     <section
       id="contact"
-      className="relative w-full overflow-hidden py-6 sm:py-14 lg:py-20"
+      className="relative w-full overflow-hidden py-6 sm:py-10 lg:py-16"
     >
       <div className="mx-auto w-full">
         {/* ================================================================ */}

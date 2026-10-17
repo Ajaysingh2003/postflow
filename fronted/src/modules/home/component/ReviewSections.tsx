@@ -47,7 +47,7 @@ const REVIEWS = [
 
 export default function ReviewSection() {
   return (
-    <section className="mx-auto w-full max-w-6xl py-8">
+    <section className="mx-auto w-full max-w-6xl py-4  sm:py-6  lg:py-8">
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         {REVIEWS.map(({ id, photo, review, name, role }) => (
           <ReviewCard

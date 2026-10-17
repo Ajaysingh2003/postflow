@@ -30,14 +30,18 @@ const items: FeatureItem[] = [
   { id: "analytics", label: "Analytics", image: "analytics.png", icon: BarChart3 },
 ];
 
-export default function VideoInfraIllustration() {
-  const [active, setActive] = useState<FeatureItem>(items[0]);
+export default function VideoInfraIllustration({
+  currentActive = 0,
+}: {
+  currentActive?: number;
+}) {
+  const [active, setActive] = useState<FeatureItem>(items[currentActive] ?? items[0]);
 
   return (
-    <section className="relative mx-auto w-full max-w-7xl px-0 zpy-8 sm:px-2">
+    <section className="relative mx-auto w-full max-w-7xl px-0 py-4 sm:px-2 sm:py-8">
       {/* App window */}
-      <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_30px_80px_-30px_rgba(17,18,14,0.25)] sm:rounded-3xl">
-        <div className="relative aspect-[18/10] w-full">
+      <div className="relative overflow-hidden rounded-xl border border-black/[0.08] bg-white shadow-[0_30px_80px_-30px_rgba(17,18,14,0.22)] sm:rounded-3xl">
+        <div className="relative aspect-[16/10] sm:aspect-[18/10] w-full">
           <Image
             key={active.image}
             src={`/dashboard/${active.image}`}
@@ -45,20 +49,20 @@ export default function VideoInfraIllustration() {
             fill
             priority
             sizes="(max-width: 1280px) 100vw, 1280px"
-            className="object-cover object-top"
+            className="object-cover object-left"
             unoptimized
           />
         </div>
 
         {/* Bottom fade stays inside the window */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#f9f8f4]/80 to-transparent sm:h-24" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#f9f8f4]/80 to-transparent sm:h-24" />
       </div>
 
-      {/* Tabs: fully below the image, no overlap */}
+      {/* Tabs: scrollable on mobile, spaced cleanly on desktop */}
       <div
         role="tablist"
         aria-label="Core features"
-        className="mt-5 flex items-center zgap-1 overflow-x-auto  [scrollbar-width:none] sm:gap-3 sm:px-4 [&::-webkit-scrollbar]:hidden"
+        className="mt-4 flex items-center gap-1.5 overflow-x-auto px-1 py-1 [scrollbar-width:none] sm:mt-5 sm:gap-2 sm:px-4 [&::-webkit-scrollbar]:hidden"
       >
         {items.map((item) => {
           const Icon = item.icon;
@@ -72,17 +76,17 @@ export default function VideoInfraIllustration() {
               aria-selected={isActive}
               onClick={() => setActive(item)}
               className={cn(
-                "group flex shrink-0 hover:bg-[#a6a6a622] items-center gap-2 rounded-lg px-1.5 py-1 font-heading text-[13px] font-medium transition-colors duration-150 sm:text-base",
+                "group flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 font-heading text-[13px] font-medium transition-all duration-150 sm:text-[15px]",
                 isActive
-                  ? "text-[#11120e]"
-                  : "text-[#85887e] hover:text-[#11120e]",
+                  ? "bg-black/[0.05] text-[#11120e]"
+                  : "text-[#85887e] hover:bg-black/[0.03] hover:text-[#11120e]",
               )}
             >
               <Icon
                 className={cn(
-                  "size-4 transition-colors sm:size-[14px]",
+                  "size-4 shrink-0 transition-colors",
                   isActive
-                    ? "text-green-500"
+                    ? "text-[#0f7a47]"
                     : "text-[#a3a69c] group-hover:text-[#6d7066]",
                 )}
                 strokeWidth={2}
@@ -94,10 +98,10 @@ export default function VideoInfraIllustration() {
         })}
       </div>
 
-      {/* Handwritten hint */}
-      <div className="mt-2 hidden items-start gap-2 pl-24 text-[#a3a69c] sm:flex sm:pl-32">
+      {/* Handwritten hint — now visible and scaled properly on mobile */}
+      <div className="mt-1.5 flex items-start gap-1.5 pl-8 text-[#a3a69c] sm:mt-2 sm:gap-2 sm:pl-36">
         <svg
-          className="mt-1 h-9 w-12 shrink-0"
+          className="mt-0.5 h-7 w-9 shrink-0 sm:mt-1 sm:h-9 sm:w-12"
           viewBox="0 0 48 40"
           fill="none"
           stroke="currentColor"
@@ -109,8 +113,8 @@ export default function VideoInfraIllustration() {
           <path d="M44 36C22 36 8 28 6 6" />
           <path d="M1 12L6 5L12 11" />
         </svg>
-        <span className={cn(hand.className, "pt-4 text-xl text-[#85887e]")}>
-          click to switch between our core features
+        <span className={cn(hand.className, "pt-2.5 text-lg leading-none text-[#85887e] sm:pt-4 sm:text-xl")}>
+          tap to switch between our core features
         </span>
       </div>
     </section>

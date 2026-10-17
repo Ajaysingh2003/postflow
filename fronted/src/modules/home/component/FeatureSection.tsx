@@ -45,7 +45,7 @@ export default function FeatureSection() {
   const active = "text-[#171914] font-semibold";
 
   return (
-    <section className="relative w-full overflow-hidden  py-12 zsm:px-8 sm:py-16 zlg:px-12 lg:py-20
+    <section className="relative w-full overflow-hidden  py-4  sm:py-6  lg:py-8
    
     ">
       <div className="relative mx-auto max-w-6xlz">

@@ -56,16 +56,16 @@ const ROUTES = {
   login: "/login",
   signup: "/login",
   platform: "/#platform",
-  composer: "/#feature-editor",
-  ai: "/#feature-ai",
+  composer: "/product/ai-writer",
+  ai: "/product/ai-writer",
   scheduling: "/product/schedule",
   repurposing: "/#feature-repurposing",
-  analytics: "/#feature-analytics",
-  collaboration: "/#feature-review",
-  channels: "/#feature-channels",
-  mcp: "/#feature-mcp",
-  integrations: "/#feature-channels",
-  pricing: "/#pricing",
+  analytics: "/product/analytics",
+
+  channels: "/product/social-intigration",
+  mcp: "/product/mcp",
+  integrations: "/product/social-intigration",
+  pricing: "/pricing",
   howItWorks: "/#how-it-works",
 } as const;
 
@@ -129,13 +129,7 @@ const products: NavEntry<FeatureKind>[] = [
     icon: BarChart3,
     kind: "analytics",
   },
-  {
-    title: "Review & Approvals",
-    description: "Collaborate on content without the chaos.",
-    href: ROUTES.collaboration,
-    icon: UsersRound,
-    kind: "collaboration",
-  },
+  
   {
     title: "Social Integrations",
     description: "Manage your channels in one workspace.",
@@ -883,7 +877,7 @@ function NavItemCard({
   const Icon = item.icon;
 
   return (
-    <NavigationMenuLink asChild>
+    <NavigationMenuLink >
       <Link
         href={item.href}
         onMouseEnter={onHover}
@@ -1231,7 +1225,7 @@ export default function Navbar() {
                 {/* Direct Navigation */}
 
                 <NavigationMenuItem>
-                  <NavigationMenuLink asChild>
+                  <NavigationMenuLink >
                     <Link
                       href={ROUTES.integrations}
                       onClick={closeDesktop}
@@ -1243,7 +1237,7 @@ export default function Navbar() {
                 </NavigationMenuItem>
 
                 <NavigationMenuItem>
-                  <NavigationMenuLink asChild>
+                  <NavigationMenuLink >
                     <Link
                       href={ROUTES.pricing}
                       onClick={closeDesktop}
@@ -1255,7 +1249,7 @@ export default function Navbar() {
                 </NavigationMenuItem>
 
                 <NavigationMenuItem>
-                  <NavigationMenuLink asChild>
+                  <NavigationMenuLink >
                     <Link
                       href={ROUTES.howItWorks}
                       onClick={closeDesktop}
@@ -1301,7 +1295,7 @@ export default function Navbar() {
 
         <div className="lg:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
+            <SheetTrigger >
               <button
                 type="button"
                 aria-label="Open navigation menu"

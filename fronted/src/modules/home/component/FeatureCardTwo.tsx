@@ -31,10 +31,10 @@ const TODAY = 0; // Mon 12
 const HOURS = ["9 AM", "10 AM", "11 AM", "12 PM"];
 
 const ROW = 56; // px per hour
-const GUTTER = 40; // px for the hour labels
-const NOW_MINUTES = 37; // the red line sits at 9:37
+const GUTTER = 40; 
+const NOW_MINUTES = 37;
 
-/** Posts the scheduler places, in order. `row` is hours after 9 AM. */
+
 const POSTS: {
   day: number;
   row: number;
@@ -68,9 +68,6 @@ function PlatformBadge({ platform }: { platform: Platform }) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Card                                                                       */
-/* -------------------------------------------------------------------------- */
 
 export function FeatureCardTwo() {
   return (
@@ -92,9 +89,6 @@ export function FeatureCardTwo() {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Week calendar (a miniature of the real Schedule page)                      */
-/* -------------------------------------------------------------------------- */
 
 function WeekCalendar() {
   const reduce = useReducedMotion();

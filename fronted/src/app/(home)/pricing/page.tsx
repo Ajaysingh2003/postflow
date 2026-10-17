@@ -1,10 +1,22 @@
-import PricingView from '@/modules/home/view/PricingView'
-import React from 'react'
+import React, { Suspense } from "react";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { getQueryClient, trpc } from "@/trpc/server";
+import PricingView from "@/modules/home/view/PricingView";
 
-function page() {
+async function PreloadedPricing() {
+  const queryClient = getQueryClient();
+  await queryClient.prefetchQuery(trpc.billing.getPlans.queryOptions());
   return (
-    <PricingView/>
-  )
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <PricingView />
+    </HydrationBoundary>
+  );
 }
 
-export default page
+export default function Page() {
+  return (
+    <Suspense>
+      <PreloadedPricing />
+    </Suspense>
+  );
+}

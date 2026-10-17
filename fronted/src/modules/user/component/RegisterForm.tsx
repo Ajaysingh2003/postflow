@@ -3,6 +3,7 @@
 import { reloadAuthPage } from "../authFlow";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,12 +15,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTRPCClient } from "@/trpc/client";
 
-import { registerSchema, nextAuthPath, verificationPath } from "../authFlow";
+import {
+  registerSchema,
+  nextAuthPath,
+  verificationPath,
+  authSwitchHref,
+} from "../authFlow";
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterForm() {
   const trpc = useTRPCClient();
+  const search = useSearchParams();
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -144,7 +151,7 @@ export default function RegisterForm() {
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Already have an account?{" "}
         <Link
-          href="/login"
+          href={authSwitchHref("/login", search?.toString() ?? "")}
           className="font-medium text-foreground underline-offset-4 hover:underline"
         >
           Sign in

@@ -137,6 +137,12 @@ export interface MetricSnapshotSummary {
 }
 
 export interface AnalyticsDashboard {
+  cache_hit?: boolean;
+  cache_expires_at?: string | null;
+  refresh_available_at?: string | null;
+  provider_reads?: number;
+  daily_provider_reads?: number;
+  daily_read_limit?: number;
   account_id: string | null;
   accounts: AccountAnalytics[];
   overview: WorkspaceOverview;

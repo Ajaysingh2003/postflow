@@ -127,6 +127,7 @@ def effective_plan(db: Session, workspace_id: str) -> str:
 def sync_entitlements(
     db: Session, workspace_id: str, plan_code: str, quantity: int | None = None
 ) -> None:
+    db.flush()
     plan = db.scalar(select(Plan).where(Plan.code == plan_code, Plan.active.is_(True)))
     values = plan_limits(plan_code, plan)
     db.execute(
@@ -134,14 +135,24 @@ def sync_entitlements(
             EntitlementGrant.workspace_id == workspace_id, EntitlementGrant.source == "plan"
         )
     )
+    overrides = set(
+        db.scalars(
+            select(EntitlementGrant.capability).where(
+                EntitlementGrant.workspace_id == workspace_id, EntitlementGrant.source != "plan"
+            )
+        )
+    )
     for capability, limit in values.items():
-        if capability == "seats" and quantity is not None:
-            limit = max(1, min(quantity, limit or quantity))
+        # A product quantity is not the number of included team seats.
+        if capability in overrides:
+            continue
         db.add(
             EntitlementGrant(
                 workspace_id=workspace_id, capability=capability, limit_value=limit, source="plan"
             )
         )
+
+    db.flush()
 
 
 def entitlement_limit(db: Session, workspace_id: str, capability: str) -> int | None:
@@ -161,8 +172,11 @@ def entitlement_limit(db: Session, workspace_id: str, capability: str) -> int | 
         )
         .order_by((EntitlementGrant.source != "plan").desc(), EntitlementGrant.created_at.desc())
     )
-    if grant and (grant.source != "plan" or code != "free"):
+    if grant and grant.source != "plan":
         return grant.limit_value
+    if grant and code != "free" and capability != "seats":
+        return grant.limit_value
+    # Recompute included seats so old quantity=1 grants do not strand paid teams.
     plan = db.scalar(select(Plan).where(Plan.code == code, Plan.active.is_(True)))
     return plan_limits(code, plan).get(capability)
 

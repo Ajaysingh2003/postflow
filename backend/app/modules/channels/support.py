@@ -13,6 +13,9 @@ class AdapterHTTP(httpx.AsyncClient):
         super().__init__(timeout=30, **kwargs)
 
     async def send(self, request, **kwargs):
+        from app.modules.analytics.cache import count_read
+
+        await count_read(self.platform)
         allowed, delay = await shared_rate_limiter.acquire(self.platform, self.account_id)
         if not allowed:
             raise HTTPException(

@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { authSwitchHref } from "../authFlow";
 import RegisterForm from "../component/RegisterForm";
 import SocialAuthButtons from "../component/SocialAuthButtons";
 import type { AuthProviderConfig } from "../types";
@@ -10,6 +12,7 @@ export default function RegisterView({
 }: {
   authConfig?: AuthProviderConfig | null;
 }) {
+  const search = useSearchParams();
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] w-full items-center justify-center p-4">
       <div className="card card-shadow relative z-10 w-full max-w-sm rounded-lg bg-background p-6">
@@ -19,7 +22,7 @@ export default function RegisterView({
         <p className="mt-2 text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link
-            href="/login"
+            href={authSwitchHref("/login", search?.toString() ?? "")}
             className="font-medium text-foreground hover:underline"
           >
             Sign in

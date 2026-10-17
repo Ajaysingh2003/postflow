@@ -124,6 +124,7 @@ def run(kind: str) -> None:
     logger.info("draftva %s started", kind)
     last_subreddit_refresh = 0.0
     last_token_refresh = 0.0
+    last_media_cleanup = 0.0
 
     while running:
         try:
@@ -133,6 +134,21 @@ def run(kind: str) -> None:
 
             now_mono = time.monotonic()
             if kind == "scheduler":
+                if now_mono - last_media_cleanup >= 3600:
+                    from app.modules.media.limits import (
+                        cleanup_abandoned_uploads,
+                        cleanup_quarantine_objects,
+                    )
+
+                    with SessionLocal() as db:
+                        cleaned = cleanup_abandoned_uploads(db)
+                        try:
+                            cleaned += cleanup_quarantine_objects(db)
+                        except Exception:  # noqa: BLE001 - isolate maintenance failures and retry later
+                            logger.warning("Quarantine object cleanup will retry next cycle")
+                    last_media_cleanup = now_mono
+                    if cleaned:
+                        logger.info("cleaned %s abandoned uploads", cleaned)
                 if now_mono - last_token_refresh >= 300:
                     with SessionLocal() as db:
                         recover_stale_publications(db)

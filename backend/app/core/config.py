@@ -96,6 +96,16 @@ class Settings(BaseSettings):
     llm_provider_api_key: str | None = None
     llm_model: str = ""
 
+    # Shared, temporary analytics. Counts are HTTP reads, not a provider dollar estimate.
+    analytics_cache_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    analytics_refresh_cooldown_seconds: int = Field(default=60, ge=10, le=600)
+    analytics_max_pages_per_account: int = Field(default=5, ge=1, le=32)
+    analytics_max_posts_per_account: int = Field(default=500, ge=10, le=3200)
+    analytics_max_reads_per_refresh: int = Field(default=100, ge=1, le=1000)
+    analytics_daily_read_limit: int = Field(default=1000, ge=1)
+    analytics_refresh_timeout_seconds: int = Field(default=50, ge=5, le=120)
+    analytics_cache_max_bytes: int = Field(default=5000000, ge=10000)
+
     # Media & Storage
     r2_account_id: str | None = None
     r2_access_key_id: str | None = None
@@ -105,7 +115,10 @@ class Settings(BaseSettings):
     r2_public_url: str | None = None
     media_max_bytes: int = 20 * 1024 * 1024
     video_max_bytes: int = 100 * 1024 * 1024
-    media_url_ttl_seconds: int = 900
+    media_url_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    media_workspace_quota_bytes: int = Field(default=1073741824, ge=1048576)
+    media_pending_ttl_hours: int = Field(default=24, ge=1, le=168)
+    media_cleanup_batch_size: int = Field(default=100, ge=1, le=1000)
     clamav_host: str | None = "clamav"
     clamav_port: int = 3310
     rate_limit_enabled: bool = True

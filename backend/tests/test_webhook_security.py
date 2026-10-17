@@ -102,7 +102,7 @@ def test_subscription_upgrade_hold_out_of_order_failure_and_refund(client, auth)
             .filter_by(workspace_id=me["workspace_id"], capability="seats")
             .one()
         )
-        assert seats.limit_value == 3
+        assert seats.limit_value == 5  # Pro includes five seats regardless of product quantity
 
     assert (
         _post_signed(

@@ -1,5 +1,7 @@
 # Live analytics
 
+**Current update:** Analytics now uses bounded, short-lived shared Redis datasets; SQL metric snapshots remain unused. Manual refreshes have a cooldown and daily read budgets. This supersedes the earlier no-cache behavior below. See [cost controls](team-invitations-and-cost-controls.md).
+
 ## All-channel account feeds (2026-10-08)
 
 The account-feed contract is covered for X, LinkedIn, Reddit, Bluesky, Mastodon, Facebook, Instagram and Threads: native posts without a draftva record remain visible and included in full-selection totals. Local records only add studio links, and the Posts library remains local-only. Adapter tests exercise official pagination independently of this shared dashboard contract.

@@ -154,6 +154,12 @@ class InclusiveImpressions(BaseModel):
 
 
 class AnalyticsDashboardResponse(BaseModel):
+    cache_hit: bool = False
+    cache_expires_at: datetime | None = None
+    refresh_available_at: datetime | None = None
+    provider_reads: int = 0
+    daily_provider_reads: int = 0
+    daily_read_limit: int = 0
     account_id: str | None = None
     accounts: list[AccountAnalyticsResponse] = Field(default_factory=list)
     overview: WorkspaceOverviewResponse

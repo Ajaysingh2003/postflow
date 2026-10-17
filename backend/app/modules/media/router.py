@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -10,9 +11,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user, get_current_workspace, require_content_access
+from app.core.security import as_utc, utcnow
 from app.db.session import get_db
+from app.modules.billing.usage import lock_workspace
 from app.modules.identity.models import User, Workspace
 from app.modules.media import service
+from app.modules.media.limits import reserve_storage, storage_usage
 from app.modules.media.models import MediaAsset
 from app.modules.media.schemas import DownloadResponse, MediaResponse, UploadRequest, UploadResponse
 
@@ -30,8 +34,24 @@ def _asset(db: Session, workspace_id: str, asset_id: str) -> MediaAsset:
 
 
 @router.get("", response_model=list[MediaResponse])
-def list_assets(workspace: Workspace = Depends(get_current_workspace), db: Session = Depends(get_db)):
-    return list(db.scalars(select(MediaAsset).where(MediaAsset.workspace_id == workspace.id).order_by(MediaAsset.created_at.desc()).limit(200)))
+def list_assets(
+    workspace: Workspace = Depends(get_current_workspace), db: Session = Depends(get_db)
+):
+    return list(
+        db.scalars(
+            select(MediaAsset)
+            .where(MediaAsset.workspace_id == workspace.id)
+            .order_by(MediaAsset.created_at.desc())
+            .limit(200)
+        )
+    )
+
+
+@router.get("/usage")
+def media_usage(
+    workspace: Workspace = Depends(get_current_workspace), db: Session = Depends(get_db)
+):
+    return storage_usage(db, workspace.id)
 
 
 @router.post("/attachments", response_model=MediaResponse, status_code=201)
@@ -60,8 +80,27 @@ def upload_attachment(
         service.validate_contents(data, content_type)
         width, height = service.dimensions(data, content_type)
         s3 = service.client(settings)
-        service.scan_clamav(settings, data)
+        reserve_storage(db, workspace.id, len(data))
         key = f"media/{workspace.id}/{uuid4()}/{filename}"
+        asset = MediaAsset(
+            workspace_id=workspace.id,
+            uploaded_by_user_id=user.id,
+            object_key=key,
+            original_filename=filename,
+            content_type=content_type,
+            declared_size=len(data),
+            status="uploading",
+        )
+        db.add(asset)
+        db.commit()
+        try:
+            service.scan_clamav(settings, data)
+        except Exception:
+            asset.status = "scan_failed"
+            db.commit()
+            raise
+        lock_workspace(db, workspace.id)
+        asset = _asset(db, workspace.id, asset.id)
         try:
             stored = s3.put_object(
                 Bucket=settings.r2_bucket_name,
@@ -86,19 +125,10 @@ def upload_attachment(
             ) from exc
         except Exception as exc:
             raise HTTPException(502, "Could not store this file. Please retry") from exc
-        asset = MediaAsset(
-            workspace_id=workspace.id,
-            uploaded_by_user_id=user.id,
-            object_key=key,
-            original_filename=filename,
-            content_type=content_type,
-            width=width,
-            height=height,
-            declared_size=len(data),
-            actual_size=len(data),
-            status="ready",
-            etag=str(stored.get("ETag", "")).strip('"'),
-        )
+        asset.width, asset.height = width, height
+        asset.actual_size = len(data)
+        asset.status = "ready"
+        asset.etag = str(stored.get("ETag", "")).strip('"')
         try:
             db.add(asset)
             db.commit()
@@ -125,6 +155,7 @@ def create_upload(
     filename = service.validate_upload(
         settings, payload.filename, payload.content_type, payload.size
     )
+    reserve_storage(db, workspace.id, payload.size)
     key = f"quarantine/{workspace.id}/{uuid4()}/{filename}"
     asset = MediaAsset(
         workspace_id=workspace.id,
@@ -139,7 +170,12 @@ def create_upload(
     db.refresh(asset)
     url = service.client(settings).generate_presigned_url(
         "put_object",
-        Params={"Bucket": settings.r2_bucket_name, "Key": key, "ContentType": payload.content_type},
+        Params={
+            "Bucket": settings.r2_bucket_name,
+            "Key": key,
+            "ContentType": payload.content_type,
+            "ContentLength": payload.size,
+        },
         ExpiresIn=settings.media_url_ttl_seconds,
     )
     return UploadResponse(
@@ -157,9 +193,13 @@ def complete_upload(
     db: Session = Depends(get_db),
 ) -> MediaAsset:
     settings = get_settings()
+    lock_workspace(db, workspace.id)
     asset = _asset(db, workspace.id, asset_id)
+    db.refresh(asset)
     if asset.status == "ready":
         return asset
+    if as_utc(asset.created_at) + timedelta(hours=settings.media_pending_ttl_hours) <= utcnow():
+        raise HTTPException(410, "This upload has expired. Start a new upload")
     s3 = service.client(settings)
     try:
         head = s3.head_object(Bucket=settings.r2_bucket_name, Key=asset.object_key)
@@ -258,6 +298,7 @@ def delete_asset(
     db: Session = Depends(get_db),
 ) -> None:
     settings = get_settings()
+    lock_workspace(db, workspace.id)
     asset = _asset(db, workspace.id, asset_id)
     try:
         service.client(settings).delete_object(Bucket=settings.r2_bucket_name, Key=asset.object_key)

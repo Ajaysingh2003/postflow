@@ -1,10 +1,11 @@
 import axios from "axios";
 import { z } from "zod";
 
-import { authedProcedure, createTRPCRouter } from "@/trpc/init";
+import { baseProcedure, authedProcedure, createTRPCRouter } from "@/trpc/init";
 import {
   getApiBase,
   getAuthHeaders,
+  getAuthClientHeaders,
   getWorkspacesApiUrl,
   handleBackendError,
   setActiveWorkspaceCookie,
@@ -71,9 +72,12 @@ export const workspaceRouter = createTRPCRouter({
    */
   current: authedProcedure.query(async (): Promise<Workspace> => {
     try {
-      const response = await axios.get<Workspace>(`${getWorkspacesApiUrl()}/current`, {
-        headers: await getAuthHeaders(),
-      });
+      const response = await axios.get<Workspace>(
+        `${getWorkspacesApiUrl()}/current`,
+        {
+          headers: await getAuthHeaders(),
+        },
+      );
       return response.data;
     } catch (error) {
       return handleBackendError(error, "Could not load current workspace");
@@ -84,7 +88,11 @@ export const workspaceRouter = createTRPCRouter({
    * Creates a new workspace and sets it as active.
    */
   create: authedProcedure
-    .input(z.object({ name: z.string().trim().min(1, "Workspace name is required").max(160) }))
+    .input(
+      z.object({
+        name: z.string().trim().min(1, "Workspace name is required").max(160),
+      }),
+    )
     .mutation(async ({ input }): Promise<Workspace> => {
       try {
         const response = await axios.post<Workspace>(
@@ -104,7 +112,9 @@ export const workspaceRouter = createTRPCRouter({
    * Switches the active workspace in cookies.
    */
   switch: authedProcedure
-    .input(z.object({ workspaceId: z.string().min(1, "Workspace ID is required") }))
+    .input(
+      z.object({ workspaceId: z.string().min(1, "Workspace ID is required") }),
+    )
     .mutation(async ({ input }) => {
       await setActiveWorkspaceCookie(input.workspaceId);
       return { success: true, workspaceId: input.workspaceId };
@@ -153,7 +163,7 @@ export const workspaceRouter = createTRPCRouter({
    */
   bulkInvite: authedProcedure
     .input(
-    z.object({
+      z.object({
         invitations: z
           .array(
             z.object({
@@ -180,8 +190,59 @@ export const workspaceRouter = createTRPCRouter({
   /**
    * Accepts an invitation to join a workspace.
    */
+  invitationPreview: baseProcedure
+    .input(z.object({ token: z.string().min(20).max(500) }))
+    .query(async ({ input }) => {
+      try {
+        return (
+          await axios.post<{
+            status: "pending" | "accepted";
+            workspace_name?: string;
+            role?: string;
+            email_hint?: string;
+            expires_at?: string;
+          }>(`${getWorkspacesApiUrl()}/invitations/preview`, input, {
+            timeout: 10000,
+            headers: await getAuthClientHeaders(),
+          })
+        ).data;
+      } catch (error) {
+        return handleBackendError(
+          error,
+          "Could not check this invitation. Please retry.",
+        );
+      }
+    }),
+  invitations: authedProcedure.query(async () => {
+    try {
+      return (
+        await axios.get<WorkspaceInvitation[]>(
+          `${getWorkspacesApiUrl()}/current/invitations`,
+          { headers: await getAuthHeaders() },
+        )
+      ).data;
+    } catch (error) {
+      return handleBackendError(error, "Could not load invitations");
+    }
+  }),
+  revokeInvitation: authedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input }) => {
+      try {
+        await axios.delete(
+          `${getWorkspacesApiUrl()}/current/invitations/${input.id}`,
+          { headers: await getAuthHeaders() },
+        );
+        return { success: true };
+      } catch (error) {
+        return handleBackendError(error, "Could not revoke this invitation");
+      }
+    }),
+
   acceptInvitation: authedProcedure
-    .input(z.object({ token: z.string().min(1, "Invitation token is required") }))
+    .input(
+      z.object({ token: z.string().min(1, "Invitation token is required") }),
+    )
     .mutation(async ({ input }): Promise<Workspace> => {
       try {
         const response = await axios.post<Workspace>(
@@ -193,7 +254,10 @@ export const workspaceRouter = createTRPCRouter({
         await setActiveWorkspaceCookie(response.data.id);
         return response.data;
       } catch (error) {
-        return handleBackendError(error, "Could not accept workspace invitation");
+        return handleBackendError(
+          error,
+          "Could not accept workspace invitation",
+        );
       }
     }),
 
@@ -280,7 +344,9 @@ export const workspaceRouter = createTRPCRouter({
     .input(z.object({ connectionId: z.string().optional() }).optional())
     .query(async ({ input }): Promise<LinkedInConnectionData | null> => {
       try {
-        const params = input?.connectionId ? `?connection_id=${encodeURIComponent(input.connectionId)}` : "";
+        const params = input?.connectionId
+          ? `?connection_id=${encodeURIComponent(input.connectionId)}`
+          : "";
         const response = await axios.get<LinkedInConnectionData | null>(
           `${getApiBase()}/v1/extension/linkedin/connection${params}`,
           { headers: await getAuthHeaders() },
@@ -294,17 +360,19 @@ export const workspaceRouter = createTRPCRouter({
   /**
    * Lists all connected LinkedIn accounts for the active workspace.
    */
-  listLinkedInConnections: authedProcedure.query(async (): Promise<LinkedInConnectionData[]> => {
-    try {
-      const response = await axios.get<LinkedInConnectionData[]>(
-        `${getApiBase()}/v1/extension/linkedin/connections`,
-        { headers: await getAuthHeaders() },
-      );
-      return response.data;
-    } catch (error) {
-      return handleBackendError(error, "Failed to load LinkedIn accounts");
-    }
-  }),
+  listLinkedInConnections: authedProcedure.query(
+    async (): Promise<LinkedInConnectionData[]> => {
+      try {
+        const response = await axios.get<LinkedInConnectionData[]>(
+          `${getApiBase()}/v1/extension/linkedin/connections`,
+          { headers: await getAuthHeaders() },
+        );
+        return response.data;
+      } catch (error) {
+        return handleBackendError(error, "Failed to load LinkedIn accounts");
+      }
+    },
+  ),
 
   /**
    * Disconnects a specific LinkedIn account or all accounts from the workspace.
@@ -326,7 +394,10 @@ export const workspaceRouter = createTRPCRouter({
         }
         return { success: true };
       } catch (error) {
-        return handleBackendError(error, "Failed to disconnect LinkedIn account");
+        return handleBackendError(
+          error,
+          "Failed to disconnect LinkedIn account",
+        );
       }
     }),
 
@@ -344,7 +415,10 @@ export const workspaceRouter = createTRPCRouter({
         );
         return response.data;
       } catch (error) {
-        return handleBackendError(error, "Failed to set primary LinkedIn account");
+        return handleBackendError(
+          error,
+          "Failed to set primary LinkedIn account",
+        );
       }
     }),
 
@@ -355,7 +429,9 @@ export const workspaceRouter = createTRPCRouter({
     .input(z.object({ connectionId: z.string().optional() }).optional())
     .mutation(async ({ input }): Promise<LinkedInVerifySessionResponse> => {
       try {
-        const params = input?.connectionId ? `?connection_id=${encodeURIComponent(input.connectionId)}` : "";
+        const params = input?.connectionId
+          ? `?connection_id=${encodeURIComponent(input.connectionId)}`
+          : "";
         const response = await axios.post<LinkedInVerifySessionResponse>(
           `${getApiBase()}/v1/extension/linkedin/verify-session${params}`,
           {},
@@ -367,8 +443,7 @@ export const workspaceRouter = createTRPCRouter({
       }
     }),
 
-
-  getBrandProfile:authedProcedure.query(async({ctx})=>{
+  getBrandProfile: authedProcedure.query(async ({ ctx }) => {
     try {
       const response = await axios.get(`${getApiBase()}/v1/brand-profile`, {
         headers: await getAuthHeaders(),
@@ -377,5 +452,5 @@ export const workspaceRouter = createTRPCRouter({
     } catch (error) {
       return handleBackendError(error, "Could not load workspaces");
     }
-  })
+  }),
 });

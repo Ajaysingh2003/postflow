@@ -8,6 +8,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, quote, urlsplit
 
+from app.modules.analytics.cache import PageLimit, pages
 from app.modules.channels.base import AnalyticsPost, AnalyticsPosts, Metrics
 from app.modules.channels.oauth import decrypt_token
 
@@ -57,7 +58,7 @@ async def x_posts(self, account, start, end):
     client = await self._get_client()
     posts, replies, visited, seen, complete, notice = [], [], set(), set(), True, None
     try:
-        while True:
+        for _ in pages():
             response = await client.get(
                 f"{X_API_BASE}/users/{quote(account.external_account_id, safe='')}/tweets",
                 headers=headers,
@@ -139,6 +140,14 @@ async def x_posts(self, account, start, end):
         return AnalyticsPosts(
             posts=posts, replies=replies, supports_replies=True, complete=complete, notice=notice
         )
+    except PageLimit:
+        return AnalyticsPosts(
+            posts=posts,
+            replies=replies,
+            supports_replies=True,
+            complete=False,
+            notice="Analytics page limit reached. Choose a shorter date range for complete totals.",
+        )
     finally:
         if self._http_client is None:
             await client.aclose()
@@ -162,7 +171,7 @@ async def linkedin_posts(self, account, start, end):
     client = await self._get_client()
     posts, offset, visited = [], 0, set()
     try:
-        while True:
+        for _ in pages():
             response = await client.get(
                 f"{LINKEDIN_REST_BASE}/posts",
                 headers=headers,
@@ -208,6 +217,12 @@ async def linkedin_posts(self, account, start, end):
             offset = int(next_offset)
             visited.add(offset)
         return AnalyticsPosts(posts=posts)
+    except PageLimit:
+        return AnalyticsPosts(
+            posts=posts,
+            complete=False,
+            notice="Analytics page limit reached. Choose a shorter date range for complete totals.",
+        )
     finally:
         if self._http_client is None:
             await client.aclose()
@@ -222,7 +237,7 @@ async def bluesky_posts(self, account, start, end):
     }
     posts, cursors = [], set()
     try:
-        while True:
+        for _ in pages():
             response = await self._oauth_request(
                 client,
                 "GET",
@@ -273,6 +288,12 @@ async def bluesky_posts(self, account, start, end):
             cursors.add(cursor)
             params["cursor"] = cursor
         return AnalyticsPosts(posts=posts)
+    except PageLimit:
+        return AnalyticsPosts(
+            posts=posts,
+            complete=False,
+            notice="Analytics page limit reached. Choose a shorter date range for complete totals.",
+        )
     finally:
         if self._http_client is None:
             await client.aclose()
@@ -287,7 +308,7 @@ async def mastodon_posts(self, account, start, end):
     posts, cursors = [], set()
     params = {"limit": 40, "exclude_reblogs": "true", "exclude_replies": "true"}
     try:
-        while True:
+        for _ in pages():
             response = await client.get(
                 f"https://{domain}/api/v1/accounts/{quote(str(user_id), safe='')}/statuses",
                 headers={
@@ -335,6 +356,12 @@ async def mastodon_posts(self, account, start, end):
             cursors.add(cursor)
             params["max_id"] = cursor
         return AnalyticsPosts(posts=posts)
+    except PageLimit:
+        return AnalyticsPosts(
+            posts=posts,
+            complete=False,
+            notice="Analytics page limit reached. Choose a shorter date range for complete totals.",
+        )
     finally:
         if self._http_client is None:
             await client.aclose()
@@ -351,7 +378,7 @@ async def reddit_posts(self, account, start, end):
         me = await client.get(f"{REDDIT_OAUTH_API_BASE}/api/v1/me", headers=headers)
         me.raise_for_status()
         username = me.json()["name"]
-        while True:
+        for _ in pages():
             response = await client.get(
                 f"{REDDIT_OAUTH_API_BASE}/user/{quote(username, safe='')}/submitted",
                 headers=headers,
@@ -392,6 +419,12 @@ async def reddit_posts(self, account, start, end):
             if len(posts) >= 1000
             else None,
         )
+    except PageLimit:
+        return AnalyticsPosts(
+            posts=posts,
+            complete=False,
+            notice="Analytics page limit reached. Choose a shorter date range for complete totals.",
+        )
     finally:
         if self._http_client is None:
             await client.aclose()
@@ -402,7 +435,7 @@ async def _graph_posts(self, account, start, end, base, target, edge, fields, to
     params = {"fields": fields, "limit": 100, "access_token": token}
     posts, cursors = [], set()
     try:
-        while True:
+        for _ in pages():
             response = await client.get(f"{base}/{quote(target, safe='')}/{edge}", params=params)
             response.raise_for_status()
             data = response.json()
@@ -439,6 +472,12 @@ async def _graph_posts(self, account, start, end, base, target, edge, fields, to
             if posts and posts[-1].published_at < start:
                 break
         return AnalyticsPosts(posts=posts)
+    except PageLimit:
+        return AnalyticsPosts(
+            posts=posts,
+            complete=False,
+            notice="Analytics page limit reached. Choose a shorter date range for complete totals.",
+        )
     finally:
         if self._http_client is None:
             await client.aclose()

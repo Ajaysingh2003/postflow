@@ -21,6 +21,10 @@ POLICIES = (
     ("/api/v1/assistant/", 30, 60),
     ("/api/v1/channels/", 30, 60),
     ("/api/v1/media/uploads", 30, 60),
+    ("/api/v1/media/attachments", 10, 60),
+    ("/api/v1/analytics/", 60, 60),
+    ("/api/v1/workspaces/invitations/", 20, 60),
+    ("/api/v1/workspaces/current/invitations", 10, 60),
     ("/api/v1/webhooks/dodo", 180, 60),
 )
 
@@ -42,7 +46,10 @@ class RateLimiter:
     def identity(self, request: Request) -> str:
         # Uvicorn handles forwarded IPs only from configured trusted proxies.
         # Raw X-Forwarded-For and arbitrary Authorization values cannot bypass auth limits.
-        if request.url.path.startswith("/api/v1/auth/"):
+        if (
+            request.url.path.startswith("/api/v1/auth/")
+            or request.url.path == "/api/v1/workspaces/invitations/preview"
+        ):
             ip = request.headers.get("x-auth-client-ip", "")
             timestamp = request.headers.get("x-auth-client-timestamp", "")
             signature = request.headers.get("x-auth-client-signature", "")

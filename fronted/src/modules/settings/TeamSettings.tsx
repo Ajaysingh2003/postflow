@@ -82,6 +82,9 @@ export default function TeamSettings() {
   const invite = useMutation(
     trpc.workspace.invite.mutationOptions({
       onSuccess: (data) => {
+        void client.invalidateQueries({
+          queryKey: trpc.workspace.invitations.queryKey(),
+        });
         setSent(data.email);
         setEmail("");
         toast.success("Invitation sent");
@@ -171,6 +174,8 @@ export default function TeamSettings() {
         </p>
       )}
 
+      {canManageTeam(actor) && <PendingInvitations />}
+
       <section className="space-y-3">
         <h3 className="text-sm font-semibold">Members</h3>
         <div className="divide-y divide-border/60 rounded-xl border border-border/70">
@@ -252,5 +257,83 @@ export default function TeamSettings() {
         </div>
       </section>
     </div>
+  );
+}
+function PendingInvitations() {
+  const trpc = useTRPC();
+  const cache = useQueryClient();
+  const { data } = useSuspenseQuery(trpc.workspace.invitations.queryOptions());
+  const refresh = () =>
+    cache.invalidateQueries({
+      queryKey: trpc.workspace.invitations.queryKey(),
+    });
+  const revoke = useMutation(
+    trpc.workspace.revokeInvitation.mutationOptions({
+      onSuccess: () => {
+        void refresh();
+        toast.success("Invitation revoked");
+      },
+      onError: (err) => toast.error(err.message),
+    }),
+  );
+  const resend = useMutation(
+    trpc.workspace.invite.mutationOptions({
+      onSuccess: () => {
+        void refresh();
+        toast.success("New invitation sent. The old link has been replaced.");
+      },
+      onError: (err) => toast.error(err.message),
+    }),
+  );
+  if (!data.length) return null;
+  return (
+    <section className="rounded-xl border border-border p-4">
+      <h3 className="text-sm font-semibold">
+        Pending invitations{" "}
+        <span className="ml-1 text-muted-foreground">{data.length}</span>
+      </h3>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        Pending invitations reserve a seat until they expire or you revoke them.
+      </p>
+      <div className="mt-3 divide-y divide-border">
+        {data.map((invitation) => (
+          <div
+            key={invitation.id}
+            className="flex flex-wrap items-center justify-between gap-3 py-3"
+          >
+            <div className="min-w-0">
+              <p className="break-all text-sm">{invitation.email}</p>
+              <p className="mt-1 text-xs capitalize text-muted-foreground">
+                {invitation.role} · Expires{" "}
+                {new Date(invitation.expires_at).toLocaleDateString()}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="secondary-btn !text-xs"
+                disabled={resend.isPending || revoke.isPending}
+                onClick={() =>
+                  resend.mutate({
+                    email: invitation.email,
+                    role: invitation.role as Role,
+                  })
+                }
+              >
+                Resend
+              </Button>
+              <Button
+                variant="ghost"
+                className="!text-xs text-destructive"
+                disabled={resend.isPending || revoke.isPending}
+                onClick={() => revoke.mutate({ id: invitation.id })}
+              >
+                Revoke
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

@@ -6,7 +6,11 @@ import Link from "next/link";
 
 import { useRouter } from "next/navigation";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 
 import { toast } from "sonner";
 
@@ -101,12 +105,7 @@ import AnalyticsSkeleton from "../component/AnalyticsSkeleton";
 /* -------------------------------------------------------------------------- */
 
 type SortKey =
-  | "latest"
-  | "views"
-  | "impressions"
-  | "likes"
-  | "engagements"
-  | "eng_rate";
+  "latest" | "views" | "impressions" | "likes" | "engagements" | "eng_rate";
 
 type Timeframe = "7d" | "30d" | "90d" | "all" | "custom";
 
@@ -405,23 +404,37 @@ function AnalyticsDashboardContent({ accounts }: { accounts: Account[] }) {
 
   // One account-scoped response keeps the cards and table consistent.
 
+  const analyticsInput = {
+    account_id: selectedAccountId === "all" ? undefined : activeAccount.id,
+
+    start_date: startDateStr,
+
+    end_date: endDateStr,
+
+    limit: ANALYTICS_PAGE_SIZE,
+
+    offset: feedOffset,
+
+    content_type: "posts" as const,
+  };
+  const queryClient = useQueryClient();
   const dashboardQuery = useSuspenseQuery({
-    ...trpc.studio.analyticsDashboard.queryOptions({
-      account_id: selectedAccountId === "all" ? undefined : activeAccount.id,
-
-      start_date: startDateStr,
-
-      end_date: endDateStr,
-
-      limit: ANALYTICS_PAGE_SIZE,
-
-      offset: feedOffset,
-
-      content_type: "posts",
-    }),
-
+    ...trpc.studio.analyticsDashboard.queryOptions(analyticsInput),
     ...liveAnalyticsOptions,
   });
+  const refreshDashboard = useMutation(
+    trpc.studio.analyticsRefresh.mutationOptions({
+      onSuccess: (data, variables) => {
+        queryClient.setQueryData(
+          trpc.studio.analyticsDashboard.queryKey(variables),
+          data,
+        );
+        toast.success("Analytics updated");
+      },
+      onError: (error) =>
+        toast.error(error.message || "Couldn't refresh analytics"),
+    }),
+  );
 
   // Never render a previous result during a switch, refresh, or failed request.
 
@@ -450,9 +463,7 @@ function AnalyticsDashboardContent({ accounts }: { accounts: Account[] }) {
   const feedQuery = dashboardQuery;
 
   const refreshMetrics = async () => {
-    const result = await dashboardQuery.refetch();
-
-    if (result.error) toast.error("Couldn't refresh analytics");
+    if (!refreshDashboard.isPending) refreshDashboard.mutate(analyticsInput);
   };
 
   // 5. Sort only the current server-paginated page.
@@ -473,11 +484,7 @@ function AnalyticsDashboardContent({ accounts }: { accounts: Account[] }) {
     list.sort((a, b) => {
       const metricSort = (
         metric:
-          | "views"
-          | "impressions"
-          | "likes"
-          | "engagements"
-          | "engagement_rate",
+          "views" | "impressions" | "likes" | "engagements" | "engagement_rate",
 
         key: string,
       ) => {
@@ -737,6 +744,7 @@ function AnalyticsDashboardContent({ accounts }: { accounts: Account[] }) {
   }
 
   const isRefreshing =
+    refreshDashboard.isPending ||
     feedQuery.isFetching ||
     overviewQuery.isFetching ||
     accountMetricsQuery.isFetching;
@@ -824,6 +832,7 @@ function AnalyticsDashboardContent({ accounts }: { accounts: Account[] }) {
               )}
             />
 
+            {dashboardData?.cache_hit ? "Saved result · " : ""}
             {syncStatus}
           </span>
 
@@ -833,7 +842,7 @@ function AnalyticsDashboardContent({ accounts }: { accounts: Account[] }) {
             onClick={() => void refreshMetrics()}
             disabled={isRefreshing}
             className="h-8 cursor-pointer gap-1.5 rounded-lg text-xs"
-            title="Refresh metrics"
+            title="Fetch new metrics from the platform. Available once per minute."
           >
             <RefreshCw
               className={cn("size-3.5", isRefreshing && "animate-spin")}
@@ -881,6 +890,15 @@ function AnalyticsDashboardContent({ accounts }: { accounts: Account[] }) {
         </div>
       ) : null}
 
+      {dashboardData?.daily_read_limit ? (
+        <p className="text-[11px] text-muted-foreground">
+          Platform reads today:{" "}
+          {(dashboardData.daily_provider_reads ?? 0).toLocaleString()} /{" "}
+          {dashboardData.daily_read_limit.toLocaleString()}. Page changes reuse
+          results until their cache expires; Refresh requests new metrics. Read
+          limits reset at midnight UTC.
+        </p>
+      ) : null}
       {dashboardData?.dataset_notice ? (
         <p
           className="rounded-xl border border-border p-3 text-sm text-muted-foreground"

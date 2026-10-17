@@ -98,3 +98,7 @@ export function reloadAuthPage(path: string) {
     throw new Error("Invalid authentication destination");
   window.location.assign(destination.href);
 }
+
+export function authSwitchHref(path: "/login" | "/register", search: string) {
+  return `${path}?${new URLSearchParams({ next: nextAuthPath(search) })}`;
+}

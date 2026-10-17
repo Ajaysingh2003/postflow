@@ -66,6 +66,55 @@ async def get_dashboard_endpoint(
     )
 
 
+@router.post("/dashboard/refresh", response_model=AnalyticsDashboardResponse)
+async def refresh_dashboard(
+    account_id: str | None = Query(default=None),
+    start_date: str | None = Query(default=None),
+    end_date: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    content_type: Literal["posts", "replies", "all"] = Query(default="posts"),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    return await get_dashboard(
+        db,
+        workspace.id,
+        account_id,
+        parse_flexible_datetime(start_date),
+        parse_flexible_datetime(end_date),
+        limit=limit,
+        offset=offset,
+        content_type=content_type,
+        refresh=True,
+    )
+
+
+@router.get("/read-budget")
+async def read_budget(workspace: Workspace = Depends(get_current_workspace)):
+    import time
+
+    from redis.exceptions import RedisError
+
+    from app.core.config import get_settings
+    from app.modules.analytics.cache import connection
+
+    client = connection()
+    try:
+        used = int(
+            await client.get(f"analytics:reads:{workspace.id}:{int(time.time()) // 86400}") or 0
+        )
+    except RedisError as exc:
+        raise HTTPException(503, "Analytics budget monitoring is temporarily unavailable") from exc
+    finally:
+        await client.aclose()
+    return {
+        "used": used,
+        "limit": get_settings().analytics_daily_read_limit,
+        "reset_at": datetime.fromtimestamp((int(time.time()) // 86400 + 1) * 86400, UTC),
+    }
+
+
 def parse_flexible_datetime(dt_str: str | None) -> datetime | None:
     """Parse ISO datetime or date string safely, handling unencoded + as space."""
     if not dt_str:
@@ -106,7 +155,7 @@ async def get_overview_endpoint(
 async def get_accounts_analytics_endpoint(
     live: bool = Query(
         default=True,
-        description="Deprecated: analytics always reads the official APIs, including when false",
+        description="Deprecated: official API results may use the shared short-lived Redis cache",
     ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
@@ -120,7 +169,7 @@ async def get_single_account_analytics_endpoint(
     account_id: str,
     live: bool = Query(
         default=True,
-        description="Deprecated: analytics always reads the official APIs, including when false",
+        description="Deprecated: official API results may use the shared short-lived Redis cache",
     ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
@@ -140,7 +189,7 @@ async def get_variant_analytics_endpoint(
     variant_id: str,
     live: bool = Query(
         default=True,
-        description="Deprecated: analytics always reads the official APIs, including when false",
+        description="Deprecated: official API results may use the shared short-lived Redis cache",
     ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
@@ -154,7 +203,7 @@ async def get_post_analytics_endpoint(
     post_id: str,
     live: bool = Query(
         default=True,
-        description="Deprecated: analytics always reads the official APIs, including when false",
+        description="Deprecated: official API results may use the shared short-lived Redis cache",
     ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
@@ -172,7 +221,7 @@ async def get_analytics_feed_endpoint(
     offset: int = Query(default=0, ge=0),
     live: bool = Query(
         default=True,
-        description="Deprecated: analytics always reads the official APIs, including when false",
+        description="Deprecated: official API results may use the shared short-lived Redis cache",
     ),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),

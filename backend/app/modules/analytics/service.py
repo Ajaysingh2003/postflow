@@ -1,4 +1,4 @@
-"""Request-scoped analytics from official APIs. No metric persistence or cache fallback."""
+"""Official analytics with short-lived shared Redis datasets, never SQL snapshots."""
 
 import asyncio
 import logging
@@ -9,6 +9,8 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.modules.analytics.cache import cached_dashboard
 from app.modules.analytics.schemas import (
     AccountAnalyticsResponse,
     AnalyticsDashboardResponse,
@@ -60,6 +62,14 @@ def _unavailable(notice: str) -> dict:
 
 
 def _failure_notice(exc: Exception) -> str:
+    if (
+        isinstance(exc, HTTPException)
+        and isinstance(exc.detail, str)
+        and exc.detail.startswith(
+            ("Analytics read budget", "Daily analytics read budget", "Analytics cost protection")
+        )
+    ):
+        return exc.detail
     code = getattr(exc, "status_code", None)
     if isinstance(exc, httpx.HTTPStatusError):
         code = exc.response.status_code
@@ -123,19 +133,17 @@ async def _account_metrics(
     )
 
 
-async def get_account_analytics(
-    db: Session, workspace_id: str, account_id: str | None = None, live: bool = True
-) -> list[AccountAnalyticsResponse]:
-    # Retained keyword for old clients; live=False cannot select stored metrics.
-    semaphore = asyncio.Semaphore(6)
-    return list(
-        await asyncio.gather(
-            *[
-                _account_metrics(account, semaphore)
-                for account in _accounts(db, workspace_id, account_id)
-            ]
-        )
-    )
+async def get_account_analytics(db, workspace_id, account_id=None, live=True):
+    accounts = _accounts(db, workspace_id, account_id)
+    identity = ["accounts", workspace_id, [(a.id, a.status, str(a.updated_at)) for a in accounts]]
+
+    async def build():
+        semaphore = asyncio.Semaphore(6)
+        result = await asyncio.gather(*[_account_metrics(a, semaphore) for a in accounts])
+        return [a.model_dump(mode="json") for a in result]
+
+    data, _, _, _ = await cached_dashboard(workspace_id, identity, False, build)
+    return [AccountAnalyticsResponse.model_validate(a) for a in data]
 
 
 async def _post_metrics(account, external_id, payload, published_at, semaphore) -> Metrics:
@@ -267,6 +275,15 @@ async def _account_posts(db, workspace_id, account, start, end, semaphore):
             "This integration can retrieve live metrics only for posts published through draftva.",
         )
         reply_items, supported = [], False
+    max_posts = get_settings().analytics_max_posts_per_account
+    if len(items) + len(reply_items) > max_posts:
+        bounded = sorted(items + reply_items, key=lambda p: _utc(p.published_at), reverse=True)[
+            :max_posts
+        ]
+        items = [p for p in bounded if not p.is_reply]
+        reply_items = [p for p in bounded if p.is_reply]
+        complete = False
+        notice = "Analytics post limit reached. Narrow the date range for complete totals."
     unique = {
         item.external_post_id: item
         for item in items + reply_items
@@ -355,7 +372,7 @@ def _overview(posts, start, end, complete, notice):
     )
 
 
-async def get_dashboard(
+async def _build_dashboard(
     db: Session,
     workspace_id: str,
     account_id: str | None = None,
@@ -414,6 +431,67 @@ async def get_dashboard(
     )
 
 
+async def get_dashboard(
+    db,
+    workspace_id,
+    account_id=None,
+    start_date=None,
+    end_date=None,
+    days=30,
+    limit=50,
+    offset=0,
+    content_type="posts",
+    refresh=False,
+):
+    # Resolve accounts before Redis: removed members/accounts can never read an old cache entry.
+    accounts = _accounts(db, workspace_id, account_id)
+    now = datetime.now(UTC)
+    if start_date and end_date and _utc(start_date) > _utc(end_date):
+        raise HTTPException(422, "Start date must precede end date")
+    identity = [
+        workspace_id,
+        account_id,
+        str(start_date) if start_date else f"last-{days}:{now.date()}",
+        str(end_date) if end_date else str(now.date()),
+        [(a.id, a.status, str(a.updated_at)) for a in accounts],
+    ]
+
+    async def build():
+        result = await _build_dashboard(
+            db,
+            workspace_id,
+            account_id,
+            start_date,
+            end_date,
+            days,
+            get_settings().analytics_max_posts_per_account * max(1, len(accounts)),
+            0,
+            "all",
+        )
+        return result.model_dump(mode="json")
+
+    data, hit, reads, daily_used = await cached_dashboard(workspace_id, identity, refresh, build)
+    result = AnalyticsDashboardResponse.model_validate(data)
+    feed = [
+        p
+        for p in result.posts
+        if content_type == "all" or p.is_reply == (content_type == "replies")
+    ]
+    result.posts = feed[offset : offset + limit]
+    result.feed_total = len(feed)
+    result.cache_hit = hit
+    result.cache_expires_at = result.fetched_at + timedelta(
+        seconds=get_settings().analytics_cache_ttl_seconds
+    )
+    result.refresh_available_at = result.fetched_at + timedelta(
+        seconds=get_settings().analytics_refresh_cooldown_seconds
+    )
+    result.provider_reads = reads
+    result.daily_provider_reads = daily_used
+    result.daily_read_limit = get_settings().analytics_daily_read_limit
+    return result
+
+
 async def get_workspace_overview(
     db, workspace_id, days=30, start_date=None, end_date=None, account_id=None
 ):
@@ -430,7 +508,7 @@ async def get_posts_analytics_feed(
     ).posts
 
 
-async def get_variant_analytics(
+async def _get_variant_analytics_live(
     db, workspace_id, variant_id, live=True
 ) -> VariantAnalyticsResponse:
     variant = db.scalar(
@@ -476,6 +554,36 @@ async def get_variant_analytics(
     )
 
 
+async def get_variant_analytics(db, workspace_id, variant_id, live=True):
+    variant = db.scalar(
+        select(PostVariant)
+        .join(Post)
+        .where(PostVariant.id == variant_id, Post.workspace_id == workspace_id)
+    )
+    if variant is None:
+        raise HTTPException(404, "Variant not found")
+    account = (
+        db.get(ConnectedAccount, variant.connected_account_id)
+        if variant.connected_account_id
+        else None
+    )
+    identity = [
+        "variant",
+        workspace_id,
+        variant_id,
+        str(variant.updated_at),
+        [account.id, account.status, str(account.updated_at)] if account else None,
+    ]
+
+    async def build():
+        return (await _get_variant_analytics_live(db, workspace_id, variant_id)).model_dump(
+            mode="json"
+        )
+
+    data, _, _, _ = await cached_dashboard(workspace_id, identity, False, build)
+    return VariantAnalyticsResponse.model_validate(data)
+
+
 async def get_post_analytics(db, workspace_id, post_id, live=True) -> PostAnalyticsResponse:
     post = db.scalar(select(Post).where(Post.id == post_id, Post.workspace_id == workspace_id))
     if not post:
@@ -499,7 +607,7 @@ async def get_post_analytics(db, workspace_id, post_id, live=True) -> PostAnalyt
 
 async def trigger_workspace_metrics_sync(db: Session, workspace_id: str) -> dict[str, int]:
     """Compatibility endpoint: read fresh data without recording any snapshots."""
-    result = await get_dashboard(db, workspace_id)
+    result = await get_dashboard(db, workspace_id, refresh=True)
     return {
         "accounts_synced": sum(a.metrics_status != "unavailable" for a in result.accounts),
         "variants_synced": sum(p.metrics_status != "unavailable" for p in result.posts),

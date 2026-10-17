@@ -201,6 +201,25 @@ export const studioRouter = createTRPCRouter({
         input,
       ),
     ),
+  analyticsRefresh: authedProcedure
+    .input(
+      z.object({
+        account_id: id.optional(),
+        start_date: z.string().optional(),
+        end_date: z.string().optional(),
+        limit: z.number().int().min(1).max(100).default(50),
+        offset: z.number().int().min(0).default(0),
+        content_type: z.enum(["posts", "replies", "all"]).default("posts"),
+      }),
+    )
+    .mutation(({ input }) =>
+      backend<AnalyticsDashboard>(
+        "POST",
+        "/analytics/dashboard/refresh",
+        undefined,
+        input,
+      ),
+    ),
   analyticsOverview: authedProcedure
     .input(
       z

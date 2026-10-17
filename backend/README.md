@@ -41,6 +41,9 @@ Compose runs the migrations before the API, worker and scheduler:
 docker compose up --build -d
 ```
 
+Team invitation acceptance, Redis analytics caching/read budgets and storage quota/cleanup
+configuration are documented in [team invitations and cost controls](docs/team-invitations-and-cost-controls.md).
+
 ## Verify
 
 ```sh

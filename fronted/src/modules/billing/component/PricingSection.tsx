@@ -19,13 +19,17 @@ function PricingSection() {
             <span className="size-1.5 rounded-full bg-[#4ff576] animate-pulse" />
             <span className="font-heading">Predictable Tier Pricing</span>
             <span className="text-neutral-300">•</span>
-            <span className="font-subheading text-neutral-500">3 Days Free Trial</span>
+            <span className="font-subheading text-neutral-500">
+              Free plan available
+            </span>
           </div>
-          
+
           <h2 className="mt-4 font-heading text-3xl sm:text-5xl lg:text-[36px] font-bold tracking-[-0.04em] text-[#11120e] leading-[1.08]">
             Transparent pricing for{" "}
             <span className="relative inline-block whitespace-nowrap">
-              <span className="relative z-10 bg-[#98f9ae3c] text-[#11120e]">every scale</span>
+              <span className="relative z-10 bg-[#98f9ae3c] text-[#11120e]">
+                every scale
+              </span>
               <span
                 aria-hidden="true"
                 className="absolute -inset-x-1.5 bottom-1 top-2 -z-0 rounded-[5px] bg-[#e7f6b8]"
@@ -34,8 +38,9 @@ function PricingSection() {
           </h2>
 
           <p className="mt-4 font-subheading text-sm sm:text-base text-neutral-600 max-w-xl leading-relaxed tracking-normal">
-            Plan your content, publish across channels, and shape your voice with AI.
-            Paid plans include a 3-day trial and monthly usage allowances.
+            Plan your content, publish across channels, and shape your voice
+            with AI. Start with Free. Paid plans include unlimited posts and
+            monthly AI credits.
           </p>
         </div>
 

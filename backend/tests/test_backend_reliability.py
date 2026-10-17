@@ -148,6 +148,9 @@ async def test_validation_contract_for_every_non_reddit_adapter(client, owners, 
 
 @pytest.mark.anyio
 async def test_foreign_voice_profile_does_not_reach_llm(client, owners):
+    from app.modules.billing.models import Subscription
+    with SessionLocal.begin() as db:
+        db.add(Subscription(workspace_id=owners[1]["workspace_id"], user_id=owners[1]["user_id"], provider_subscription_id="foreign-voice-test", plan_code="pro", status="active"))
     response = client.post(
         "/api/v1/assistant/voice-profiles",
         headers=owners[1]["headers"],

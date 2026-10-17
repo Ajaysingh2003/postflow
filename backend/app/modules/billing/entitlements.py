@@ -21,6 +21,7 @@ from app.modules.billing.usage import lock_workspace
 
 PLAN_DEFAULTS = {
     "free": {
+        "brand_profiles": 0,
         "ai_credits": 20,
         "scheduled_posts": 5,
         "seats": 1,
@@ -28,6 +29,7 @@ PLAN_DEFAULTS = {
         "connected_accounts": 2,
     },
     "starter": {
+        "brand_profiles": 3,
         "ai_credits": 1000,
         "scheduled_posts": None,
         "seats": 3,
@@ -35,20 +37,23 @@ PLAN_DEFAULTS = {
         "connected_accounts": 5,
     },
     "creator": {
-        "ai_credits": 2500,
+        "brand_profiles": 3,
+        "ai_credits": 1000,
         "scheduled_posts": None,
         "seats": 1,
         "workspaces": 1,
         "connected_accounts": 5,
     },
     "pro": {
-        "ai_credits": 4000,
+        "brand_profiles": 5,
+        "ai_credits": 5000,
         "scheduled_posts": None,
         "seats": 5,
         "workspaces": 5,
         "connected_accounts": 15,
     },
     "business": {
+        "brand_profiles": 10,
         "ai_credits": 8000,
         "scheduled_posts": None,
         "seats": 15,
@@ -56,7 +61,8 @@ PLAN_DEFAULTS = {
         "connected_accounts": 50,
     },
     "agency": {
-        "ai_credits": 5000,
+        "brand_profiles": 10,
+        "ai_credits": 8000,
         "scheduled_posts": None,
         "seats": 25,
         "workspaces": 25,

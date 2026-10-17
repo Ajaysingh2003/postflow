@@ -1,6 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import Link from "next/link";
 function PricingOverviewHome() {
   return (
     <div className="w-full primary-box h-full py-8 md:py-16 bg-[#3fda8a] rounded-xl shadow-lg px-6 md:px-8">
@@ -10,8 +11,8 @@ function PricingOverviewHome() {
             Ready to get started?
           </h2>
           <p className="text-white max-w-[620px] text-white text-left text-[18px] leading-[23.44px] sm:text-[22px] sm:leading-[28.64px] font-[400]">
-            Connect your channels and schedule your first post in minutes. Your
-            first 3 days cost $0.
+            Connect your channels and schedule your first post. Start on Free,
+            with no trial deadline, and upgrade when you need more.
           </p>
         </div>
 
@@ -22,8 +23,11 @@ function PricingOverviewHome() {
             height={100}
             width={100}
           />
-          <Button className="secondary-btn size-lg capitalize order-1  rounded-full font-medium !py-6 !px-8 !text-xl ">
-            start for 0$
+          <Button
+            asChild
+            className="secondary-btn size-lg capitalize order-1  rounded-full font-medium !py-6 !px-8 !text-xl "
+          >
+            <Link href="/register">Start for free</Link>
           </Button>
         </div>
       </div>

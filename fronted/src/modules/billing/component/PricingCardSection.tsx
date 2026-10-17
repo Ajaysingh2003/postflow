@@ -40,6 +40,10 @@ export function planFeatures(plan: PlanConfig): FeatureItem[] {
     },
     { label: `${allowance("seats")} workspace seats`, icon: WorkIcon },
     { label: `${allowance("workspaces")} workspaces`, icon: WorkIcon },
+    {
+      label: `${allowance("brand_profiles")} custom brand voice profiles`,
+      icon: WorkIcon,
+    },
     { label: "Account analytics", icon: AnalysisTextLinkIcon },
     {
       label:

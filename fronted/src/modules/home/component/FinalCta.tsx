@@ -6,7 +6,11 @@ import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Check } from "lucide-react";
 
-const TRIAL_POINTS = ["3-day free trial", "No credit card", "Cancel anytime"];
+const FREE_PLAN_POINTS = [
+  "Free plan available",
+  "No credit card",
+  "Cancel anytime",
+];
 
 export default function FinalCta() {
   const reduce = useReducedMotion();
@@ -92,7 +96,7 @@ export default function FinalCta() {
                 href="/register"
                 className="group inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-6 font-heading text-sm font-semibold text-[#0f7a47] shadow-[0_8px_20px_-8px_rgba(6,56,29,0.5)] transition-all hover:bg-white/95 active:scale-[0.98] sm:h-12 sm:w-auto sm:px-7 sm:text-base"
               >
-                Start your free trial
+                Start for free
                 <ArrowRight
                   className="size-4 transition-transform group-hover:translate-x-0.5"
                   aria-hidden="true"
@@ -107,9 +111,9 @@ export default function FinalCta() {
               </Link>
             </div>
 
-            {/* Trial points */}
+            {/* Free plan details */}
             <ul className="mt-4 flex max-w-[310px] flex-wrap justify-center gap-x-3 gap-y-1.5 text-[11px] font-medium text-white sm:mt-5 sm:max-w-none sm:gap-x-4 sm:text-xs">
-              {TRIAL_POINTS.map((point) => (
+              {FREE_PLAN_POINTS.map((point) => (
                 <li key={point} className="flex items-center gap-1.5">
                   <Check
                     className="size-3 shrink-0 sm:size-3.5"

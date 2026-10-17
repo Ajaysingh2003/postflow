@@ -26,7 +26,6 @@ import {
   Plus,
   RefreshCw,
   SlidersHorizontal,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -43,6 +42,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useTRPC } from "@/trpc/client";
+import { BrandProfileManager } from "./BrandProfileManager";
 import {
   BRAND_CHANNELS,
   VOICE_TRAITS,
@@ -462,7 +462,11 @@ function ChipListField({
           maxLength={LIMITS.item}
           disabled={full}
           placeholder={
-            full ? `Limit of ${max} reached` : value.length ? "Add another" : placeholder
+            full
+              ? `Limit of ${max} reached`
+              : value.length
+                ? "Add another"
+                : placeholder
           }
           aria-describedby={hint ? hintId : undefined}
           onChange={(e) => setText(e.target.value)}
@@ -496,7 +500,15 @@ export function BrandFields({
   change: (draft: BrandDraft) => void;
 }) {
   const text = (
-    name: "display_name" | "role" | "bio" | "niche" | "audience" | "style_guide" | "writing_rules" | "output_language",
+    name:
+      | "display_name"
+      | "role"
+      | "bio"
+      | "niche"
+      | "audience"
+      | "style_guide"
+      | "writing_rules"
+      | "output_language",
     label: string,
     max: number,
     options: { hint?: string; multiline?: boolean; placeholder?: string } = {},
@@ -596,7 +608,11 @@ export function BrandFields({
           <p className="text-xs leading-5 text-muted-foreground">
             Choose a few traits that feel natural. Add your own below.
           </p>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Voice traits">
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Voice traits"
+          >
             {VOICE_TRAITS.map((trait) => {
               const active = draft.voice_traits.includes(trait);
               return (
@@ -632,7 +648,10 @@ export function BrandFields({
             hint="Anything the presets miss."
             placeholder="e.g. Dry wit"
             value={custom}
-            max={Math.max(custom.length, LIMITS.traits - (draft.voice_traits.length - custom.length))}
+            max={Math.max(
+              custom.length,
+              LIMITS.traits - (draft.voice_traits.length - custom.length),
+            )}
             onChange={(items) =>
               change({
                 ...draft,
@@ -706,7 +725,10 @@ export function BrandFields({
             className="rounded-xl border border-border/70 p-4 transition-colors focus-within:border-border"
           >
             <div className="mb-2 flex items-center justify-between">
-              <Label htmlFor={`brand-sample-${index}`} className="text-xs font-medium">
+              <Label
+                htmlFor={`brand-sample-${index}`}
+                className="text-xs font-medium"
+              >
                 Sample {index + 1}
               </Label>
               <Button
@@ -718,7 +740,9 @@ export function BrandFields({
                 onClick={() =>
                   change({
                     ...draft,
-                    sample_posts: draft.sample_posts.filter((_, at) => at !== index),
+                    sample_posts: draft.sample_posts.filter(
+                      (_, at) => at !== index,
+                    ),
                   })
                 }
               >
@@ -742,7 +766,8 @@ export function BrandFields({
               }
             />
             <p className="mt-2 text-right text-[10px] tabular-nums text-muted-foreground">
-              {sample.length.toLocaleString()} / {LIMITS.sample.toLocaleString()}
+              {sample.length.toLocaleString()} /{" "}
+              {LIMITS.sample.toLocaleString()}
             </p>
           </div>
         ))}
@@ -770,7 +795,10 @@ export function BrandFields({
   return (
     <div className="space-y-4">
       {BRAND_CHANNELS.map((channel) => (
-        <div key={channel.id} className="rounded-xl border border-border/70 p-4">
+        <div
+          key={channel.id}
+          className="rounded-xl border border-border/70 p-4"
+        >
           <BrandTextField
             name={`channel-${channel.id}`}
             label={channel.name}
@@ -819,14 +847,17 @@ function BrandEditor({
     updatedAt: string | null;
   } | null>(null);
   const [section, setSection] = useState<Section>("identity");
-  const [confirmation, setConfirmation] = useState<"close" | "reload" | null>(null);
+  const [confirmation, setConfirmation] = useState<"close" | "reload" | null>(
+    null,
+  );
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const baseline = brandValues(query.data);
   const draft = edit?.draft ?? baseline;
   const canEdit = query.data.can_edit;
-  const dirty = edit !== null && JSON.stringify(draft) !== JSON.stringify(baseline);
+  const dirty =
+    edit !== null && JSON.stringify(draft) !== JSON.stringify(baseline);
   const progress = brandProgress(draft);
   const current = SECTIONS.find((item) => item.id === section)!;
 
@@ -876,6 +907,7 @@ function BrandEditor({
         workspaceId,
         profile: checked.data,
         expectedUpdatedAt: edit ? edit.updatedAt : query.data.updated_at,
+        profileId: query.data.id ?? undefined,
       });
       cache.setQueryData(trpc.persona.brand.queryKey(input), result);
       setEdit(null);
@@ -979,9 +1011,9 @@ function BrandEditor({
               })}
 
               <div className="mt-auto hidden px-3 pb-2 pt-8 text-[11px] leading-5 text-muted-foreground sm:block">
-                {/* <Sparkles className="mb-2 size-4 text-violet-400" /> */}
-                Your saved profile is used automatically when Draftva writes or
-                refines a post.
+                {query.data.paid_access === false
+                  ? "Free writing and publishing remain available within your plan limits."
+                  : "Your selected profile is used automatically when Draftva writes or refines a post."}
               </div>
             </nav>
 
@@ -998,6 +1030,12 @@ function BrandEditor({
             >
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8">
                 <div className="mx-auto max-w-2xl">
+                  <BrandProfileManager
+                    workspaceId={workspaceId}
+                    profile={query.data}
+                    disabled={dirty || save.isPending}
+                    onUpgrade={() => setOpen(false)}
+                  />
                   <p className="text-[10px] font-medium uppercase tracking-wider text-violet-500">
                     {current.caption}
                   </p>
@@ -1008,7 +1046,7 @@ function BrandEditor({
                     {current.description}
                   </p>
 
-                  {!canEdit && (
+                  {!canEdit && query.data.paid_access !== false && (
                     <p className="mb-5 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
                       You can view this profile. An owner, admin, or editor can
                       update it.
@@ -1020,7 +1058,11 @@ function BrandEditor({
                     className="min-w-0 border-0 p-0"
                   >
                     <legend className="sr-only">{current.label}</legend>
-                    <BrandFields section={section} draft={draft} change={change} />
+                    <BrandFields
+                      section={section}
+                      draft={draft}
+                      change={change}
+                    />
                   </fieldset>
                 </div>
               </div>
@@ -1106,7 +1148,10 @@ function BrandEditor({
             </DialogDescription>
           </DialogHeader>
           <div className="mt-3 flex justify-end gap-2">
-            <Button className="secondary-btn" onClick={() => setConfirmation(null)}>
+            <Button
+              className="secondary-btn"
+              onClick={() => setConfirmation(null)}
+            >
               Keep editing
             </Button>
             <Button
@@ -1121,7 +1166,9 @@ function BrandEditor({
                 } else setOpen(false);
               }}
             >
-              {confirmation === "reload" ? "Discard and reload" : "Discard changes"}
+              {confirmation === "reload"
+                ? "Discard and reload"
+                : "Discard changes"}
             </Button>
           </div>
         </DialogContent>
@@ -1139,9 +1186,12 @@ function WorkspaceBrand({ setOpen }: { setOpen: (open: boolean) => void }) {
   const { data: workspace } = useSuspenseQuery(
     trpc.workspace.current.queryOptions(),
   );
+  const { data: brand } = useSuspenseQuery(
+    trpc.persona.brand.queryOptions({ workspaceId: workspace.id }),
+  );
   return (
     <BrandEditor
-      key={workspace.id}
+      key={`${workspace.id}:${brand.id ?? "new"}`}
       workspaceId={workspace.id}
       workspaceName={workspace.name}
       setOpen={setOpen}

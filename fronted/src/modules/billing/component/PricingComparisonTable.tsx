@@ -3,6 +3,7 @@
 import React, { useId, useMemo, useState } from "react";
 import { Check, ChevronDown, Minus, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PAID_ALLOWANCES } from "../planAllowances";
 
 /* -------------------------------------------------------------------------- */
 /*  Data                                                                       */
@@ -61,7 +62,12 @@ const COMPARISON_DATA: FeatureCategory[] = [
         "Unlimited",
         "All paid plans include unlimited scheduled and published posts.",
       ),
-      row("Connected social accounts", "5 accounts", "15 accounts", "50 accounts"),
+      row(
+        "Connected social accounts",
+        "5 accounts",
+        "15 accounts",
+        "50 accounts",
+      ),
       row("Visual multi-channel calendar", true, true, true),
       row(
         "Cross-platform stagger scheduling",
@@ -85,18 +91,19 @@ const COMPARISON_DATA: FeatureCategory[] = [
     features: [
       row(
         "Monthly AI credits",
-        "250 credits",
-        "1,000 credits",
-        "5,000 credits",
-        "1 credit generates or refines one high-performing post variant.",
+        ...((["starter", "pro", "business"] as const).map(
+          (code) =>
+            `${PAID_ALLOWANCES[code].ai_credits.toLocaleString("en-US")} credits`,
+        ) as [string, string, string]),
+        "One credit per successful AI request. Credits reset monthly.",
       ),
       row("AI hook & opener generator", true, true, true),
       row("Tone & rephrase engine", true, true, true),
       row(
         "Custom brand voice profiles",
-        "1 voice profile",
-        "5 voice profiles",
-        "Unlimited profiles",
+        ...((["starter", "pro", "business"] as const).map(
+          (code) => `${PAID_ALLOWANCES[code].brand_profiles} voice profiles`,
+        ) as [string, string, string]),
         "Train the AI on your past winners to replicate your natural cadence.",
       ),
       row("Multi-tweet & carousel splitter", true, true, true),
@@ -114,7 +121,12 @@ const COMPARISON_DATA: FeatureCategory[] = [
         true,
         "Real-time alerts when early engagement spikes 3x above your baseline.",
       ),
-      row("Golden hours audience heatmap", "Basic", "Advanced", "Advanced + custom"),
+      row(
+        "Golden hours audience heatmap",
+        "Basic",
+        "Advanced",
+        "Advanced + custom",
+      ),
       row("Exportable PDF & CSV reports", false, true, true),
     ],
   },
@@ -148,8 +160,12 @@ const COMPARISON_DATA: FeatureCategory[] = [
   },
 ];
 
-const TOTAL_FEATURES = COMPARISON_DATA.reduce((n, g) => n + g.features.length, 0);
-const differs = (f: FeatureRow) => !(f.starter === f.pro && f.pro === f.business);
+const TOTAL_FEATURES = COMPARISON_DATA.reduce(
+  (n, g) => n + g.features.length,
+  0,
+);
+const differs = (f: FeatureRow) =>
+  !(f.starter === f.pro && f.pro === f.business);
 
 /* -------------------------------------------------------------------------- */
 /*  Layout constants                                                           */
@@ -225,7 +241,9 @@ function Switch({
           )}
         />
       </span>
-      <span className="font-subheading text-xs font-medium text-[#11120e]">{label}</span>
+      <span className="font-subheading text-xs font-medium text-[#11120e]">
+        {label}
+      </span>
     </button>
   );
 }
@@ -286,11 +304,18 @@ export default function PricingComparisonTable() {
 
       {/* Toolbar */}
       <div className="mt-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-1">
-        <p aria-live="polite" className="font-subheading text-xs text-[#85887e]">
+        <p
+          aria-live="polite"
+          className="font-subheading text-xs text-[#85887e]"
+        >
           Showing {shownCount} of {TOTAL_FEATURES} features
         </p>
         <div className="flex items-center gap-5">
-          <Switch checked={diffOnly} onChange={setDiffOnly} label="Differences only" />
+          <Switch
+            checked={diffOnly}
+            onChange={setDiffOnly}
+            label="Differences only"
+          />
           <button
             type="button"
             onClick={toggleAll}
@@ -320,17 +345,17 @@ export default function PricingComparisonTable() {
             <div key={tier.id} className="px-2 py-2.5">
               {tier.popular ? (
                 <div className="primary-btn !flex h-auto w-full flex-col items-center justify-center rounded-2xl px-4 py-4 text-center">
-  <span className="font-subheading inline-flex mt-py-1 items-center gap-1 rounded-full bordezr bordzer-white/20 zbg-white/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white zshadow-2xs backdrop-blur-zxs">
-    <Sparkles className="size-2.5" aria-hidden="true" />
-    Most popular
-  </span>
-  <span className="font-heading mt-2 block text-base font-bold text-white">
-    {tier.name}
-  </span>
-  <span className="font-subheading mt-0.5 block text-[11px] text-white/80">
-    {tier.tagline}
-  </span>
-</div>
+                  <span className="font-subheading inline-flex mt-py-1 items-center gap-1 rounded-full bordezr bordzer-white/20 zbg-white/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white zshadow-2xs backdrop-blur-zxs">
+                    <Sparkles className="size-2.5" aria-hidden="true" />
+                    Most popular
+                  </span>
+                  <span className="font-heading mt-2 block text-base font-bold text-white">
+                    {tier.name}
+                  </span>
+                  <span className="font-subheading mt-0.5 block text-[11px] text-white/80">
+                    {tier.tagline}
+                  </span>
+                </div>
               ) : (
                 <div className="px-3 py-3 text-center">
                   <span className="font-heading block text-base font-semibold text-[#11120e]">
@@ -396,7 +421,10 @@ export default function PricingComparisonTable() {
             const isOpen = !!open[group.category];
             const panelId = `${uid}-panel-${gi}`;
             return (
-              <div key={group.category} className="border-t border-black/[0.06] first:border-t-0">
+              <div
+                key={group.category}
+                className="border-t border-black/[0.06] first:border-t-0"
+              >
                 <button
                   type="button"
                   aria-expanded={isOpen}
@@ -425,7 +453,10 @@ export default function PricingComparisonTable() {
                     </span>
                   </span>
                   <span aria-hidden="true" className="hidden md:block" />
-                  <span aria-hidden="true" className={cn("hidden md:block", PRO_BAND)} />
+                  <span
+                    aria-hidden="true"
+                    className={cn("hidden md:block", PRO_BAND)}
+                  />
                   <span aria-hidden="true" className="hidden md:block" />
                 </button>
 
@@ -440,7 +471,10 @@ export default function PricingComparisonTable() {
                     {group.features.map((feat) => (
                       <div
                         key={feat.name}
-                        className={cn("grid items-stretch border-t border-black/[0.05]", ROW_COLS)}
+                        className={cn(
+                          "grid items-stretch border-t border-black/[0.05]",
+                          ROW_COLS,
+                        )}
                       >
                         {/* Name + hint */}
                         <div className="flex min-w-0 flex-col justify-center px-4 py-3.5 sm:px-6">
@@ -486,7 +520,8 @@ export default function PricingComparisonTable() {
 
       <p className="font-subheading mt-5 flex items-center justify-center gap-1.5 text-center text-xs text-[#85887e]">
         <Check className="size-3.5 text-[#0f7a47]" aria-hidden="true" />
-        Every plan includes unlimited scheduled posts and official OAuth 2.0 access.
+        Every plan includes unlimited scheduled posts and official OAuth 2.0
+        access.
       </p>
     </section>
   );

@@ -10,6 +10,7 @@ from app.modules.assistant.base import LLMResponse
 from app.modules.assistant.brand import BrandUpdate, save_brand
 from app.modules.assistant.models import VoiceProfile
 from app.modules.assistant.service import execute_feature
+from app.modules.billing.models import Subscription
 from app.modules.identity.models import User
 from app.modules.workspaces.models import Workspace, WorkspaceMembership
 
@@ -21,6 +22,14 @@ def identity():
         user = db.scalar(select(User))
         workspace = db.scalar(select(Workspace).where(Workspace.owner_user_id == user.id))
         return user.id, workspace.id
+
+
+@pytest.fixture(autouse=True)
+def paid_workspace(auth):
+    user_id, workspace_id = identity()
+    with SessionLocal.begin() as db:
+        db.add(Subscription(workspace_id=workspace_id, user_id=user_id,
+            provider_subscription_id=f"brand-test-{uuid4()}", plan_code="pro", status="active"))
 
 
 def test_profile_saves_without_accounts_and_updates_the_same_voice_record(client, auth):

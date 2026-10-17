@@ -1,5 +1,7 @@
 """FastAPI router for AI assistant features, platform profiles, and voice training."""
 
+from datetime import UTC
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -12,9 +14,15 @@ from app.core.dependencies import (
 from app.db.session import get_db
 from app.modules.assistant.brand import (
     BRAND_KIND,
+    BrandCreate,
     BrandResponse,
     BrandUpdate,
+    activate_brand,
     brand_response,
+    check_profile_capacity,
+    create_brand,
+    find_brand,
+    require_brand_access,
     save_brand,
 )
 from app.modules.assistant.conversations import execute_turn
@@ -56,8 +64,122 @@ def update_brand_profile(
     user: User = Depends(get_current_user),
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
+    profile_id: str | None = Query(default=None, max_length=36),
 ) -> BrandResponse:
-    save_brand(db, workspace.id, user.id, payload)
+    save_brand(db, workspace.id, user.id, payload, profile_id)
+    return brand_response(db, workspace.id, True)
+
+
+@router.post("/brand-profiles", response_model=BrandResponse, status_code=201)
+def add_brand_profile(
+    payload: BrandCreate,
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    create_brand(db, workspace.id, user.id, payload.name)
+    return brand_response(db, workspace.id, True)
+
+
+@router.post("/brand-profiles/{profile_id}/activate", response_model=BrandResponse)
+def switch_brand_profile(
+    profile_id: str,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    activate_brand(db, workspace.id, profile_id)
+    return brand_response(db, workspace.id, True)
+
+
+@router.patch("/brand-profiles/{profile_id}/name", response_model=BrandResponse)
+def rename_brand_profile(
+    profile_id: str,
+    payload: BrandCreate,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    from sqlalchemy import func
+
+    from app.modules.billing.usage import lock_workspace
+
+    lock_workspace(db, workspace.id)
+    require_brand_access(db, workspace.id)
+    profile = find_brand(db, workspace.id, profile_id)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(422, "A profile name is required")
+    if db.scalar(
+        select(VoiceProfile.id).where(
+            VoiceProfile.workspace_id == workspace.id,
+            VoiceProfile.id != profile_id,
+            func.lower(VoiceProfile.name) == name.lower(),
+        )
+    ):
+        raise HTTPException(409, "A profile with this name already exists")
+    profile.name = name
+    profile.settings = {**profile.settings, "profile_name": name}
+    db.commit()
+    return brand_response(db, workspace.id, True)
+
+
+@router.delete("/brand-profiles/{profile_id}", response_model=BrandResponse)
+def remove_brand_profile(
+    profile_id: str,
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    from app.modules.billing.usage import lock_workspace
+
+    lock_workspace(db, workspace.id)
+    profile = find_brand(db, workspace.id, profile_id)
+    db.delete(profile)
+    db.commit()
+    return brand_response(db, workspace.id, True)
+
+
+@router.post("/brand-profiles/{profile_id}/train", response_model=BrandResponse)
+async def train_existing_brand(
+    profile_id: str,
+    payload: BrandUpdate,
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    from app.modules.assistant.brand import brand_details
+
+    require_brand_access(db, workspace.id)
+    profile = find_brand(db, workspace.id, profile_id)
+    details = brand_details(profile)
+    if not details.sample_posts:
+        raise HTTPException(422, "Save at least one writing sample before training")
+    revision = profile.updated_at
+    if payload.expected_updated_at and payload.expected_updated_at != revision.replace(tzinfo=UTC):
+        raise HTTPException(409, "Your brand profile changed. Reload it before training again.")
+    output, _, _ = await execute_feature(
+        workspace.id,
+        user.id,
+        "voice_profile_training",
+        {"sample_posts": details.sample_posts},
+        platform="shared",
+        db=db,
+    )
+    # The provider call commits its credit reservation; recheck the profile revision
+    # under the workspace lock before applying anything to this profile.
+    db.expire_all()
+    save_brand(
+        db,
+        workspace.id,
+        user.id,
+        BrandUpdate(
+            style_guide=output.get("tone_description", "")[:1500],
+            voice_traits=[
+                value[:240] for value in output.get("style_keywords", []) if value.strip()
+            ][:8],
+            writing_rules="\n".join(output.get("rules", []))[:1500],
+            expected_updated_at=revision.replace(tzinfo=UTC),
+        ),
+        profile_id,
+    )
     return brand_response(db, workspace.id, True)
 
 
@@ -145,6 +267,7 @@ def create_voice_profile_endpoint(
     """Manually create a voice profile for the workspace."""
     if payload.settings.get("profile_kind") == BRAND_KIND:
         raise HTTPException(422, "Use brand profile settings to update your workspace brand")
+    check_profile_capacity(db, workspace.id)
     profile = VoiceProfile(
         workspace_id=workspace.id,
         user_id=user.id,

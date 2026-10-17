@@ -716,7 +716,7 @@ def test_plan_upgrade_relaxes_limits(test_setup):
         assert summary["plan_code"] == "pro"
         assert summary["connected_accounts"]["limit"] == 15
         assert summary["scheduled_posts"]["limit"] is None
-        assert summary["ai_credits"]["limit"] == 1000
+        assert summary["ai_credits"]["limit"] == 5000
 
 
 def test_real_time_official_api_fetching_on_request(analytics_adapter, test_setup):

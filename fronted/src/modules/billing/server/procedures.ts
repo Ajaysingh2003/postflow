@@ -1,12 +1,17 @@
 import axios from "axios";
 import { z } from "zod";
 
-import { authedProcedure, createTRPCRouter, getUserProcedure } from "@/trpc/init";
+import {
+  authedProcedure,
+  createTRPCRouter,
+  getUserProcedure,
+} from "@/trpc/init";
 import {
   getApiBase,
   getAuthHeaders,
   handleBackendError,
 } from "@/lib/http-error";
+import { PAID_ALLOWANCES } from "../planAllowances";
 import type { BillingConfigResponse } from "@/modules/types";
 
 export interface CheckoutResult {
@@ -26,46 +31,110 @@ export interface SubscriptionData {
 export const defaultPlans: BillingConfigResponse = {
   starter: {
     id: "starter",
-    limits: { ai_credits: 250, scheduled_posts: null, connected_accounts: 5, seats: 3, workspaces: 3 },
+    limits: {
+      ...PAID_ALLOWANCES.starter,
+      scheduled_posts: null,
+      connected_accounts: 5,
+      seats: 3,
+      workspaces: 3,
+    },
     name: "Starter",
     description: "Ideal for founders & creators scaling their personal brand.",
-    trial_days: 3,
+    trial_days: 0,
     billing_cycles: {
-      monthly: { amount: 29, price_id: "starter_monthly", currency: "USD", interval: "month" },
-      quarterly: { amount: 24, price_id: "starter_quarterly", currency: "USD", interval: "quarter" },
-      annually: { amount: 19, price_id: "starter_annually", currency: "USD", interval: "year" },
+      monthly: {
+        amount: 29,
+        price_id: "starter_monthly",
+        currency: "USD",
+        interval: "month",
+      },
+      quarterly: {
+        amount: 24,
+        price_id: "starter_quarterly",
+        currency: "USD",
+        interval: "quarter",
+      },
+      annually: {
+        amount: 19,
+        price_id: "starter_annually",
+        currency: "USD",
+        interval: "year",
+      },
     },
   },
   pro: {
     id: "pro",
-    limits: { ai_credits: 1000, scheduled_posts: null, connected_accounts: 15, seats: 5, workspaces: 5 },
+    limits: {
+      ...PAID_ALLOWANCES.pro,
+      scheduled_posts: null,
+      connected_accounts: 15,
+      seats: 5,
+      workspaces: 5,
+    },
     name: "Pro",
     description: "For growth leaders & high-volume teams running campaigns.",
     popular: true,
-    trial_days: 3,
+    trial_days: 0,
     billing_cycles: {
-      monthly: { amount: 59, price_id: "pro_monthly", currency: "USD", interval: "month" },
-      quarterly: { amount: 49, price_id: "pro_quarterly", currency: "USD", interval: "quarter" },
-      annually: { amount: 39, price_id: "pro_annually", currency: "USD", interval: "year" },
+      monthly: {
+        amount: 59,
+        price_id: "pro_monthly",
+        currency: "USD",
+        interval: "month",
+      },
+      quarterly: {
+        amount: 49,
+        price_id: "pro_quarterly",
+        currency: "USD",
+        interval: "quarter",
+      },
+      annually: {
+        amount: 39,
+        price_id: "pro_annually",
+        currency: "USD",
+        interval: "year",
+      },
     },
   },
   business: {
     id: "business",
-    limits: { ai_credits: 5000, scheduled_posts: null, connected_accounts: 50, seats: 15, workspaces: 10 },
+    limits: {
+      ...PAID_ALLOWANCES.business,
+      scheduled_posts: null,
+      connected_accounts: 50,
+      seats: 15,
+      workspaces: 10,
+    },
     name: "Business",
-    description: "For agencies managing client workspaces and larger publishing schedules.",
-    trial_days: 3,
+    description:
+      "For agencies managing client workspaces and larger publishing schedules.",
+    trial_days: 0,
     billing_cycles: {
-      monthly: { amount: 129, price_id: "business_monthly", currency: "USD", interval: "month" },
-      quarterly: { amount: 109, price_id: "business_quarterly", currency: "USD", interval: "quarter" },
-      annually: { amount: 89, price_id: "business_annually", currency: "USD", interval: "year" },
+      monthly: {
+        amount: 129,
+        price_id: "business_monthly",
+        currency: "USD",
+        interval: "month",
+      },
+      quarterly: {
+        amount: 109,
+        price_id: "business_quarterly",
+        currency: "USD",
+        interval: "quarter",
+      },
+      annually: {
+        amount: 89,
+        price_id: "business_annually",
+        currency: "USD",
+        interval: "year",
+      },
     },
   },
 };
 
 export const billingRouter = createTRPCRouter({
   /**
-   * Retrieves available subscription plans with 3 days trial.
+   * Retrieves available subscription plans without a trial.
    */
   getPlans: getUserProcedure.query(async (): Promise<BillingConfigResponse> => {
     try {
@@ -82,7 +151,7 @@ export const billingRouter = createTRPCRouter({
   }),
 
   /**
-   * Initiates Dodo Payments hosted checkout session with 3-day trial.
+   * Initiates Dodo Payments hosted checkout session without a trial.
    */
   Createcheckout: authedProcedure
     .input(
@@ -103,7 +172,10 @@ export const billingRouter = createTRPCRouter({
         }
         planCode = planCode || "starter";
 
-        const response = await axios.post<{ checkout_url: string; session_id: string }>(
+        const response = await axios.post<{
+          checkout_url: string;
+          session_id: string;
+        }>(
           `${getApiBase()}/v1/billing/checkout`,
           {
             plan_code: planCode,
@@ -143,7 +215,10 @@ export const billingRouter = createTRPCRouter({
       planCode = planCode || "starter";
 
       try {
-        const response = await axios.post<{ checkout_url: string; session_id: string }>(
+        const response = await axios.post<{
+          checkout_url: string;
+          session_id: string;
+        }>(
           `${getApiBase()}/v1/billing/checkout`,
           {
             plan_code: planCode,
@@ -165,17 +240,19 @@ export const billingRouter = createTRPCRouter({
   /**
    * Retrieves the current workspace subscription status.
    */
-  subscription: authedProcedure.query(async (): Promise<SubscriptionData | null> => {
-    try {
-      const response = await axios.get<SubscriptionData>(
-        `${getApiBase()}/v1/billing/subscription`,
-        { headers: await getAuthHeaders() },
-      );
-      return response.data;
-    } catch {
-      return null;
-    }
-  }),
+  subscription: authedProcedure.query(
+    async (): Promise<SubscriptionData | null> => {
+      try {
+        const response = await axios.get<SubscriptionData>(
+          `${getApiBase()}/v1/billing/subscription`,
+          { headers: await getAuthHeaders() },
+        );
+        return response.data;
+      } catch {
+        return null;
+      }
+    },
+  ),
 
   /**
    * Creates a Dodo customer portal session.

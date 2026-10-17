@@ -1,5 +1,4 @@
 import {
-  FileText,
   ShieldCheck,
   Cookie,
   AlertTriangle,
@@ -7,7 +6,6 @@ import {
   Server,
   Lock,
   CheckCircle2,
-  Share2,
   Sparkles,
 } from "lucide-react";
 import type { LegalDocMeta } from "../types";
@@ -18,9 +16,9 @@ export const LEGAL_DOCS: LegalDocMeta[] = [
     title: "Terms of Service",
     shortTitle: "Terms",
     slug: "/terms",
-    lastUpdated: "October 16, 2026",
-    effectiveDate: "October 16, 2026",
-    version: "2.4",
+    lastUpdated: "October 17, 2026",
+    effectiveDate: "October 17, 2026",
+    version: "2.5",
     readTime: "12 min read",
     description:
       "The terms governing your access to and use of Draftva's multi-channel social media scheduling, content composition, and AI writing platform.",
@@ -47,7 +45,7 @@ export const LEGAL_DOCS: LegalDocMeta[] = [
         icon: CheckCircle2,
         title: "Transparent Subscriptions",
         description:
-          "Enjoy a 3-day free trial with no surprises. Cancel anytime from your account settings with instant confirmation.",
+          "Use the Free plan without a trial deadline. Manage or cancel a paid subscription from account settings.",
       },
     ],
   },

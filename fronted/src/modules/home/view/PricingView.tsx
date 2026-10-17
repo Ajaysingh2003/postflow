@@ -27,7 +27,7 @@ function PricingView() {
       {/* 5. Frequently Asked Questions Accordion */}
       <PricingFaqSection />
 
-      {/* 6. High-converting $0 Free Trial Banner */}
+      {/* 6. Free-plan and billing information */}
       <div className="my-12">
         <PricingOverviewHome />
       </div>

@@ -57,7 +57,7 @@ def get_plans(db: Session = Depends(get_db)) -> dict:
             "name": "Starter",
             "description": "Ideal for founders & creators scaling their personal brand.",
             "popular": False,
-            "trial_days": 3,
+            "trial_days": 0,
             "billing_cycles": {
                 "monthly": {
                     "amount": 29,
@@ -84,7 +84,7 @@ def get_plans(db: Session = Depends(get_db)) -> dict:
             "name": "Pro",
             "description": "For growth leaders & high-volume teams running campaigns.",
             "popular": True,
-            "trial_days": 3,
+            "trial_days": 0,
             "billing_cycles": {
                 "monthly": {
                     "amount": 59,
@@ -111,7 +111,7 @@ def get_plans(db: Session = Depends(get_db)) -> dict:
             "name": "Business",
             "description": "For agencies managing client workspaces and larger publishing schedules.",
             "popular": False,
-            "trial_days": 3,
+            "trial_days": 0,
             "billing_cycles": {
                 "monthly": {
                     "amount": 129,

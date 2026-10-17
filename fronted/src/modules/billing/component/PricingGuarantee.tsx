@@ -17,10 +17,10 @@ const GUARANTEES: {
 }[] = [
   {
     icon: CalendarCheck,
-    badge: "$0 due today",
-    title: "3-day full access trial",
+    badge: "Free plan",
+    title: "Start free, upgrade when ready",
     description:
-      "Start on any paid tier for $0 today. Schedule posts, test AI writing, and experience the full platform risk-free.",
+      "Use the Free plan with no expiry. Choose a paid plan when you need more AI credits, accounts or brand profiles.",
   },
   {
     icon: ShieldCheck,

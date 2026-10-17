@@ -81,6 +81,10 @@ export type BrandProfile = BrandDraft & {
   workspace_id: string;
   updated_at: string | null;
   can_edit: boolean;
+  profile_name?: string;
+  profiles?: { id: string; name: string; active: boolean }[];
+  profile_limit?: number | null;
+  paid_access?: boolean;
 };
 export const EMPTY_BRAND: BrandDraft = {
   display_name: "",

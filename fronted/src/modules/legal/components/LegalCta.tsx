@@ -24,7 +24,9 @@ export function LegalCta() {
             </h3>
 
             <p className="font-content text-sm sm:text-base text-[#6d6e68] leading-relaxed">
-              Connect your official accounts on X, LinkedIn, Reddit, Bluesky, Mastodon, Facebook, Instagram, and Threads with full peace of mind.
+              Connect your official accounts on X, LinkedIn, Reddit, Bluesky,
+              Mastodon, Facebook, Instagram, and Threads with full peace of
+              mind.
             </p>
           </div>
 
@@ -33,7 +35,7 @@ export function LegalCta() {
               href="/register"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#3fda8a] px-6 py-3.5 text-sm font-semibold text-neutral-950 shadow-sm transition-all hover:bg-[#3fda8ae6] hover:translate-y-[-1px] active:translate-y-0"
             >
-              <span>Start 3-Day Free Trial</span>
+              <span>Start for free</span>
               <ArrowRight className="size-4" />
             </Link>
 

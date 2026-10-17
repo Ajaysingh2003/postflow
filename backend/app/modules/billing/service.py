@@ -30,14 +30,14 @@ async def create_checkout(
         if not settings.debug:
             raise HTTPException(503, "Billing is not configured")
         return {
-            "checkout_url": f"{settings.dodo_return_url}?checkout=success&plan={plan_code}&trial_days=3",
+            "checkout_url": f"{settings.dodo_return_url}?checkout=success&plan={plan_code}",
             "session_id": f"mock_dodo_sess_{user_id}_{plan_code}",
         }
 
     body = {
         "product_cart": [{"product_id": product_id, "quantity": seats}],
         "subscription_data": {
-            "trial_period_days": 3,
+            "trial_period_days": 0,
         },
         "customer": {"email": email, "name": name},
         "return_url": settings.dodo_return_url,

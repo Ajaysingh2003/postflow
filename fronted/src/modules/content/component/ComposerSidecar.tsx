@@ -38,6 +38,7 @@ import { CommandDialog } from "./CommandDialog";
 import { DEFAULT_COMMANDS, getCommandIcon, type CommandItem } from "../types";
 import GenerateAvatar from "@/modules/user/component/GenerateAvartar";
 import { AiUsageNotice } from "@/modules/billing/component/AiUsageNotice";
+import { BrandProfileManager } from "./BrandProfileManager";
 import {
   useAiAllowance,
   useRefreshUsage,
@@ -209,7 +210,8 @@ function ComposerSidecarContent({
   const scope =
     sidecarBridge?.scope ??
     `${workspace.data?.id ?? "loading"}:${state.localId}:${account?.id ?? state.platform}`;
-  const agent = useAgentChat(state, scope, sidecarBridge, account?.id, {
+  const voiceScope = `${scope}:brand:${brandProfile.data?.paid_access ? (brandProfile.data.id ?? "new") : "none"}`;
+  const agent = useAgentChat(state, voiceScope, sidecarBridge, account?.id, {
     workspaceId: workspace.data.id,
     viewerId: viewer.data.id,
   });
@@ -224,7 +226,7 @@ function ComposerSidecarContent({
 
   const contextReady = agent.restored
     ? !!agent.conversation && !agent.error && agent.conversation.can_continue
-    : currentContextReady;
+    : currentContextReady && !brandProfile.isPending;
   const [historyOpen, setHistoryOpen] = useState(false);
   function newConversation() {
     if (agent.busy) return;
@@ -825,11 +827,21 @@ function ComposerSidecarContent({
 
                     <span className="max-w-40 truncate">
                       <span className="font-medium text-[#23272c]">
-                        {brandProfile.data?.display_name || "Your brand"}
+                        {brandProfile.data?.profile_name ||
+                          brandProfile.data?.display_name ||
+                          "Your brand"}
                       </span>
                       <span className="ml-1">voice</span>
                     </span>
                   </button>
+                  {brandProfile.data && (
+                    <BrandProfileManager
+                      compact
+                      workspaceId={workspace.data.id}
+                      profile={brandProfile.data}
+                      disabled={agent.busy}
+                    />
+                  )}
                   <button
                     type="button"
                     aria-label="Attach media"

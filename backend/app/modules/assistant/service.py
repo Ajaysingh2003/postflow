@@ -105,6 +105,10 @@ async def execute_feature(
         )
         if account is None:
             raise HTTPException(404, "Connected account not found in this workspace/platform")
+    from app.modules.assistant.brand import require_brand_access
+
+    if db and feature_id == "voice_profile_training":
+        require_brand_access(db, workspace_id)
     voice = ""
     if voice_profile_id:
         v = (
@@ -118,6 +122,7 @@ async def execute_feature(
         )
         if v is None:
             raise HTTPException(404, "Voice profile not found in this workspace")
+        require_brand_access(db, workspace_id)
         voice = "Voice preferences: " + json.dumps(
             {"tone": v.tone_description, "settings": v.settings, "sample_posts": v.sample_posts[:5]}
         )
@@ -286,6 +291,10 @@ async def train_voice_profile(
             detail="At least one sample post is required to train a voice profile.",
         )
 
+    from app.modules.assistant.brand import check_profile_capacity
+
+    check_profile_capacity(db, workspace_id)
+
     output, _, _ = await execute_feature(
         workspace_id=workspace_id,
         user_id=user_id,
@@ -300,6 +309,7 @@ async def train_voice_profile(
     style_keywords = output.get("style_keywords", [])
     rules = output.get("rules", [])
 
+    check_profile_capacity(db, workspace_id)
     profile = VoiceProfile(
         workspace_id=workspace_id,
         user_id=user_id,

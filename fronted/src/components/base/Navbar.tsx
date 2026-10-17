@@ -398,7 +398,7 @@ function FeaturePreview({
 
                 <p className="mt-2 text-[11px] font-medium leading-relaxed text-neutral-800">
                   Months of building. Countless iterations.
-                  Today, we're finally sharing what we've created.
+                  Today, we&apos;re finally sharing what we&apos;ve created.
                 </p>
               </div>
             </div>
@@ -570,7 +570,7 @@ function FeaturePreview({
                 </div>
 
                 <p className="mt-2 text-[10px] leading-relaxed text-neutral-500">
-                  Ready for the team's final review.
+                  Ready for the team&apos;s final review.
                 </p>
               </div>
 
@@ -877,9 +877,8 @@ function NavItemCard({
   const Icon = item.icon;
 
   return (
-    <NavigationMenuLink >
-      <Link
-        href={item.href}
+    <NavigationMenuLink
+        render={<Link href={item.href} />}
         onMouseEnter={onHover}
         onFocus={onHover}
         onClick={onNavigate}
@@ -919,7 +918,6 @@ function NavItemCard({
             {item.description}
           </p>
         </div>
-      </Link>
     </NavigationMenuLink>
   );
 }
@@ -1225,38 +1223,32 @@ export default function Navbar() {
                 {/* Direct Navigation */}
 
                 <NavigationMenuItem>
-                  <NavigationMenuLink >
-                    <Link
-                      href={ROUTES.integrations}
+                  <NavigationMenuLink
+                      render={<Link href={ROUTES.integrations} />}
                       onClick={closeDesktop}
                       className="inline-flex h-9 items-center rounded-lg px-3 text-[13px] font-medium text-neutral-600 transition-colors hover:bg-black/[0.04] hover:text-neutral-900"
                     >
                       Integrations
-                    </Link>
                   </NavigationMenuLink>
                 </NavigationMenuItem>
 
                 <NavigationMenuItem>
-                  <NavigationMenuLink >
-                    <Link
-                      href={ROUTES.pricing}
+                  <NavigationMenuLink
+                      render={<Link href={ROUTES.pricing} />}
                       onClick={closeDesktop}
                       className="inline-flex h-9 items-center rounded-lg px-3 text-[13px] font-medium text-neutral-600 transition-colors hover:bg-black/[0.04] hover:text-neutral-900"
                     >
                       Pricing
-                    </Link>
                   </NavigationMenuLink>
                 </NavigationMenuItem>
 
                 <NavigationMenuItem>
-                  <NavigationMenuLink >
-                    <Link
-                      href={ROUTES.howItWorks}
+                  <NavigationMenuLink
+                      render={<Link href={ROUTES.howItWorks} />}
                       onClick={closeDesktop}
                       className="inline-flex h-9 items-center rounded-lg px-3 text-[13px] font-medium text-neutral-600 transition-colors hover:bg-black/[0.04] hover:text-neutral-900"
                     >
                       How it works
-                    </Link>
                   </NavigationMenuLink>
                 </NavigationMenuItem>
               </NavigationMenuList>
@@ -1295,14 +1287,12 @@ export default function Navbar() {
 
         <div className="lg:hidden">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger >
-              <button
+            <SheetTrigger
                 type="button"
                 aria-label="Open navigation menu"
                 className="flex size-9 items-center justify-center rounded-[10px] border border-black/[0.08] bg-white/90 text-neutral-800 shadow-sm transition-colors hover:bg-white"
               >
                 <Menu size={19} />
-              </button>
             </SheetTrigger>
 
             <SheetContent

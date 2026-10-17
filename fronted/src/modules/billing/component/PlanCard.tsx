@@ -30,7 +30,12 @@ function PlanCard({
       )}
     >
       <PlanCardHeader popular={popular} timeLine={timeLine} plan={plan} />
-      <div className={cn("px-5 mt-4 pb-2 flex flex-col flex-1 justify-between",!popular && "")}>
+      <div
+        className={cn(
+          "px-5 mt-4 pb-2 flex flex-col flex-1 justify-between",
+          !popular && "",
+        )}
+      >
         <ul className="flex flex-col  gap-3">
           {feature?.map((e, i) => (
             <li key={i} className="flex items-center gap-3 font-medium ">
@@ -72,7 +77,7 @@ function PlanCard({
               "bg-gray-300 overflow-hidden rounded-full size-5 text-center flex items-center justify-center ",
               popular && "bg-stone-700",
             )}
-          > 
+          >
             <motion.div
               initial={{ x: 10 }}
               animate={{ x: hoverSeeAll ? [0, 20, 0] : 0 }}
@@ -114,9 +119,14 @@ function PlanCardHeader({
         }
       },
       onError(error) {
-        if (error.data?.code === "UNAUTHORIZED" || error.message?.includes("Authentication required")) {
-          toast.error("Please sign in to start your 3-day free trial.");
-          router.push("/login?redirect=" + encodeURIComponent(window.location.pathname));
+        if (
+          error.data?.code === "UNAUTHORIZED" ||
+          error.message?.includes("Authentication required")
+        ) {
+          toast.error("Please sign in to choose a paid plan.");
+          router.push(
+            "/login?redirect=" + encodeURIComponent(window.location.pathname),
+          );
           return;
         }
         toast.error(
@@ -185,7 +195,7 @@ function PlanCardHeader({
              relative
             `}
         >
-          {mutate.isPending ? "Starting trial..." : "Start 3-Day Free Trial"}
+          {mutate.isPending ? "Opening checkout…" : "Choose plan"}
         </Button>
       </div>
     </div>

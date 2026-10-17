@@ -11,9 +11,9 @@ interface FaqItem {
 
 const FAQS: FaqItem[] = [
   {
-    question: "How does the 3-day free trial work?",
+    question: "Is there a free plan?",
     answer:
-      "When you choose any paid plan (Starter, Pro, or Business), you get full unrestricted access to all features, AI capabilities, and unlimited post scheduling for 72 hours. You will not be charged during the trial period. If you decide Draftva isn't for you, cancel anytime before the trial ends with one click and you won't pay a cent.",
+      "Yes. Free includes 20 AI credits per month, 5 posts per month and 2 connected accounts, with no trial deadline. Paid plans start at checkout and include unlimited posts, more AI credits and custom brand voice profiles.",
   },
   {
     question: "Is post scheduling truly unlimited on all paid plans?",
@@ -65,7 +65,7 @@ export default function PricingFaqSection() {
         </h3>
 
         <p className="mt-3 font-subheading text-sm text-[#6d7066] sm:text-base">
-          Everything you need to know about billing, trials, quotas, and platform
+          Everything you need to know about billing, plans, quotas, and platform
           safety. Have another question? Our support team is ready to help.
         </p>
       </div>

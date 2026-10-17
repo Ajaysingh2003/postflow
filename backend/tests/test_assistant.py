@@ -25,6 +25,7 @@ from app.modules.assistant.service import (
     fetch_untrusted_url_content,
     train_voice_profile,
 )
+from app.modules.billing.models import Subscription
 from app.modules.channels.models import SubredditProfile
 from app.modules.identity.models import PasswordCredential, SessionToken, User
 from app.modules.workspaces.models import Workspace, WorkspaceMembership
@@ -111,7 +112,12 @@ def test_setup():
             token_hash=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
             expires_at=datetime.now(UTC) + timedelta(days=1),
         )
-        db.add_all([user, ws, cred, mem, session])
+        db.add(user)
+        db.flush()
+        db.add(ws)
+        db.flush()
+        db.add_all([cred, mem, session])
+        db.add(Subscription(workspace_id=ws_id, user_id=user_id, provider_subscription_id=f"ai-test-{uuid4()}", plan_code="pro", status="active"))
 
     client = TestClient(app)
     headers = {

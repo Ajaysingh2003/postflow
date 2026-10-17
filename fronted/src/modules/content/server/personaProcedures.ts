@@ -19,6 +19,59 @@ async function brandError(error: unknown, fallback: string): Promise<never> {
   return handleBackendError(error, fallback);
 }
 export const personaRouter = createTRPCRouter({
+  manageBrand: authedProcedure
+    .input(
+      workspace.extend({
+        action: z.enum(["create", "activate", "rename", "delete", "train"]),
+        profileId: z.string().uuid().optional(),
+        name: z.string().trim().min(1).max(120).optional(),
+        expectedUpdatedAt: z
+          .string()
+          .datetime({ offset: true })
+          .nullable()
+          .optional(),
+      }),
+    )
+    .mutation(async ({ input }): Promise<BrandProfile> => {
+      if (input.action !== "create" && !input.profileId)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Choose a brand profile",
+        });
+      if (["create", "rename"].includes(input.action) && !input.name)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Enter a profile name",
+        });
+      const path =
+        input.action === "create"
+          ? ""
+          : `/${input.profileId}${input.action === "delete" ? "" : input.action === "rename" ? "/name" : `/${input.action}`}`;
+      try {
+        return (
+          await axios.request<BrandProfile>({
+            method:
+              input.action === "delete"
+                ? "DELETE"
+                : input.action === "rename"
+                  ? "PATCH"
+                  : "POST",
+            url: `${getApiBase()}/v1/assistant/brand-profiles${path}`,
+            data:
+              input.action === "train"
+                ? { expected_updated_at: input.expectedUpdatedAt }
+                : { name: input.name },
+            headers: await getAuthHeaders(undefined, input.workspaceId),
+            timeout: input.action === "train" ? 120000 : 15000,
+          })
+        ).data;
+      } catch (error) {
+        return brandError(
+          error,
+          "Could not update your brand profiles. Please try again.",
+        );
+      }
+    }),
   brand: authedProcedure
     .input(workspace)
     .query(async ({ input }): Promise<BrandProfile> => {
@@ -44,6 +97,7 @@ export const personaRouter = createTRPCRouter({
       workspace.extend({
         profile: brandSchema,
         expectedUpdatedAt: z.string().datetime({ offset: true }).nullable(),
+        profileId: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ input }): Promise<BrandProfile> => {
@@ -57,6 +111,7 @@ export const personaRouter = createTRPCRouter({
             },
             {
               headers: await getAuthHeaders(undefined, input.workspaceId),
+              params: { profile_id: input.profileId },
               timeout: 15000,
             },
           )

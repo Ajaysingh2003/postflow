@@ -24,7 +24,7 @@ Run the publishing worker and maintenance scheduler in separate terminals:
 .venv/bin/python -c "from app.jobs.runner import run; run('scheduler')"
 ```
 
-Redis is required in production. Mock AI output is explicitly opt-in and prohibited in production. Real AI requires `LLM_PROVIDER_URL`, `LLM_PROVIDER_API_KEY` and `LLM_MODEL`. Uploads require R2/S3 and ClamAV. Verification, password-reset and invitation emails require SMTP with verified STARTTLS.
+Redis is required in production. Mock AI output is explicitly opt-in and prohibited in production. Real AI requires `LLM_PROVIDER_URL`, `LLM_PROVIDER_API_KEY` and `LLM_MODEL`. Uploads require R2/S3 and ClamAV. Verification, password-reset and invitation emails require Resend with a verified sender or SMTP with verified STARTTLS.
 
 Billing reconciliation uses durable keyset progress, a shared scheduler lease and
 per-subscription retries. See [billing recovery operations](docs/billing-reconciliation.md)
@@ -44,6 +44,12 @@ docker compose up --build -d
 Team invitation acceptance, Redis analytics caching/read budgets and storage quota/cleanup
 configuration are documented in [team invitations and cost controls](docs/team-invitations-and-cost-controls.md).
 
+Direct browser uploads, required R2 CORS configuration and yearly-plan monthly AI
+renewals are documented in [direct R2 uploads](docs/direct-r2-uploads.md).
+
+Numeric AI counters, bonus credit grants, terminal resets and migration cutover
+are documented in [AI credit operations](docs/ai-credit-operations.md).
+
 ## Verify
 
 ```sh
@@ -56,3 +62,13 @@ The regression suite checks workspace isolation, publication claims and uncertai
 The backend CI workflow runs SQLite checks on Python 3.12 and 3.14 and a separate PostgreSQL/Redis job. Optional service tests use an explicitly isolated database named `draftva_test` through `draftva_TEST_DATABASE_URL`; never point the test suite at application data.
 
 The new migration is additive. Existing application/production databases have not been reset or migrated by this repair task; run `alembic upgrade head` against the intended database before starting the updated application.
+
+
+## Production on api.draftva.com
+
+Use the [production deployment runbook](docs/production-deployment.md) for AWS/GCP
+VM deployment with Docker, Nginx HTTPS, certificate renewal, environment preflight,
+backups, exact OAuth callbacks and the live Dodo webhook. Production uses
+`compose.prod.yaml` through `scripts/compose-prod.sh`; do not expose the development
+Compose stack to the internet. No cloud resources, DNS changes or public certificates
+are created by the repository checks.

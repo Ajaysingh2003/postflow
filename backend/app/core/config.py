@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
 
     app_env: str = "development"
     app_secret: str = "development-only-secret-change-me"
@@ -170,6 +170,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 "X login callback must use HTTPS (HTTP localhost is allowed in development)"
             )
+        if parts.path != "/api/auth/x/callback":
+            raise ValueError(
+                "X_LOGIN_REDIRECT_URI must point to the frontend /api/auth/x/callback route, "
+                "not the publishing channel callback"
+            )
         return self
 
     @property
@@ -213,6 +218,30 @@ class Settings(BaseSettings):
                 raise ValueError("Rate limiting cannot be disabled in production")
             if urlsplit(self.frontend_url).scheme != "https":
                 raise ValueError("Production FRONTEND_URL must use HTTPS for authentication links")
+            if not self.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+                raise ValueError("Production DATABASE_URL must use PostgreSQL")
+            public_backend = urlsplit(self.public_backend_url or self.oauth_redirect_base_url)
+            if public_backend.scheme != "https":
+                raise ValueError("Production PUBLIC_BACKEND_URL and OAuth callbacks must use HTTPS")
+            for origin in self.cors_origin_list:
+                parsed = urlsplit(origin)
+                if (
+                    parsed.scheme != "https"
+                    or not parsed.hostname
+                    or parsed.username
+                    or parsed.password
+                    or parsed.path not in {"", "/"}
+                    or parsed.query
+                    or parsed.fragment
+                ):
+                    raise ValueError("Production CORS_ORIGINS must contain exact HTTPS origins")
+            if not self.cors_origin_list:
+                raise ValueError("Production CORS_ORIGINS cannot be empty")
+            if (
+                self.dodo_api_key
+                and self.dodo_api_base.rstrip("/") != "https://live.dodopayments.com"
+            ):
+                raise ValueError("Production billing must use the live Dodo API")
         return self
 
     def dodo_product_id(self, plan_code: str) -> str | None:

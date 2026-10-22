@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
   Code2,
+  Divide,
   Layers3,
   Menu,
   PencilLine,
@@ -42,6 +43,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import Image from "next/image";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useTRPC } from "@/trpc/client";
+import { Button } from "@base-ui/react";
+import { useRouter } from "next/navigation";
 
 /* -------------------------------------------------------------------------- */
 /* Configuration                                                              */
@@ -129,7 +135,7 @@ const products: NavEntry<FeatureKind>[] = [
     icon: BarChart3,
     kind: "analytics",
   },
-  
+
   {
     title: "Social Integrations",
     description: "Manage your channels in one workspace.",
@@ -190,34 +196,9 @@ function BrandLogo({ compact = false }: { compact?: boolean }) {
     <Link
       href={ROUTES.home}
       aria-label="Draftva home"
-      className="group inline-flex shrink-0 items-center gap-2.5"
+      className="group inline-flex shrink-0 rounded-full overflow-hidden size-10 items-center gap-2.5"
     >
-      <span
-        className={cn(
-          "relative flex shrink-0 items-center justify-center overflow-hidden",
-          "rounded-[10px] bg-[#101311] text-white",
-          "shadow-[inset_0_1px_1px_rgba(255,255,255,0.16),0_2px_5px_rgba(0,0,0,0.12)]",
-          compact ? "size-8" : "size-[34px]"
-        )}
-      >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-1 bottom-[-16px] h-8 rounded-full bg-[#3fda8a]/25 blur-xl"
-        />
-
-        <span className="relative text-[21px] font-black leading-none tracking-[-0.12em] pr-0.5">
-          D
-        </span>
-      </span>
-
-      <span
-        className={cn(
-          "font-heading font-bold tracking-[-0.065em] text-neutral-950",
-          compact ? "text-[20px]" : "text-[23px]"
-        )}
-      >
-        draftva<span className="text-[#3fda8a]">.</span>
-      </span>
+      <Image src={"/logo.jpg"} height={100} width={100} alt="" />
     </Link>
   );
 }
@@ -233,13 +214,7 @@ const CHANNELS = [
   { name: "Reddit", short: "r/" },
 ];
 
-function SocialBadge({
-  name,
-  short,
-}: {
-  name: string;
-  short: string;
-}) {
+function SocialBadge({ name, short }: { name: string; short: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-md border border-black/[0.065] bg-white px-2 py-1.5 text-[10px] font-medium text-neutral-600">
       <span className="flex size-[17px] items-center justify-center rounded bg-neutral-900 text-[9px] font-bold text-white">
@@ -280,7 +255,7 @@ function FeaturePreview({
     <div
       className={cn(
         "relative flex h-full min-h-[325px] flex-col overflow-hidden",
-        "rounded-xl border border-[#d9efe1] bg-[#f5fbf7]"
+        "rounded-xl border border-[#d9efe1] bg-[#f5fbf7]",
       )}
     >
       {/* Background decoration */}
@@ -397,8 +372,8 @@ function FeaturePreview({
                 </div>
 
                 <p className="mt-2 text-[11px] font-medium leading-relaxed text-neutral-800">
-                  Months of building. Countless iterations.
-                  Today, we&apos;re finally sharing what we&apos;ve created.
+                  Months of building. Countless iterations. Today, we&apos;re
+                  finally sharing what we&apos;ve created.
                 </p>
               </div>
             </div>
@@ -418,13 +393,8 @@ function FeaturePreview({
 
               <div className="mt-4 grid grid-cols-7 gap-1">
                 {["M", "T", "W", "T", "F", "S", "S"].map((day, i) => (
-                  <div
-                    key={i}
-                    className="flex flex-col items-center gap-2"
-                  >
-                    <span className="text-[9px] text-neutral-400">
-                      {day}
-                    </span>
+                  <div key={i} className="flex flex-col items-center gap-2">
+                    <span className="text-[9px] text-neutral-400">{day}</span>
 
                     <motion.div
                       initial={{ scale: reduced ? 1 : 0.7, opacity: 0 }}
@@ -436,7 +406,7 @@ function FeaturePreview({
                         "flex size-7 items-center justify-center rounded-md text-[10px]",
                         [0, 2, 4].includes(i)
                           ? "bg-[#3fda8a] font-semibold text-[#0c3921]"
-                          : "bg-neutral-100 text-neutral-400"
+                          : "bg-neutral-100 text-neutral-400",
                       )}
                     >
                       {[0, 2, 4].includes(i) ? <Check size={12} /> : i + 12}
@@ -525,10 +495,7 @@ function FeaturePreview({
 
               <div className="mt-5 flex h-[84px] items-end gap-2 border-b border-neutral-100 pb-1">
                 {[35, 48, 41, 62, 52, 78, 92, 73, 86].map((height, i) => (
-                  <div
-                    key={i}
-                    className="flex h-full flex-1 items-end"
-                  >
+                  <div key={i} className="flex h-full flex-1 items-end">
                     <motion.div
                       initial={{ height: reduced ? `${height}%` : 0 }}
                       animate={{ height: `${height}%` }}
@@ -538,9 +505,7 @@ function FeaturePreview({
                       }}
                       className={cn(
                         "w-full rounded-t-[3px]",
-                        i === 6
-                          ? "bg-[#27b96d]"
-                          : "bg-[#b8efcb]"
+                        i === 6 ? "bg-[#27b96d]" : "bg-[#b8efcb]",
                       )}
                     />
                   </div>
@@ -609,7 +574,7 @@ function FeaturePreview({
                   }}
                   className={cn(
                     "flex items-center gap-2.5 rounded-lg px-2 py-2",
-                    i !== CHANNELS.length - 1 && "border-b border-neutral-50"
+                    i !== CHANNELS.length - 1 && "border-b border-neutral-50",
                   )}
                 >
                   <span className="flex size-7 items-center justify-center rounded-lg bg-neutral-900 text-[11px] font-bold text-white">
@@ -878,46 +843,46 @@ function NavItemCard({
 
   return (
     <NavigationMenuLink
-        render={<Link href={item.href} />}
-        onMouseEnter={onHover}
-        onFocus={onHover}
-        onClick={onNavigate}
+      render={<Link href={item.href} />}
+      onMouseEnter={onHover}
+      onFocus={onHover}
+      onClick={onNavigate}
+      className={cn(
+        "group flex items-start gap-3 rounded-xl p-2.5",
+        "transition-colors duration-150",
+        "hover:bg-[#f3faf5] focus-visible:bg-[#f3faf5]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3fda8a]",
+      )}
+    >
+      <span
         className={cn(
-          "group flex items-start gap-3 rounded-xl p-2.5",
-          "transition-colors duration-150",
-          "hover:bg-[#f3faf5] focus-visible:bg-[#f3faf5]",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3fda8a]"
+          "flex size-9 shrink-0 items-center justify-center rounded-[10px]",
+          "border border-black/[0.06] bg-white text-neutral-600",
+          "shadow-[0_1px_2px_rgba(0,0,0,0.025)]",
+          "transition-all duration-150",
+          "group-hover:border-[#c0ebcf] group-hover:bg-[#e9f9ee]",
+          "group-hover:text-[#168b50]",
         )}
       >
-        <span
-          className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-[10px]",
-            "border border-black/[0.06] bg-white text-neutral-600",
-            "shadow-[0_1px_2px_rgba(0,0,0,0.025)]",
-            "transition-all duration-150",
-            "group-hover:border-[#c0ebcf] group-hover:bg-[#e9f9ee]",
-            "group-hover:text-[#168b50]"
-          )}
-        >
-          <Icon size={16} strokeWidth={1.8} />
-        </span>
+        <Icon size={16} strokeWidth={1.8} />
+      </span>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1">
-            <span className="font-heading text-[12px] font-semibold tracking-tight text-neutral-900">
-              {item.title}
-            </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <span className="font-heading text-[12px] font-semibold tracking-tight text-neutral-900">
+            {item.title}
+          </span>
 
-            <ArrowRight
-              size={12}
-              className="translate-x-[-3px] text-neutral-400 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100"
-            />
-          </div>
-
-          <p className="mt-0.5 line-clamp-2 text-[11px] leading-[1.5] text-neutral-500">
-            {item.description}
-          </p>
+          <ArrowRight
+            size={12}
+            className="translate-x-[-3px] text-neutral-400 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100"
+          />
         </div>
+
+        <p className="mt-0.5 line-clamp-2 text-[11px] leading-[1.5] text-neutral-500">
+          {item.description}
+        </p>
+      </div>
     </NavigationMenuLink>
   );
 }
@@ -955,7 +920,7 @@ function MobileNavGroup({
           size={16}
           className={cn(
             "text-neutral-500 transition-transform duration-200",
-            expanded && "rotate-180"
+            expanded && "rotate-180",
           )}
         />
       </button>
@@ -1016,14 +981,13 @@ function MobileNavGroup({
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [desktopMenu, setDesktopMenu] = useState("");
-  const [activeFeature, setActiveFeature] =
-    useState<FeatureKind>("composer");
+  const [activeFeature, setActiveFeature] = useState<FeatureKind>("composer");
   const [activeAudience, setActiveAudience] =
     useState<AudienceKind>("creators");
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(
-    "Product"
+    "Product",
   );
 
   const reduced = Boolean(useReducedMotion());
@@ -1046,7 +1010,12 @@ export default function Navbar() {
 
   const closeDesktop = () => setDesktopMenu("");
   const closeMobile = () => setMobileOpen(false);
+  const trpc = useTRPC();
+  const { data: userData } = useSuspenseQuery(trpc.user.me.queryOptions());
 
+  const router = useRouter();
+
+  console.log(userData, "leah jaye");
   return (
     <header
       className={cn(
@@ -1054,7 +1023,7 @@ export default function Navbar() {
         "transition-all duration-300 ease-out",
         scrolled
           ? "border-b border-black/[0.06] bg-[#faf9f5]/90 shadow-[0_8px_30px_-15px_rgba(20,22,16,0.08)] backdrop-blur-xl"
-          : "border-b border-transparent bg-[#faf9f5]/70 backdrop-blur-md"
+          : "border-b border-transparent bg-[#faf9f5]/70 backdrop-blur-md",
       )}
     >
       <a
@@ -1096,7 +1065,7 @@ export default function Navbar() {
                       "shadow-none transition-colors",
                       "hover:bg-black/[0.04] hover:text-neutral-900",
                       "data-[state=open]:bg-black/[0.04]",
-                      "data-[state=open]:text-neutral-900"
+                      "data-[state=open]:text-neutral-900",
                     )}
                   >
                     Product
@@ -1121,9 +1090,7 @@ export default function Navbar() {
                               <NavItemCard
                                 key={item.kind}
                                 item={item}
-                                onHover={() =>
-                                  setActiveFeature(item.kind)
-                                }
+                                onHover={() => setActiveFeature(item.kind)}
                                 onNavigate={closeDesktop}
                               />
                             ))}
@@ -1136,7 +1103,6 @@ export default function Navbar() {
                               className="group inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-semibold text-[#168b50] transition-colors hover:text-[#086b38]"
                             >
                               Explore the platform
-
                               <ArrowRight
                                 size={14}
                                 className="transition-transform group-hover:translate-x-1"
@@ -1177,7 +1143,7 @@ export default function Navbar() {
                       "shadow-none transition-colors",
                       "hover:bg-black/[0.04] hover:text-neutral-900",
                       "data-[state=open]:bg-black/[0.04]",
-                      "data-[state=open]:text-neutral-900"
+                      "data-[state=open]:text-neutral-900",
                     )}
                   >
                     Solutions
@@ -1202,9 +1168,7 @@ export default function Navbar() {
                               <NavItemCard
                                 key={item.kind}
                                 item={item}
-                                onHover={() =>
-                                  setActiveAudience(item.kind)
-                                }
+                                onHover={() => setActiveAudience(item.kind)}
                                 onNavigate={closeDesktop}
                               />
                             ))}
@@ -1224,33 +1188,24 @@ export default function Navbar() {
 
                 <NavigationMenuItem>
                   <NavigationMenuLink
-                      render={<Link href={ROUTES.integrations} />}
-                      onClick={closeDesktop}
-                      className="inline-flex h-9 items-center rounded-lg px-3 text-[13px] font-medium text-neutral-600 transition-colors hover:bg-black/[0.04] hover:text-neutral-900"
-                    >
-                      Integrations
+                    render={<Link href={ROUTES.integrations} />}
+                    onClick={closeDesktop}
+                    className="inline-flex h-9 items-center rounded-lg px-3 text-[13px] font-medium text-neutral-600 transition-colors hover:bg-black/[0.04] hover:text-neutral-900"
+                  >
+                    Integrations
                   </NavigationMenuLink>
                 </NavigationMenuItem>
 
                 <NavigationMenuItem>
                   <NavigationMenuLink
-                      render={<Link href={ROUTES.pricing} />}
-                      onClick={closeDesktop}
-                      className="inline-flex h-9 items-center rounded-lg px-3 text-[13px] font-medium text-neutral-600 transition-colors hover:bg-black/[0.04] hover:text-neutral-900"
-                    >
-                      Pricing
+                    render={<Link href={ROUTES.pricing} />}
+                    onClick={closeDesktop}
+                    className="inline-flex h-9 items-center rounded-lg px-3 text-[13px] font-medium text-neutral-600 transition-colors hover:bg-black/[0.04] hover:text-neutral-900"
+                  >
+                    Pricing
                   </NavigationMenuLink>
                 </NavigationMenuItem>
 
-                <NavigationMenuItem>
-                  <NavigationMenuLink
-                      render={<Link href={ROUTES.howItWorks} />}
-                      onClick={closeDesktop}
-                      className="inline-flex h-9 items-center rounded-lg px-3 text-[13px] font-medium text-neutral-600 transition-colors hover:bg-black/[0.04] hover:text-neutral-900"
-                    >
-                      How it works
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
               </NavigationMenuList>
             </NavigationMenu>
           </div>
@@ -1258,41 +1213,44 @@ export default function Navbar() {
 
         {/* Right: Desktop Actions */}
 
-        <div className="hidden items-center gap-2.5 lg:flex">
-          <Link
-            href={ROUTES.login}
-            className={cn(
-              "secondary-btn rounded-lg"
-            )}
-          >
-            Sign in
-          </Link>
+        {!userData ? (
+          <div className="hidden items-center gap-2.5 lg:flex">
+            <Link
+              href={ROUTES.login}
+              className={cn("secondary-btn rounded-lg")}
+            >
+              Sign in
+            </Link>
 
-          <Link
-            href={ROUTES.signup}
-            className={cn(
-              "primary-btn rounded-lg"
-            )}
-          >
-            Start for free
-
-            <ArrowRight
-              size={14}
-              className="transition-transform group-hover:translate-x-0.5"
-            />
-          </Link>
-        </div>
+            <Link href={ROUTES.signup} className={cn("primary-btn rounded-lg")}>
+              Start for free
+              <ArrowRight
+                size={14}
+                className="transition-transform group-hover:translate-x-0.5"
+              />
+            </Link>
+          </div>
+        ) : (
+          <div className="hidden lg:inline-block">
+            <Button
+              onClick={() => router.push(`/dashboard`)}
+              className={" capitalize  primary-btn rounded-lg "}
+            >
+              Dashboard
+            </Button>
+          </div>
+        )}
 
         {/* Mobile Navigation */}
 
-        <div className="lg:hidden">
+        <div className="lg:hidden no-scrollbar">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger
-                type="button"
-                aria-label="Open navigation menu"
-                className="flex size-9 items-center justify-center rounded-[10px] border border-black/[0.08] bg-white/90 text-neutral-800 shadow-sm transition-colors hover:bg-white"
-              >
-                <Menu size={19} />
+              type="button"
+              aria-label="Open navigation menu"
+              className="flex size-9 items-center justify-center rounded-[10px] border border-black/[0.08] bg-white/90 text-neutral-800 shadow-sm transition-colors hover:bg-white"
+            >
+              <Menu size={19} />
             </SheetTrigger>
 
             <SheetContent
@@ -1300,9 +1258,7 @@ export default function Navbar() {
               className="flex h-dvh w-full max-w-[380px] flex-col border-l border-black/[0.08] bg-[#faf9f5] p-0 sm:max-w-[380px]"
             >
               <SheetHeader className="border-b border-black/[0.06] bg-white/80 px-5 py-4">
-                <SheetTitle className="sr-only">
-                  Draftva navigation
-                </SheetTitle>
+                <SheetTitle className="sr-only">Draftva navigation</SheetTitle>
 
                 <div className="pr-8">
                   <BrandLogo compact />
@@ -1316,7 +1272,7 @@ export default function Navbar() {
                   expanded={mobileExpanded === "Product"}
                   onToggle={() =>
                     setMobileExpanded(
-                      mobileExpanded === "Product" ? null : "Product"
+                      mobileExpanded === "Product" ? null : "Product",
                     )
                   }
                   onNavigate={closeMobile}
@@ -1328,7 +1284,7 @@ export default function Navbar() {
                   expanded={mobileExpanded === "Solutions"}
                   onToggle={() =>
                     setMobileExpanded(
-                      mobileExpanded === "Solutions" ? null : "Solutions"
+                      mobileExpanded === "Solutions" ? null : "Solutions",
                     )
                   }
                   onNavigate={closeMobile}
@@ -1344,10 +1300,7 @@ export default function Navbar() {
                       title: "Pricing",
                       href: ROUTES.pricing,
                     },
-                    {
-                      title: "How it works",
-                      href: ROUTES.howItWorks,
-                    },
+
                   ].map((link) => (
                     <Link
                       key={link.title}
@@ -1357,17 +1310,14 @@ export default function Navbar() {
                     >
                       {link.title}
 
-                      <ChevronRight
-                        size={15}
-                        className="text-neutral-400"
-                      />
+                      <ChevronRight size={15} className="text-neutral-400" />
                     </Link>
                   ))}
                 </div>
               </div>
 
               <div className="border-t border-black/[0.06] bg-white/90 p-4">
-                <div className="grid grid-cols-2 gap-2.5">
+               { !userData ? <div className="grid grid-cols-2 gap-2.5">
                   <Link
                     href={ROUTES.login}
                     onClick={closeMobile}
@@ -1384,7 +1334,13 @@ export default function Navbar() {
                     Start for free
                     {/* <ArrowRight size={13} /> */}
                   </Link>
-                </div>
+                </div> :<Button
+              onClick={() => router.push(`/dashboard`)}
+              className={" capitalize  primary-btn w-full rounded-lg "}
+            >
+              Dashboard
+            </Button>}
+
 
                 <p className="mt-3 text-center text-[10px] text-neutral-400">
                   Create better. Publish smarter. Grow together.

@@ -1,8 +1,15 @@
+"use client"
 import React from "react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import Link from "next/link";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useTRPC } from "@/trpc/client";
+import { useRouter } from "next/navigation";
 function PricingOverviewHome() {
+  const trpc=useTRPC()
+  const {data}=useSuspenseQuery(trpc.user.me.queryOptions())
+  const router=useRouter()
   return (
     <div className="w-full primary-box h-full py-8 md:py-16 bg-[#3fda8a] rounded-xl shadow-lg px-6 md:px-8">
       <div className="flex  flex-col md:flex-row justify-between items-center gap-2">
@@ -24,6 +31,7 @@ function PricingOverviewHome() {
             width={100}
           />
           <Button
+            onClick={()=>router.push(`/dashboard`)}
             asChild
             className="secondary-btn size-lg capitalize order-1  rounded-full font-medium !py-6 !px-8 !text-xl "
           >

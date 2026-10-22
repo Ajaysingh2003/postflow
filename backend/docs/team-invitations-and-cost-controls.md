@@ -119,8 +119,8 @@ Pending reservations and orphan removal are eventually consistent; large abandon
 backlogs take multiple scheduler ticks. Add an R2/S3 lifecycle rule expiring old
 `quarantine/` objects as a backstop, with a retention longer than the ticket lifetime.
 
-This change does not reroute large uploads around Vercel's function body limit;
-the existing signed-upload API can be used for that separate frontend upload change.
+Frontend uploads now use the signed R2 quarantine flow directly, bypassing
+Vercel's function body limit. See [direct uploads and required bucket CORS](direct-r2-uploads.md).
 
 ## Deploy and verify
 

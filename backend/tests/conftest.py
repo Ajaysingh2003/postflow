@@ -24,6 +24,11 @@ os.environ["RESEND_API_KEY"] = ""
 # Feature tests use existing unverified fixtures; auth tests explicitly exercise enforcement.
 os.environ["EMAIL_VERIFICATION_REQUIRED"] = "false"
 
+# Tests must never load developer or production credentials from the repository .env.
+from app.core.config import Settings
+
+Settings.model_config["env_file"] = None
+
 from app.db import models as _models  # noqa: F401
 from app.db.base import Base
 from app.db.session import engine

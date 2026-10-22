@@ -523,3 +523,73 @@ def test_public_paid_plans_normalize_old_limits_without_changing_ai_or_prices(cl
         assert plan["limits"]["scheduled_posts"] is None
         assert plan["limits"]["ai_credits"] == 123
     assert catalog["starter"]["billing_cycles"]["monthly"]["amount"] == 29
+
+
+@pytest.mark.parametrize(
+    "plan_code,allowance", [("starter", 1000), ("pro", 5000), ("business", 8000)]
+)
+def test_yearly_paid_credits_renew_at_monthly_boundary_in_billing_home_and_enforcement(
+    workspace, client, auth, monkeypatch, plan_code, allowance
+):
+    from app.modules.billing import entitlements
+
+    ws, user = workspace
+    boundary = datetime(2026, 2, 28, 10, tzinfo=UTC)
+    clock = {"now": boundary - timedelta(microseconds=1)}
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock["now"] if tz else clock["now"].replace(tzinfo=None)
+
+    monkeypatch.setattr(entitlements, "datetime", Clock)
+    monkeypatch.setattr("app.modules.content.home.datetime", Clock)
+    with SessionLocal.begin() as db:
+        db.add(
+            Subscription(
+                workspace_id=ws,
+                user_id=user,
+                provider_subscription_id=f"yearly-{plan_code}",
+                plan_code=plan_code,
+                status="active",
+                current_period_start=datetime(2026, 1, 31, 10, tzinfo=UTC),
+                current_period_end=datetime(2027, 1, 31, 10, tzinfo=UTC),
+            )
+        )
+        db.add_all(
+            [
+                AssistantRun(
+                    workspace_id=ws,
+                    user_id=user,
+                    platform="x",
+                    feature_id="rewrite",
+                    status="succeeded",
+                    created_at=datetime(2026, 2, 15, tzinfo=UTC),
+                )
+                for _ in range(allowance)
+            ]
+        )
+    with SessionLocal() as db:
+        assert get_plan_limits_summary(db, ws)["ai_credits"]["remaining"] == 0
+        with pytest.raises(HTTPException, match="monthly limit"):
+            check_assistant_usage_limit(db, ws)
+    clock["now"] = boundary
+    with SessionLocal() as db:
+        check_assistant_usage_limit(db, ws)
+        summary = get_plan_limits_summary(db, ws)
+        assert summary["ai_credits"] == {"used": 0, "limit": allowance, "remaining": allowance}
+        assert summary["cycle_start"] == boundary
+        assert summary["cycle_end"] == datetime(2026, 3, 31, 10, tzinfo=UTC)
+        assert len(list(db.scalars(select(AssistantRun)))) == allowance
+    for path in ["/api/v1/billing/usage", "/api/v1/posts/home"]:
+        response = client.get(path, headers=auth)
+        assert response.status_code == 200, response.text
+        usage = response.json()["usage"]
+        assert usage["ai_credits"]["remaining"] == allowance
+        assert datetime.fromisoformat(usage["cycle_end"].replace("Z", "+00:00")) == datetime(
+            2026, 3, 31, 10, tzinfo=UTC
+        )
+    clock["now"] = datetime(2026, 3, 31, 10, tzinfo=UTC)
+    with SessionLocal() as db:
+        assert get_plan_limits_summary(db, ws)["ai_credits"]["remaining"] == allowance
+        check_assistant_usage_limit(db, ws)

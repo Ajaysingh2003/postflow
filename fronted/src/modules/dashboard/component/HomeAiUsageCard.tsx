@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   aiExhausted,
+  bonusCreditNote,
   usagePercent,
   usageReset,
   type PlanUsage,
@@ -102,6 +103,9 @@ export function HomeAiUsageCard({ usage }: { usage: PlanUsage }) {
         </div>
       </div>
 
+      {bonusCreditNote(usage) && (
+        <p className="mb-4 text-xs leading-5 text-muted-foreground">{bonusCreditNote(usage)}</p>
+      )}
       {exhausted && (
         <p className="mb-4 rounded-xl bg-amber-500/10 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:text-amber-300">
           <span className="font-medium">AI allowance used up.</span> Your
@@ -110,7 +114,7 @@ export function HomeAiUsageCard({ usage }: { usage: PlanUsage }) {
       )}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-4">
         <p className="text-[11px] leading-5 text-muted-foreground">
-          Resets {usageReset(usage.cycle_end)}
+          Monthly reset {usageReset(usage.cycle_end)}
           <span className="ml-1">(UTC)</span>
         </p>
         <Button

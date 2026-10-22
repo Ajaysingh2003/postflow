@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { emailSchema } from "./contracts";
 import type { AuthResponse, TokenResponse } from "./types";
 
 export const passwordSchema = z
@@ -11,11 +12,11 @@ export const registerSchema = z.object({
     .trim()
     .min(2, "Enter at least 2 characters")
     .max(160),
-  email: z.string().trim().email("Enter a valid email address"),
+  email: emailSchema,
   password: passwordSchema,
 });
 export const loginSchema = z.object({
-  email: z.string().trim().email("Enter a valid email address"),
+  email: emailSchema,
   password: z.string().min(1, "Password is required").max(200),
 });
 
@@ -72,6 +73,7 @@ export function publicAuthSession(data: AuthResponse): TokenResponse {
     workspace_id: data.workspace_id,
     verification_required: data.verification_required ?? !data.email_verified,
     verification_sent: data.verification_sent ?? false,
+    verification_error: data.verification_error,
     retry_after: data.retry_after ?? 0,
     user: {
       id: data.user_id,
@@ -84,12 +86,15 @@ export function publicAuthSession(data: AuthResponse): TokenResponse {
   };
 }
 
-export function authRetrySeconds(error: unknown, fallback = 60) {
+export function authRetrySeconds(error: unknown, fallback = 0) {
   const seconds = (error as { data?: { retryAfter?: number } })?.data
     ?.retryAfter;
   return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0
     ? Math.ceil(seconds)
-    : fallback;
+    : (error as { data?: { code?: string } })?.data?.code ===
+        "TOO_MANY_REQUESTS"
+      ? 60
+      : fallback;
 }
 
 export function reloadAuthPage(path: string) {

@@ -1,0 +1,10 @@
+[Unit]
+Description=Renew Draftva HTTPS certificates and reload Nginx
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/draftva/backend
+ExecStart=/bin/sh /opt/draftva/backend/scripts/renew-tls.sh

@@ -264,14 +264,10 @@ class BlueskyOAuth:
                 },
             )
             if par.status_code >= 400:
-                logger.error("Bluesky PAR failed %s: %s", par.status_code, par.text)
-                detail = par.text
-                try:
-                    err = par.json()
-                    detail = err.get("error_description") or err.get("error") or par.text
-                except Exception:
-                    pass
-                raise HTTPException(par.status_code, f"Bluesky PAR failed: {detail}")
+                logger.warning("Bluesky authorization request rejected (HTTP %s)", par.status_code)
+                raise HTTPException(
+                    502, "Bluesky authorization could not start. Please try connecting again"
+                )
             record = opts.get("state_record")
             if not record or not opts.get("db"):
                 raise HTTPException(422, "OAuth state persistence is required")

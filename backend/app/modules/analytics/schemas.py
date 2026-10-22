@@ -179,6 +179,17 @@ class LimitUsageDetail(BaseModel):
     remaining: int | None
 
 
+class AICreditDetails(BaseModel):
+    monthly_limit: int | None
+    monthly_used: int
+    monthly_reserved: int
+    monthly_remaining: int | None
+    bonus_credits: int
+    bonus_reserved: int
+    bonus_used: int
+    bonus_remaining: int
+
+
 class PlanLimitsResponse(BaseModel):
     plan_code: str
     cycle_start: datetime
@@ -186,3 +197,4 @@ class PlanLimitsResponse(BaseModel):
     connected_accounts: LimitUsageDetail
     scheduled_posts: LimitUsageDetail
     ai_credits: LimitUsageDetail
+    ai_credit_details: AICreditDetails | None = None

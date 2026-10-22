@@ -6,9 +6,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 
 from app.core.config import get_settings
+from app.core.health import check_dependencies
 from app.core.logging import configure_safe_logging
 from app.core.rate_limit import RateLimiter
 from app.db import models as _models  # noqa: F401
@@ -125,8 +125,7 @@ def health() -> dict[str, str]:
 
 @app.get("/ready", tags=["system"])
 def readiness() -> dict[str, str]:
-    with engine.connect() as connection:
-        connection.execute(text("SELECT 1"))
+    check_dependencies()
     return {"status": "ready"}
 
 

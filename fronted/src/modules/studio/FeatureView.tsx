@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
+import { uploadAsset } from "@/modules/content/assets";
 import {
   CHANNELS,
   channelName,
@@ -720,16 +721,7 @@ export function ResourceView({
   async function upload(file: File) {
     setUploading(true);
     try {
-      const data = new FormData();
-      data.set("file", file);
-      data.set("content_type", file.type || "application/octet-stream");
-      data.set("purpose", "post");
-      const response = await fetch("/api/media/attachments", {
-        method: "POST",
-        body: data,
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.detail || "Upload failed");
+      await uploadAsset(file, "post");
       toast.success("File uploaded");
       void query.refetch();
     } catch (error) {

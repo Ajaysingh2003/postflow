@@ -250,12 +250,14 @@ def workspace_home(
     from app.modules.content.home import home_summary
 
     response.headers["Cache-Control"] = "private, no-store"
-    return home_summary(
+    summary = home_summary(
         db,
         workspace,
         membership.role in {"owner", "admin", "editor"},
         can_manage_channels=membership.role in {"owner", "admin"},
     )
+    db.commit()
+    return summary
 
 
 @router.get("/posts/{post_id}", response_model=PostResponse)

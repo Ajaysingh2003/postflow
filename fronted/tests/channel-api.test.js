@@ -225,6 +225,14 @@ describe("social account API wiring", () => {
       "Provider unavailable",
     );
   });
+  test("onboarding supplies an allowlisted return destination without changing the OAuth callback", async () => {
+    request = spyOn(axios, "request").mockResolvedValue({ data: { auth_url: "https://oauth.provider.test" } });
+    await caller.connect({ platform: "threads", return_to: "/onboarding?step=connect" });
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ data: { options: {}, return_to: "/onboarding?step=connect" } }));
+    request.mockClear();
+    await expect(caller.connect({ platform: "x", return_to: "https://evil.example" })).rejects.toThrow();
+    expect(request).not.toHaveBeenCalled();
+  });
   test("rejects invalid account IDs before calling the backend", async () => {
     request = spyOn(axios, "request");
     await expect(caller.refreshAccount({ id: "bad/id" })).rejects.toThrow();

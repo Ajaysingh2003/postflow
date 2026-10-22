@@ -9,6 +9,9 @@ from app.modules.assistant.models import (
     VoiceProfile,
 )
 from app.modules.billing.models import (
+    AICreditBalance,
+    AICreditEvent,
+    AICreditReservation,
     BillingCustomer,
     BillingReconciliationRetry,
     BillingReconciliationState,
@@ -48,6 +51,9 @@ from app.modules.workspaces.models import (
 )
 
 __all__ = [
+    "AICreditBalance",
+    "AICreditEvent",
+    "AICreditReservation",
     "AgentAuthorization",
     "AgentClient",
     "AgentConnection",

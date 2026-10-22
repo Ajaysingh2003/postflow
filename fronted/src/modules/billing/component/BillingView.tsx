@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   USAGE_QUERY_OPTIONS,
+  bonusCreditNote,
   usageReset,
   type BillingUsage,
 } from "../usageModel";
@@ -280,8 +281,13 @@ export function BillingOverview({
           {usage.scheduled_posts.limit === null
             ? "AI credits reset "
             : "AI and post allowances reset "}
-          {usageReset(usage.cycle_end)} (UTC). Unused credits don’t roll over.
+          {usageReset(usage.cycle_end)} (UTC).{" "}
+          {currentPaid && "Credits renew monthly, including on yearly plans. "}
+          Unused monthly credits don’t roll over.
         </p>
+        {bonusCreditNote(usage) && (
+          <p className="mb-4 text-xs leading-5 text-muted-foreground">{bonusCreditNote(usage)}</p>
+        )}
         <div className="grid gap-3 sm:grid-cols-3">
           <UsageCircle
             title="AI credits"

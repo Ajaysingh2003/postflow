@@ -153,7 +153,11 @@ def create_upload(
 ) -> UploadResponse:
     settings = get_settings()
     filename = service.validate_upload(
-        settings, payload.filename, payload.content_type, payload.size
+        settings,
+        payload.filename,
+        payload.content_type,
+        payload.size,
+        source=payload.purpose == "assistant",
     )
     reserve_storage(db, workspace.id, payload.size)
     key = f"quarantine/{workspace.id}/{uuid4()}/{filename}"
@@ -166,8 +170,6 @@ def create_upload(
         declared_size=payload.size,
     )
     db.add(asset)
-    db.commit()
-    db.refresh(asset)
     url = service.client(settings).generate_presigned_url(
         "put_object",
         Params={
@@ -175,13 +177,16 @@ def create_upload(
             "Key": key,
             "ContentType": payload.content_type,
             "ContentLength": payload.size,
+            "Metadata": {"purpose": payload.purpose},
         },
         ExpiresIn=settings.media_url_ttl_seconds,
     )
+    db.commit()
+    db.refresh(asset)
     return UploadResponse(
         asset_id=asset.id,
         upload_url=url,
-        headers={"Content-Type": payload.content_type},
+        headers={"Content-Type": payload.content_type, "x-amz-meta-purpose": payload.purpose},
         expires_in=settings.media_url_ttl_seconds,
     )
 
@@ -204,7 +209,20 @@ def complete_upload(
     try:
         head = s3.head_object(Bucket=settings.r2_bucket_name, Key=asset.object_key)
         actual_size = int(head["ContentLength"])
-        limit = service.max_bytes(settings, asset.content_type)
+        # Purpose is bound into the signed PUT headers, never taken from completion input.
+        purpose = head.get("Metadata", {}).get("purpose", "post")
+        service.validate_upload(
+            settings,
+            asset.original_filename,
+            asset.content_type,
+            actual_size,
+            source=purpose == "assistant",
+        )
+        limit = (
+            settings.media_max_bytes
+            if purpose == "assistant"
+            else service.max_bytes(settings, asset.content_type)
+        )
         if actual_size <= 0 or actual_size > limit or actual_size != asset.declared_size:
             raise HTTPException(status_code=422, detail="Uploaded size does not match declaration")
         body = s3.get_object(Bucket=settings.r2_bucket_name, Key=asset.object_key)["Body"]
@@ -212,21 +230,24 @@ def complete_upload(
             data = body.read(limit + 1)
         finally:
             body.close()
+        if len(data) != actual_size:
+            raise HTTPException(422, "Uploaded file is incomplete. Start a new upload")
         service.validate_contents(data, asset.content_type)
         asset.width, asset.height = service.dimensions(data, asset.content_type)
         service.scan_clamav(settings, data)
         final_key = asset.object_key.replace("quarantine/", "media/", 1)
-        s3.copy_object(
+        # A signed PUT can be replayed until expiry. Promote precisely the bytes scanned,
+        # rather than copying a quarantine object that could have changed during scanning.
+        stored = s3.put_object(
             Bucket=settings.r2_bucket_name,
             Key=final_key,
-            CopySource={"Bucket": settings.r2_bucket_name, "Key": asset.object_key},
+            Body=data,
             ContentType=asset.content_type,
-            MetadataDirective="REPLACE",
         )
-        s3.delete_object(Bucket=settings.r2_bucket_name, Key=asset.object_key)
+        quarantine_key = asset.object_key
         asset.object_key = final_key
         asset.actual_size = actual_size
-        asset.etag = str(head.get("ETag", "")).strip('"')
+        asset.etag = str(stored.get("ETag", "")).strip('"')
         asset.status = "ready"
         asset.rejection_reason = None
     except HTTPException as exc:
@@ -241,6 +262,11 @@ def complete_upload(
         raise HTTPException(status_code=502, detail="Unable to verify uploaded object") from exc
     db.commit()
     db.refresh(asset)
+    try:
+        s3.delete_object(Bucket=settings.r2_bucket_name, Key=quarantine_key)
+    except Exception:
+        # The verified file is already committed; the orphan sweep will retry cleanup.
+        logger.warning("Unable to remove completed upload quarantine object", exc_info=True)
     return asset
 
 
@@ -285,7 +311,13 @@ def download(
         raise HTTPException(status_code=409, detail="Media asset is not ready")
     url = service.client(settings).generate_presigned_url(
         "get_object",
-        Params={"Bucket": settings.r2_bucket_name, "Key": asset.object_key},
+        Params={
+            "Bucket": settings.r2_bucket_name,
+            "Key": asset.object_key,
+            "ResponseCacheControl": "private, no-store",
+            "ResponseContentDisposition": "inline; filename*=UTF-8''"
+            + quote(asset.original_filename, safe=""),
+        },
         ExpiresIn=settings.media_url_ttl_seconds,
     )
     return DownloadResponse(download_url=url, expires_in=settings.media_url_ttl_seconds)

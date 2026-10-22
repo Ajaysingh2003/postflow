@@ -18,8 +18,9 @@ const render = (props) =>
 
 test("both social buttons remain visible before setup, without dead enabled controls", () => {
   const html = render({});
-  expect(html).toContain("Continue with Google");
-  expect(html).toContain("Continue with X");
+  expect(html).toContain('aria-label="Continue with Google"');
+  expect(html).toContain('aria-label="Continue with X"');
+  expect(html).not.toContain("</svg> Continue with Google");
   expect(html.match(/disabled=""/g)).toHaveLength(2);
   expect(html).toContain("You can use email below");
   expect(html).toContain("secondary-btn");
@@ -37,7 +38,7 @@ test("configured X and loading Google keep the email form usable and show honest
     "currently unavailable. You can use email below",
   );
   expect(render({ googleClientId: "public-google-client" })).toContain(
-    "Continue with Google",
+    'aria-label="Continue with Google"',
   );
 });
 

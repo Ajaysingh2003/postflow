@@ -436,3 +436,61 @@ async def test_fetch_account_metrics(mock_bsky_account):
     assert account_metrics.followers_count == 9420
     assert account_metrics.following_count == 350
     assert account_metrics.posts_count == 512
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"error_description":"PRIVATE_PROVIDER_DATA"}',
+        b'["PRIVATE_PROVIDER_DATA"]',
+        b"PRIVATE_PROVIDER_DATA",
+    ],
+)
+async def test_authorization_rejection_never_leaks_provider_response(body, caplog):
+    def handler(request):
+        path = request.url.path
+        if path.endswith("resolveHandle"):
+            return httpx.Response(200, json={"did": "did:plc:fixture"})
+        if request.url.host == "plc.directory":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "did:plc:fixture",
+                    "service": [
+                        {
+                            "type": "AtprotoPersonalDataServer",
+                            "serviceEndpoint": "https://bsky.social",
+                        }
+                    ],
+                },
+            )
+        if path.endswith("oauth-protected-resource"):
+            return httpx.Response(
+                200,
+                json={
+                    "resource": "https://bsky.social",
+                    "authorization_servers": ["https://bsky.social"],
+                },
+            )
+        if path.endswith("oauth-authorization-server"):
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": "https://bsky.social",
+                    "authorization_endpoint": "https://bsky.social/oauth/authorize",
+                    "token_endpoint": "https://bsky.social/oauth/token",
+                    "pushed_authorization_request_endpoint": "https://bsky.social/oauth/par",
+                    "dpop_signing_alg_values_supported": ["ES256"],
+                },
+            )
+        return httpx.Response(400, content=body)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        adapter = BlueskyAdapter(http_client=client)
+        with pytest.raises(HTTPException) as raised:
+            await adapter.build_auth_url(
+                "workspace", "state", identifier="creator.bsky.social", code_challenge="challenge"
+            )
+    assert raised.value.status_code == 502
+    assert "PRIVATE_PROVIDER_DATA" not in str(raised.value.detail) + caplog.text

@@ -8,6 +8,16 @@ export type PlanUsage = {
   cycle_start: string;
   cycle_end: string;
   ai_credits: Allowance;
+  ai_credit_details?: {
+    monthly_limit: number | null;
+    monthly_used: number;
+    monthly_reserved: number;
+    monthly_remaining: number | null;
+    bonus_credits: number;
+    bonus_reserved: number;
+    bonus_used: number;
+    bonus_remaining: number;
+  } | null;
   scheduled_posts: Allowance;
   connected_accounts: Allowance;
 };
@@ -52,4 +62,10 @@ export function aiExhausted(value?: PlanUsage) {
     value.ai_credits.limit !== null &&
     value.ai_credits.remaining === 0
   );
+}
+
+export function bonusCreditNote(usage: PlanUsage) {
+  const details = usage.ai_credit_details;
+  if (!details || (!details.bonus_credits && !details.bonus_used)) return null;
+  return `${details.bonus_remaining.toLocaleString("en-US")} bonus credits available. Bonus credits stay available until used.`;
 }

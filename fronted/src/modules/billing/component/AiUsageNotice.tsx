@@ -1,6 +1,6 @@
 import { SettingsLink } from "@/modules/settings/SettingsProvider";
 import { Sparkles } from "lucide-react";
-import { aiExhausted, usageReset, type PlanUsage } from "../usageModel";
+import { aiExhausted, bonusCreditNote, usageReset, type PlanUsage } from "../usageModel";
 import { UsageMeter } from "./UsageMeter";
 
 export function AiUsageNotice({
@@ -60,14 +60,22 @@ export function AiUsageNotice({
           <SettingsLink section="billing" className="primary-btn mt-3 !text-xs">
             View plan & usage
           </SettingsLink>
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="secondary-btn mt-3 ml-2 !text-xs">
+              Refresh credits
+            </button>
+          )}
         </>
       ) : (
         <>
           <UsageMeter
             title="AI credits"
             value={usage.ai_credits}
-            note={`Resets ${usageReset(usage.cycle_end)} (UTC)`}
+            note={`Monthly reset ${usageReset(usage.cycle_end)} (UTC)`}
           />
+          {bonusCreditNote(usage) && (
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">{bonusCreditNote(usage)}</p>
+          )}
           <SettingsLink
             section="billing"
             className="mt-2 inline-block text-xs text-muted-foreground underline underline-offset-4"

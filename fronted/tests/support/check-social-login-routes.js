@@ -35,7 +35,7 @@ const { X_LOGIN_COOKIE } = await import("../../src/modules/user/socialAuth");
 const state = "s".repeat(43);
 response.body = {
   state,
-  authorization_url: `https://x.com/i/oauth2/authorize?state=${state}`,
+  authorization_url: `https://x.com/i/oauth2/authorize?state=${state}&redirect_uri=${encodeURIComponent("http://localhost:3000/api/auth/x/callback")}`,
 };
 const begun = await start(
   new Request(
@@ -59,6 +59,23 @@ assert.equal(
   JSON.parse(requests[0].options.body).browser_token,
   flow.browser_token,
 );
+const validAuthorization = response.body.authorization_url;
+for (const redirect of [
+  "http://localhost:18000/api/v1/channels/x/callback",
+  "http://localhost:3001/api/auth/x/callback",
+  "https://evil.example/api/auth/x/callback",
+]) {
+  response.body.authorization_url = `https://x.com/i/oauth2/authorize?state=${state}&redirect_uri=${encodeURIComponent(redirect)}`;
+  const badConfiguration = await start(
+    new Request("http://localhost:3000/api/auth/x/start"),
+  );
+  assert.match(
+    badConfiguration.headers.get("location"),
+    /login\?social_error=unavailable/,
+  );
+  assert.equal(values.get(X_LOGIN_COOKIE), "");
+}
+response.body.authorization_url = validAuthorization;
 const callsBefore = requests.length;
 const foreign = await start(
   new Request("http://localhost:3000/api/auth/x/start", {
@@ -95,7 +112,9 @@ values.set(X_LOGIN_COOKIE, cookie.value);
 response = {
   status: 200,
   body: {
-    access_token: "server-session",
+    access_token: "server-session-token-long-enough",
+    token_type: "bearer",
+    name: "Person",
     user_id: "user",
     workspace_id: "workspace",
     email: "person@example.com",
@@ -104,6 +123,25 @@ response = {
     expires_in: 3600,
   },
 };
+const validSession = response.body;
+for (const invalid of [
+  {},
+  { ...validSession, email: "invalid" },
+  { ...validSession, expires_in: 0 },
+  { ...validSession, verification_required: true },
+]) {
+  values.set(X_LOGIN_COOKIE, cookie.value);
+  response.body = invalid;
+  const rejected = await callback(
+    new Request(
+      `http://localhost:3000/api/auth/x/callback?state=${state}&code=provider-code`,
+    ),
+  );
+  assert.match(rejected.headers.get("location"), /social_error=failed/);
+  assert.equal(sessions.length, 0);
+}
+values.set(X_LOGIN_COOKIE, cookie.value);
+response.body = validSession;
 const complete = await callback(
   new Request(
     `http://localhost:3000/api/auth/x/callback?state=${state}&code=provider-code`,

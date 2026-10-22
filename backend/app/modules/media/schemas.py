@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -7,6 +8,7 @@ class UploadRequest(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=3, max_length=100)
     size: int = Field(gt=0)
+    purpose: Literal["post", "assistant"] = "post"
 
 
 class UploadResponse(BaseModel):

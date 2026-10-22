@@ -1,6 +1,15 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -79,6 +88,70 @@ class Plan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(100))
     limits: Mapped[dict] = mapped_column(JSON, default=dict)
     active: Mapped[bool] = mapped_column(default=True)
+
+
+class AICreditBalance(TimestampMixin, Base):
+    __tablename__ = "ai_credit_balances"
+    __table_args__ = (
+        CheckConstraint(
+            "monthly_used >= 0 AND monthly_reserved >= 0", name="ck_ai_monthly_nonnegative"
+        ),
+        CheckConstraint(
+            "bonus_credits >= bonus_reserved AND bonus_reserved >= 0 AND bonus_used >= 0",
+            name="ck_ai_bonus_nonnegative",
+        ),
+        CheckConstraint("cycle_end > cycle_start", name="ck_ai_credit_cycle"),
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
+    )
+    cycle_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    cycle_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    monthly_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    monthly_reserved: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    bonus_credits: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    bonus_reserved: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    bonus_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+class AICreditReservation(TimestampMixin, Base):
+    __tablename__ = "ai_credit_reservations"
+    __table_args__ = (
+        CheckConstraint("source IN ('monthly', 'bonus')", name="ck_ai_reservation_source"),
+        CheckConstraint(
+            "state IN ('reserved', 'settled', 'released', 'expired')",
+            name="ck_ai_reservation_state",
+        ),
+    )
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    cycle_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    source: Mapped[str] = mapped_column(String(20))
+    state: Mapped[str] = mapped_column(String(20), default="reserved", index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class AICreditEvent(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "ai_credit_events"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "request_key", name="uq_ai_credit_event_request"),
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    action: Mapped[str] = mapped_column(String(40))
+    actor: Mapped[str] = mapped_column(String(160))
+    reason: Mapped[str] = mapped_column(Text)
+    request_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    before: Mapped[dict] = mapped_column(JSON, default=dict)
+    after: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
 
 class BillingReconciliationState(TimestampMixin, Base):

@@ -154,12 +154,22 @@ def test_home_limits_previews_without_truncating_counts_and_has_fixed_query_cost
     try:
         with SessionLocal() as db:
             result = home_summary(db, SimpleNamespace(id=home["workspace"], name="Workspace"), True)
+            db.commit()
         assert len(result.drafts) == 3
         assert (
             result.counts["drafts"] == 102
         )  # The orphan now has variants, counted once per destination.
         assert all(len(p.text) <= 600 for p in result.drafts)
-        assert len(queries) == 12  # Six preview queries plus six bounded usage queries. No lazy loads.
+        # Includes one-time credit bootstrap and locks, independent of post count.
+        assert len(queries) <= 24
+        queries.clear()
+        with SessionLocal() as db:
+            home_summary(db, SimpleNamespace(id=home["workspace"], name="Workspace"), True)
+            db.commit()
+        assert len(queries) <= 20
+        assert not any(
+            "count(" in sql.lower() and "assistant_runs" in sql.lower() for sql in queries
+        )
     finally:
         event.remove(engine, "before_cursor_execute", record)
 

@@ -2,6 +2,7 @@ import logging
 import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from google.auth.exceptions import GoogleAuthError
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy import select, update
@@ -9,10 +10,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.dependencies import bearer, get_current_user
+from app.core.dependencies import bearer, get_current_user, get_current_workspace, membership_for
 from app.core.security import as_utc, hash_password, normalize_email, token_hash, utcnow
 from app.db.session import SessionLocal, get_db
-from app.modules.identity import service, verification, x_login
+from app.modules.identity import mail, service, verification, x_login
 from app.modules.identity.models import (
     AuthIdentity,
     EmailVerificationToken,
@@ -29,6 +30,7 @@ from app.modules.identity.schemas import (
     LoginRequest,
     MeResponse,
     MessageResponse,
+    OnboardingResponse,
     RegisterRequest,
     ResetPasswordRequest,
     SessionResponse,
@@ -71,6 +73,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> AuthRes
         except HTTPException as exc:
             if exc.status_code not in {429, 503}:
                 raise
+            response.verification_error = (
+                "Account created, but the verification email could not be sent. Request a new code."
+            )
         response.retry_after = get_settings().otp_resend_seconds
     return response
 
@@ -91,9 +96,15 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)) -> 
         )
     except ValueError as exc:
         raise HTTPException(status_code=401, detail="Invalid Google identity token") from exc
-    if not claims.get("email"):
+    except GoogleAuthError as exc:
+        raise HTTPException(503, "Google sign-in is temporarily unavailable. Please retry") from exc
+    if not isinstance(claims, dict) or not claims.get("email"):
         raise HTTPException(status_code=400, detail="Google account did not provide an email")
-    return _response(*service.login_google(db, claims))
+    try:
+        return _response(*service.login_google(db, claims))
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Account changed during sign-in. Please try again") from exc
 
 
 @router.get("/me", response_model=MeResponse)
@@ -107,6 +118,7 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) ->
         name=user.name,
         email_verified=user.email_verified,
         workspace_id=workspace.id,
+        onboarding_completed_at=user.onboarding_completed_at,
     )
 
 
@@ -130,7 +142,39 @@ def update_me(
         name=user.name,
         email_verified=user.email_verified,
         workspace_id=workspace.id,
+        onboarding_completed_at=user.onboarding_completed_at,
     )
+
+
+@router.get("/onboarding", response_model=OnboardingResponse)
+def onboarding_status(
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> OnboardingResponse:
+    membership = membership_for(db, workspace.id, user.id)
+    return OnboardingResponse(
+        completed_at=user.onboarding_completed_at,
+        workspace_id=workspace.id,
+        workspace_name=workspace.name,
+        can_connect=membership.role in {"owner", "admin"},
+    )
+
+
+@router.post("/onboarding/complete", response_model=MessageResponse)
+def complete_onboarding(
+    user: User = Depends(get_current_user),
+    workspace: Workspace = Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    # Completion and skipping share one idempotent action. Connections are optional.
+    db.execute(
+        update(User)
+        .where(User.id == user.id, User.onboarding_completed_at.is_(None))
+        .values(onboarding_completed_at=utcnow())
+    )
+    db.commit()
+    return MessageResponse(message="You're ready to go")
 
 
 @router.post("/logout", status_code=204)
@@ -197,9 +241,11 @@ def request_verification(
 ) -> MessageResponse:
     if user.email_verified:
         return MessageResponse(message="Email is already verified", already_verified=True)
-    verification.request_email_otp(db, user)
+    if not verification.request_email_otp(db, user):
+        return MessageResponse(message="Email is already verified", already_verified=True)
     return MessageResponse(
         message="Verification code sent",
+        delivery_status="sent",
         retry_after=get_settings().otp_resend_seconds,
         expires_in=get_settings().otp_ttl_seconds,
     )
@@ -224,13 +270,29 @@ def verification_status(user: User = Depends(get_current_user), db: Session = De
         if recent
         else 0
     )
-    expiry = (
-        max(0, int((as_utc(recent.expires_at) - utcnow()).total_seconds()))
-        if recent and recent.sent_at and not recent.consumed_at
-        else 0
+    delivered = db.scalar(
+        select(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.sent_at.is_not(None),
+            EmailVerificationToken.otp_hash.is_not(None),
+            EmailVerificationToken.consumed_at.is_(None),
+        )
+        .order_by(EmailVerificationToken.created_at.desc())
     )
+    expiry = (
+        max(0, int((as_utc(delivered.expires_at) - utcnow()).total_seconds())) if delivered else 0
+    )
+    failed = bool(recent and not recent.sent_at and recent.consumed_at and not user.email_verified)
     return MessageResponse(
-        message="Email is verified" if user.email_verified else "Verification required",
+        message=(
+            "The last code could not be sent. Use an earlier valid code or request a new one."
+            if failed
+            else "Email is verified"
+            if user.email_verified
+            else "Verification required"
+        ),
+        delivery_status="failed" if failed else None,
         already_verified=user.email_verified,
         retry_after=wait,
         expires_in=expiry,
@@ -257,9 +319,12 @@ def _deliver_public_email(email: str, purpose: str):
 
 @router.post("/email/resend", response_model=MessageResponse)
 def resend_verification(payload: ForgotPasswordRequest, tasks: BackgroundTasks):
+    mail.ensure_email_configured()
     tasks.add_task(_deliver_public_email, normalize_email(str(payload.email)), "verification")
     return MessageResponse(
-        message="If this email needs verification, a code will be sent",
+        message="Verification request received. Check your inbox and spam folder for next steps.",
+        delivery_status="accepted",
+        outcome="accepted",
         retry_after=get_settings().otp_resend_seconds,
         expires_in=get_settings().otp_ttl_seconds,
     )
@@ -272,6 +337,8 @@ def correct_pending_email(
     db: Session = Depends(get_db),
 ):
     user = verification.lock_user(db, user.id)
+    if not user or not user.is_active:
+        raise HTTPException(401, "Please sign in again")
     if user.email_verified:
         raise HTTPException(403, "A verified email cannot be changed through this flow")
     verification.check_send_allowance(db, EmailVerificationToken, user.id)
@@ -299,9 +366,21 @@ def correct_pending_email(
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(409, "An account with this email already exists") from exc
-    verification.request_email_otp(db, user)
+    try:
+        verification.request_email_otp(db, user)
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            raise
+        return MessageResponse(
+            message="Email updated, but the code could not be sent. Request a new code.",
+            email=user.email,
+            delivery_status="failed",
+            retry_after=get_settings().otp_resend_seconds,
+        )
     return MessageResponse(
         message="Email updated and a new code sent",
+        email=user.email,
+        delivery_status="sent",
         retry_after=get_settings().otp_resend_seconds,
         expires_in=get_settings().otp_ttl_seconds,
     )
@@ -313,7 +392,7 @@ def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)) -> 
         if not payload.email:
             raise HTTPException(422, "Email is required to verify a code")
         verification.verify_email_code(db, normalize_email(str(payload.email)), payload.token)
-        return MessageResponse(message="Email verified")
+        return MessageResponse(message="Email verified", outcome="verified")
     # Previously issued links remain usable; never truncate them into six digits.
     if len(payload.token) < 20:
         raise HTTPException(400, "Verification link is invalid or expired")
@@ -342,14 +421,17 @@ def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)) -> 
         raise HTTPException(400, "Verification link is invalid or expired")
     user.email_verified = True
     db.commit()
-    return MessageResponse(message="Email verified")
+    return MessageResponse(message="Email verified", outcome="verified")
 
 
 @router.post("/password/forgot", response_model=MessageResponse)
 def forgot_password(payload: ForgotPasswordRequest, tasks: BackgroundTasks):
+    mail.ensure_email_configured()
     tasks.add_task(_deliver_public_email, normalize_email(str(payload.email)), "reset")
     return MessageResponse(
-        message="If the account exists, password reset instructions will be sent",
+        message="Recovery request received. Check your inbox and spam folder for next steps.",
+        delivery_status="accepted",
+        outcome="accepted",
         retry_after=get_settings().otp_resend_seconds,
     )
 
@@ -417,7 +499,9 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
         .values(consumed_at=utcnow())
     )
     db.commit()
-    return MessageResponse(message="Password reset; all sessions were signed out")
+    return MessageResponse(
+        message="Password reset; all sessions were signed out", outcome="password_updated"
+    )
 
 
 @router.get("/sessions", response_model=list[SessionResponse])

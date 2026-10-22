@@ -221,3 +221,23 @@ def test_login_callback_rejects_insecure_or_ambiguous_urls():
     ):
         with pytest.raises(ValidationError):
             Settings(_env_file=None, x_login_redirect_uri=uri)
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "http://localhost:18000/api/v1/channels/x/callback",
+        "https://api.draftva.com/api/v1/channels/x/callback",
+        "http://localhost:3001/dashboard/channels",
+    ],
+)
+def test_login_callback_cannot_use_the_publishing_callback_or_a_page(uri):
+    with pytest.raises(ValidationError, match="frontend /api/auth/x/callback"):
+        Settings(_env_file=None, x_login_redirect_uri=uri)
+
+
+def test_login_callback_uses_the_configured_frontend_port():
+    settings = Settings(
+        _env_file=None, frontend_url="http://localhost:3001", x_login_redirect_uri=None
+    )
+    assert settings.x_login_callback_url == "http://localhost:3001/api/auth/x/callback"

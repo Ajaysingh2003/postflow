@@ -1,18 +1,21 @@
 "use client";
 
 import React from "react";
+import { linkTokenSchema } from "../contracts";
 import VerifyOTPForm from "../component/VerifyOTPForm";
 
 interface VerifyOTPViewProps {
   email: string;
   token?: string;
   initialCooldown?: number;
+  initialError?: string;
 }
 
 export default function VerifyOTPView({
   email,
   token,
   initialCooldown,
+  initialError,
 }: VerifyOTPViewProps) {
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] w-full flex-col">
@@ -24,7 +27,7 @@ export default function VerifyOTPView({
               Verify your email
             </h2>
             <p className="text-[14px] font-medium leading-relaxed text-muted-foreground">
-              {token && token.length >= 20 ? (
+              {linkTokenSchema.safeParse(token).success ? (
                 "Confirm this verification link to verify your email."
               ) : (
                 <>
@@ -48,6 +51,7 @@ export default function VerifyOTPView({
               email={email ?? ""}
               token={token}
               initialCooldown={initialCooldown}
+              initialError={initialError}
             />
           </div>
 

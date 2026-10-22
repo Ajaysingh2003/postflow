@@ -173,10 +173,28 @@ class XAdapter(XManagement):
                 await client.aclose()
 
         if token_resp.status_code != 200:
-            logger.error("X token exchange failed: %s %s", token_resp.status_code, token_resp.text)
+            # Token errors can include credential material. Never put the raw
+            # response in logs or in a browser callback's query string.
+            try:
+                error = token_resp.json().get("error")
+            except (ValueError, AttributeError):
+                error = None
+            client_auth_failed = isinstance(error, str) and error in {
+                "invalid_client", "unauthorized_client"
+            }
+            logger.error(
+                "X token exchange failed (HTTP %s, client authentication rejected: %s)",
+                token_resp.status_code,
+                client_auth_failed,
+            )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"X token exchange failed: {token_resp.text}",
+                status_code=503 if client_auth_failed else status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "X app authentication failed. Check the OAuth 2.0 client credentials "
+                    "and start a new connection."
+                    if client_auth_failed
+                    else "X could not complete authorization. Please start a new connection."
+                ),
             )
 
         token_data = token_resp.json()

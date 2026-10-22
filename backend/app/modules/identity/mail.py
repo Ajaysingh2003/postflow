@@ -15,7 +15,14 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+def ensure_email_configured():
+    settings = get_settings()
+    if not settings.resend_api_key and not settings.smtp_host and settings.app_env != "test":
+        raise HTTPException(503, "Email delivery is not configured. Please try again later")
+
+
 def send_email(email, subject, text, html_body, idempotency_key):
+    ensure_email_configured()
     settings = get_settings()
     if settings.resend_api_key:
         try:
@@ -38,7 +45,8 @@ def send_email(email, subject, text, html_body, idempotency_key):
                 logger.warning("Resend email delivery rejected (HTTP %s)", response.status_code)
                 raise HTTPException(503, "Email delivery is temporarily unavailable. Please retry")
             try:
-                accepted = isinstance(response.json().get("id"), str)
+                message_id = response.json().get("id")
+                accepted = isinstance(message_id, str) and bool(message_id.strip())
             except (ValueError, AttributeError):
                 accepted = False
             if not accepted:

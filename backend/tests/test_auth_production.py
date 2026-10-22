@@ -551,3 +551,142 @@ def test_email_changed_during_delivery_cannot_verify_new_address_with_old_destin
         ).status_code
         == 400
     )
+
+
+def test_names_are_validated_after_trimming_and_invalid_logins_do_not_create_sessions(
+    client, delivery
+):
+    assert (
+        client.post(
+            "/api/v1/auth/register",
+            json={"email": "blank@example.com", "password": "a secure password", "name": "  "},
+        ).status_code
+        == 422
+    )
+    data, auth = signup(client)
+    for email in (data["email"], "missing@example.com"):
+        result = client.post("/api/v1/auth/login", json={"email": email, "password": "wrong"})
+        assert result.status_code == 401
+        assert result.json()["detail"] == "Invalid email or password"
+    assert client.patch("/api/v1/auth/me", headers=auth, json={"name": " "}).status_code == 422
+    with SessionLocal() as db:
+        assert len(list(db.scalars(select(SessionToken)))) == 1
+
+
+def test_failed_resend_does_not_hide_previous_usable_code_status(client, delivery, monkeypatch):
+    data, auth = signup(client)
+    age_challenges(data["user_id"])
+
+    def unavailable(*args):
+        raise HTTPException(503, "provider unavailable")
+
+    monkeypatch.setattr("app.modules.identity.mail.deliver_otp", unavailable)
+    assert client.post("/api/v1/auth/email/request-verification", headers=auth).status_code == 503
+    assert client.get("/api/v1/auth/email/status", headers=auth).json()["expires_in"] > 0
+    assert (
+        client.post(
+            "/api/v1/auth/email/verify", json={"email": data["email"], "token": delivery[0][0][1]}
+        ).status_code
+        == 200
+    )
+
+
+def test_correcting_email_reports_partial_success_when_delivery_fails(
+    client, delivery, monkeypatch
+):
+    data, auth = signup(client)
+    age_challenges(data["user_id"])
+
+    def unavailable(*args):
+        raise HTTPException(503, "PRIVATE provider error")
+
+    monkeypatch.setattr("app.modules.identity.mail.deliver_otp", unavailable)
+    result = client.patch(
+        "/api/v1/auth/email", headers=auth, json={"email": "corrected@example.com"}
+    )
+    assert result.status_code == 200
+    assert result.json()["delivery_status"] == "failed"
+    assert result.json()["email"] == "corrected@example.com"
+    assert "PRIVATE" not in result.text
+    assert "could not be sent" in result.json()["message"]
+    assert client.get("/api/v1/auth/me", headers=auth).json()["email"] == "corrected@example.com"
+    assert client.get("/api/v1/auth/email/status", headers=auth).json()["expires_in"] == 0
+
+
+def test_public_requests_report_acceptance_not_confirmed_delivery(
+    client, delivery, monkeypatch, caplog
+):
+    data, _ = signup(client)
+    age_challenges(data["user_id"])
+
+    def unavailable(*args):
+        raise HTTPException(503, "PRIVATE provider error")
+
+    monkeypatch.setattr("app.modules.identity.mail.deliver_otp", unavailable)
+    monkeypatch.setattr("app.modules.identity.mail.deliver_token", unavailable)
+    for path in ("email/resend", "password/forgot"):
+        known = client.post("/api/v1/auth/" + path, json={"email": data["email"]})
+        unknown = client.post("/api/v1/auth/" + path, json={"email": "unknown@example.com"})
+        assert known.json() == unknown.json()
+        assert known.json()["delivery_status"] == "accepted"
+        assert "sent" not in known.json()["message"]
+    assert "Transactional email request failed (HTTP 503)" in caplog.text
+    assert "PRIVATE" not in caplog.text
+
+
+def test_unconfigured_email_returns_failure_before_account_lookup(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "resend_api_key", None)
+    monkeypatch.setattr(settings, "smtp_host", None)
+    for path in ("email/resend", "password/forgot"):
+        result = client.post("/api/v1/auth/" + path, json={"email": "unknown@example.com"})
+        assert result.status_code == 503
+        assert "not configured" in result.json()["detail"]
+
+
+def test_google_transport_failure_is_retryable_without_creating_session(client, monkeypatch):
+    from google.auth.exceptions import TransportError
+
+    monkeypatch.setattr(get_settings(), "google_client_id", "client")
+
+    def unavailable(*args):
+        raise TransportError("PRIVATE infrastructure error")
+
+    monkeypatch.setattr(
+        "app.modules.identity.router.google_id_token.verify_oauth2_token", unavailable
+    )
+    result = client.post("/api/v1/auth/google", json={"id_token": "t" * 32})
+    assert result.status_code == 503
+    assert "temporarily unavailable" in result.json()["detail"]
+    assert "PRIVATE" not in result.text
+    with SessionLocal() as db:
+        assert db.scalar(select(SessionToken)) is None
+
+
+@pytest.mark.parametrize(
+    "claims",
+    [
+        {"sub": "subject", "email": "invalid", "email_verified": True},
+        {"sub": ["subject"], "email": "person@example.com", "email_verified": True},
+        {"sub": "subject", "email": "person@example.com", "email_verified": "true"},
+    ],
+)
+def test_invalid_google_claims_do_not_write_users(claims):
+    with SessionLocal() as db, pytest.raises(HTTPException) as raised:
+        login_google(db, claims)
+    assert raised.value.status_code == 401
+    with SessionLocal() as db:
+        assert db.scalar(select(User)) is None
+
+
+def test_email_provider_requires_nonempty_message_id(monkeypatch):
+    from app.modules.identity import mail
+
+    monkeypatch.setattr(get_settings(), "resend_api_key", "private")
+    monkeypatch.setattr(
+        httpx.Client, "post", lambda *args, **kwargs: httpx.Response(200, json={"id": ""})
+    )
+    with pytest.raises(HTTPException) as raised:
+        mail.send_email("person@example.com", "Test", "Text", "<p>Text</p>", "test")
+    assert raised.value.status_code == 503

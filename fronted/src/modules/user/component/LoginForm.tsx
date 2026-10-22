@@ -30,7 +30,11 @@ export default function LoginForm() {
   const login = useMutation(
     trpc.user.login.mutationOptions({
       onSuccess: async (result) => {
-        toast.success("Welcome back");
+        toast.success(
+          result.verification_required
+            ? "Verify your email to continue"
+            : "Welcome back",
+        );
         await queryClient.clear();
         const next = nextAuthPath(window.location.search);
         reloadAuthPage(
@@ -39,11 +43,16 @@ export default function LoginForm() {
             : next,
         );
       },
-      onError: (error) => toast.error(error.message),
+      onError: (error) =>
+        form.setError("root.server", { message: error.message }),
     }),
   );
 
-  const onSubmit = async (values: LoginFormValues) => login.mutate(values);
+  const onSubmit = (values: LoginFormValues) => {
+    if (login.isPending) return;
+    form.clearErrors("root");
+    login.mutate(values);
+  };
 
   return (
     <div className="w-full ">
@@ -66,10 +75,19 @@ export default function LoginForm() {
             autoComplete="email"
             placeholder="you@example.com"
             className="rounded-md border-border !bg-input/30   text-foreground placeholder:text-muted-foreground focus-visible:ring-1"
+            disabled={login.isPending}
+            aria-invalid={!!form.formState.errors.email}
+            aria-describedby={
+              form.formState.errors.email ? "email-error" : undefined
+            }
             {...form.register("email")}
           />
           {form.formState.errors.email && (
-            <p className="mt-1 text-xs text-destructive">
+            <p
+              id="email-error"
+              role="alert"
+              className="mt-1 text-xs text-destructive"
+            >
               {form.formState.errors.email.message}
             </p>
           )}
@@ -97,15 +115,29 @@ export default function LoginForm() {
             autoComplete="current-password"
             placeholder="Your password"
             className="rounded-md border-border !bg-input/30 text-foreground placeholder:text-muted-foreground focus-visible:ring-1"
+            disabled={login.isPending}
+            aria-invalid={!!form.formState.errors.password}
+            aria-describedby={
+              form.formState.errors.password ? "password-error" : undefined
+            }
             {...form.register("password")}
           />
           {form.formState.errors.password && (
-            <p className="mt-1 text-xs text-destructive">
+            <p
+              id="password-error"
+              role="alert"
+              className="mt-1 text-xs text-destructive"
+            >
               {form.formState.errors.password.message}
             </p>
           )}
         </div>
 
+        {form.formState.errors.root?.server && (
+          <p role="alert" className="text-sm text-destructive">
+            {form.formState.errors.root.server.message}
+          </p>
+        )}
         <Button
           type="submit"
           disabled={login.isPending}

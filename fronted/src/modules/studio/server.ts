@@ -514,13 +514,19 @@ export const studioRouter = createTRPCRouter({
           "threads",
         ]),
         options: fields.optional(),
+        return_to: z
+          .enum(["/dashboard/channels", "/onboarding?step=connect"])
+          .optional(),
       }),
     )
     .mutation(({ input }) =>
       backend<{ auth_url: string }>(
         "POST",
         `/channels/${input.platform}/connect`,
-        { options: input.options ?? {} },
+        {
+          options: input.options ?? {},
+          ...(input.return_to ? { return_to: input.return_to } : {}),
+        },
       ),
     ),
   disconnect: authedProcedure

@@ -2,6 +2,7 @@ import re
 from datetime import timedelta
 
 from fastapi import HTTPException
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -100,10 +101,19 @@ def login(db: Session, email: str, password: str) -> tuple[User, Workspace, str,
 
 
 def login_google(db: Session, claims: dict[str, object]) -> tuple[User, Workspace, str, int]:
-    if not claims.get("sub") or not claims.get("email") or claims.get("email_verified") is not True:
+    if (
+        not isinstance(claims, dict)
+        or not isinstance(claims.get("sub"), str)
+        or not 1 <= len(claims["sub"]) <= 255
+        or not isinstance(claims.get("email"), str)
+        or claims.get("email_verified") is not True
+    ):
         raise HTTPException(401, "Google must provide a verified email address")
     subject = str(claims["sub"])
-    email = normalize_email(str(claims["email"]))
+    try:
+        email = normalize_email(str(TypeAdapter(EmailStr).validate_python(claims["email"])))
+    except ValidationError as exc:
+        raise HTTPException(401, "Google must provide a verified email address") from exc
     identity = db.scalar(
         select(AuthIdentity).where(
             AuthIdentity.provider == "google", AuthIdentity.provider_subject == subject
@@ -116,7 +126,7 @@ def login_google(db: Session, claims: dict[str, object]) -> tuple[User, Workspac
         if user is None:
             user = User(
                 email=email,
-                name=str(claims.get("name") or email.split("@", 1)[0]),
+                name=(str(claims.get("name") or "").strip() or email.split("@", 1)[0])[:160],
                 email_verified=bool(claims.get("email_verified")),
             )
             db.add(user)

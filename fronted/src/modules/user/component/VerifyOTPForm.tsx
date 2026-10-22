@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  emailSchema,
+  linkTokenSchema,
+  verificationInputSchema,
+} from "../contracts";
 import { reloadAuthPage } from "../authFlow";
 
 import { useEffect, useState } from "react";
@@ -20,10 +25,12 @@ export default function VerifyOTPForm({
   email: initialEmail = "",
   token = "",
   initialCooldown = 0,
+  initialError = "",
 }: {
   email?: string;
   token?: string;
   initialCooldown?: number;
+  initialError?: string;
 }) {
   const trpc = useTRPCClient();
   const queryClient = useQueryClient();
@@ -31,8 +38,14 @@ export default function VerifyOTPForm({
   const [code, setCode] = useState(/^[0-9]{6}$/.test(token) ? token : "");
   const [cooldown, setCooldown] = useState(initialCooldown);
   const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
-  const legacyLink = token.length >= 20;
+  const [error, setError] = useState(
+    token &&
+      !/^[0-9]{6}$/.test(token) &&
+      !linkTokenSchema.safeParse(token).success
+      ? "This verification link is invalid. Request a new code below."
+      : initialError,
+  );
+  const legacyLink = linkTokenSchema.safeParse(token).success;
 
   useEffect(() => {
     if (!cooldown) return;
@@ -56,6 +69,7 @@ export default function VerifyOTPForm({
       );
     },
     onError(err) {
+      setNotice("");
       setError(err.message || "Code could not be verified");
     },
   });
@@ -68,17 +82,18 @@ export default function VerifyOTPForm({
         reloadAuthPage(nextAuthPath(window.location.search));
         return;
       }
-      setNotice(result.message);
+      if (result.email) setEmail(result.email);
+      setNotice(result.delivery_status === "failed" ? "" : result.message);
       setCode("");
-      setError("");
-      setCooldown(result.retry_after || 60);
+      setError(result.delivery_status === "failed" ? result.message : "");
+      setCooldown(result.retry_after ?? 0);
     },
     onError(err) {
+      setNotice("");
       setError(err.message || "Could not send a code");
       setCooldown(authRetrySeconds(err));
     },
   });
-  const busy = verify.isPending || resend.isPending;
   const logout = useMutation({
     mutationFn: () => trpc.user.logout.mutate(),
     onSuccess() {
@@ -86,9 +101,12 @@ export default function VerifyOTPForm({
       reloadAuthPage("/login");
     },
     onError(err) {
+      setNotice("");
       setError(err.message || "Could not sign out");
     },
   });
+
+  const busy = verify.isPending || resend.isPending || logout.isPending;
 
   return (
     <div className="space-y-4">
@@ -96,11 +114,18 @@ export default function VerifyOTPForm({
         method="post"
         onSubmit={(event) => {
           event.preventDefault();
+          if (busy) return;
           setError("");
-          verify.mutate({
+          setNotice("");
+          const parsed = verificationInputSchema.safeParse({
             email: email.trim() || undefined,
             token: legacyLink ? token : code,
           });
+          if (!parsed.success) {
+            setError(parsed.error.issues[0].message);
+            return;
+          }
+          verify.mutate(parsed.data);
         }}
         className="space-y-4"
       >
@@ -119,12 +144,14 @@ export default function VerifyOTPForm({
                 type="email"
                 autoComplete="email"
                 required
+                maxLength={254}
                 value={email}
                 disabled={busy}
                 onChange={(event) => {
                   setEmail(event.target.value);
                   setCode("");
                   setError("");
+                  setNotice("");
                 }}
               />
             </div>
@@ -146,6 +173,7 @@ export default function VerifyOTPForm({
                 onChange={(value) => {
                   setCode(value.replace(/\D/g, ""));
                   setError("");
+                  setNotice("");
                 }}
                 containerClassName="w-full"
               >
@@ -160,7 +188,7 @@ export default function VerifyOTPForm({
                 </InputOTPGroup>
               </InputOTP>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                Use the latest code. Codes expire after 10 minutes.
+                Use the latest code. Its expiry time is shown in the email.
               </p>
             </div>
           </>
@@ -195,7 +223,17 @@ export default function VerifyOTPForm({
           type="button"
           className="secondary-btn w-full rounded-md"
           disabled={busy || cooldown > 0 || !email.trim()}
-          onClick={() => resend.mutate({ email: email.trim() })}
+          onClick={() => {
+            if (busy || cooldown > 0) return;
+            setNotice("");
+            setError("");
+            const parsed = emailSchema.safeParse(email);
+            if (!parsed.success) {
+              setError(parsed.error.issues[0].message);
+              return;
+            }
+            resend.mutate({ email: parsed.data });
+          }}
         >
           {resend.isPending
             ? "Sending code…"

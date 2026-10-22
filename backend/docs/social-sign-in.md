@@ -40,6 +40,27 @@ An X app can be reused if both distinct callback URLs are registered; using a
 separate login app makes permission management clearer. Never expose secrets with
 `NEXT_PUBLIC_` variables.
 
+When login and publishing deliberately share the same OAuth 2.0 Client ID,
+`X_LOGIN_CLIENT_SECRET` and `X_CLIENT_SECRET` must be the same current secret for
+that app. A different or stale publishing secret can produce X's
+`unauthorized_client` / `Missing valid authorization header` error even when
+Draftva sends Basic authentication. Use the OAuth 2.0 Client Secret, not the OAuth
+1.0 API Key Secret or a Bearer Token. Recreate the API container after changing
+the environment; recreate workers/scheduler when applying the same correction to
+background token refresh. Restart authorization rather than reusing a failed callback.
+
+If another project occupies port 3000 and Draftva runs on 3001, set
+`FRONTEND_URL=http://localhost:3001`, use
+`http://localhost:3001/api/auth/x/callback` for `X_LOGIN_REDIRECT_URI` and register
+that exact URL in X. Use the same hostname when opening Draftva; localhost and
+127.0.0.1 do not share the browser-bound login cookie. Login configuration rejects
+publishing callback paths, and the frontend rejects a callback on a different origin.
+
+Compose reads environment values when creating a container. After changing `.env`,
+recreate the API with `docker compose up -d --no-deps --force-recreate api`;
+`docker restart` alone retains the old container environment. Existing failed
+OAuth URLs cannot be reused: start a new login after updating the configuration.
+
 Requested scopes: `tweet.read users.read users.email`. The flow uses S256 PKCE,
 10-minute state records and an HTTP-only, SameSite=Lax browser cookie. The verifier
 is encrypted in the database. State must match both the browser and the backend

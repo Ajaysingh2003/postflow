@@ -39,6 +39,11 @@ export async function GET(request: Request) {
       target.searchParams.get("state") !== flow.state
     )
       throw new Error("Invalid provider response");
+    if (
+      target.searchParams.get("redirect_uri") !==
+      new URL("/api/auth/x/callback", url.origin).href
+    )
+      throw new Error("X login callback must match this frontend origin");
     cookieStore.set(
       X_LOGIN_COOKIE,
       JSON.stringify({

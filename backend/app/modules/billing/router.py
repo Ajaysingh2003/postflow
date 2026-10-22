@@ -155,8 +155,10 @@ def billing_usage(
         .where(Subscription.workspace_id == workspace.id)
         .order_by(Subscription.updated_at.desc())
     )
+    usage = get_plan_limits_summary(db, workspace.id)
+    db.commit()  # Persist monthly rollover, bootstrap and expired reservations.
     return BillingUsageResponse(
-        usage=get_plan_limits_summary(db, workspace.id),
+        usage=usage,
         subscription=SubscriptionResponse.model_validate(subscription) if subscription else None,
         can_manage_billing=membership.role in {"owner", "admin", "billing"},
     )

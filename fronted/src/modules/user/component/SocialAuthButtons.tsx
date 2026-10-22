@@ -36,27 +36,29 @@ export function SocialAuthChoices({
         </p>
       )}
 
-     <div className="grid grid-cols-2 gap-8 max-w-full ">
-       <GoogleAuthButton clientId={googleClientId} loading={loading} />
-      {xEnabled && !loading ? (
-
-        <Button asChild className="secondary-btn h-10 w-full rounded-md">
-          <a href={xLoginStartPath(next, register)}>
-            <SiX className="size-4" /> 
-          </a>
-        </Button>
-
-      ) : (
-        <Button
-          type="button"
-          className="secondary-btn h-10 w-full rounded-md"
-          disabled
-          title="X sign-in is currently unavailable"
-        >
-          <SiX className="size-4" />
-        </Button>
-      )}
-     </div>
+      <div className="grid grid-cols-2 items-center justify-center gap-3">
+        <GoogleAuthButton clientId={googleClientId} loading={loading} />
+        {xEnabled && !loading ? (
+          <Button asChild className="secondary-btn h-10 w-full rounded-md">
+            <a
+              aria-label="Continue with X"
+              href={xLoginStartPath(next, register)}
+            >
+              <SiX className="size-4" />
+            </a>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            className="secondary-btn h-10 w-full rounded-md"
+            aria-label="Continue with X"
+            disabled
+            title="X sign-in is currently unavailable"
+          >
+            <SiX className="size-4" />
+          </Button>
+        )}
+      </div>
       {!loading && (!googleClientId || !xEnabled) && (
         <p className="text-center text-xs leading-5 text-muted-foreground">
           {!googleClientId && !xEnabled

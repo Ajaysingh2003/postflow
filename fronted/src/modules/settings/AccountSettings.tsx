@@ -17,7 +17,9 @@ import type { AuthUser } from "@/modules/user/types";
 function initials(user: Pick<AuthUser, "name" | "email">) {
   const words = (user.name || user.email).trim().split(/\s+/).filter(Boolean);
   const letters =
-    words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? "?").slice(0, 2);
+    words.length > 1
+      ? words[0][0] + words[1][0]
+      : (words[0] ?? "?").slice(0, 2);
   return letters.toUpperCase();
 }
 
@@ -72,7 +74,7 @@ export function ProfileForm({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (name.trim()) onSave(name.trim());
+          if (!saving && name.trim().length >= 2) onSave(name.trim());
         }}
         className="space-y-2.5"
       >
@@ -83,13 +85,13 @@ export function ProfileForm({
           Your name
         </label>
         <Input
-        
           id="settings-name"
           value={name}
           onChange={(event) => {
             setName(event.target.value);
             onDirty?.(event.target.value.trim() !== user.name);
           }}
+          minLength={2}
           maxLength={160}
           required
           autoComplete="name"
@@ -97,14 +99,17 @@ export function ProfileForm({
           aria-describedby="settings-name-hint"
           className="h-10 max-w-md rounded-lg"
         />
-        <p id="settings-name-hint" className="text-[13px] text-muted-foreground">
-          Shown to people in your workspace.
+        <p
+          id="settings-name-hint"
+          className="text-[13px] text-muted-foreground"
+        >
+          Shown to people in your workspace. Use 2–160 characters.
         </p>
         <div className="pt-1.5">
           <Button
             type="submit"
             className="primary-btn"
-            disabled={saving || !name.trim() || unchanged}
+            disabled={saving || name.trim().length < 2 || unchanged}
           >
             {saving ? "Saving…" : "Save changes"}
           </Button>
@@ -195,7 +200,7 @@ export function SecuritySettings() {
     trpc.user.listSessions.queryOptions(undefined, { staleTime: 15000 }),
   );
   const [confirmAll, setConfirmAll] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
+  const [resetNotice, setResetNotice] = useState("");
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
@@ -221,10 +226,7 @@ export function SecuritySettings() {
     trpc.user.logoutAll.mutationOptions({
       onSuccess: finish,
       onError: () => {
-        toast.error(
-          "Couldn’t end every session. Please sign in and try again.",
-        );
-        finish();
+        toast.error("Couldn’t end every session. Please try again.");
       },
     }),
   );
@@ -242,10 +244,13 @@ export function SecuritySettings() {
   const reset = useMutation(
     trpc.user.forgotPassword.mutationOptions({
       onSuccess: (data) => {
-        setResetSent(true);
+        setResetNotice(data.message);
         setCooldown(data.retry_after || 60);
       },
-      onError: error,
+      onError: (err) => {
+        setResetNotice("");
+        error(err);
+      },
     }),
   );
   const pending = logout.isPending || logoutAll.isPending || revoke.isPending;
@@ -255,7 +260,9 @@ export function SecuritySettings() {
       <section className="space-y-3">
         <div className="space-y-1">
           <SectionHeading
-            icon={<ShieldCheck aria-hidden className="size-4 text-violet-500" />}
+            icon={
+              <ShieldCheck aria-hidden className="size-4 text-violet-500" />
+            }
           >
             Password
           </SectionHeading>
@@ -280,13 +287,13 @@ export function SecuritySettings() {
               ? `Resend in ${cooldown}s`
               : "Send password reset email"}
         </Button>
-        {resetSent && (
+        {resetNotice && (
           <p
             role="status"
             className="flex items-center gap-1.5 text-[13px] text-emerald-700"
           >
             <Check aria-hidden className="size-3.5" />
-            Check your inbox for the reset link.
+            {resetNotice}
           </p>
         )}
       </section>

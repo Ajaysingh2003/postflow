@@ -95,7 +95,7 @@ const COMPARISON_DATA: FeatureCategory[] = [
           (code) =>
             `${PAID_ALLOWANCES[code].ai_credits.toLocaleString("en-US")} credits`,
         ) as [string, string, string]),
-        "One credit per successful AI request. Credits reset monthly.",
+        "One credit per successful AI request. Credits reset monthly, including on yearly plans. Unused credits don’t roll over.",
       ),
       row("AI hook & opener generator", true, true, true),
       row("Tone & rephrase engine", true, true, true),

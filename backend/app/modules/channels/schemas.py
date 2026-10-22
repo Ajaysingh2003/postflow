@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -84,6 +84,7 @@ class ConnectRequest(BaseModel):
     """Request to initiate OAuth connection."""
 
     redirect_uri: str | None = None
+    return_to: Literal["/dashboard/channels", "/onboarding?step=connect"] = "/dashboard/channels"
     options: dict[str, Any] = Field(default_factory=dict)
 
 

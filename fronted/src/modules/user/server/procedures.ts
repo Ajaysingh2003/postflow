@@ -15,7 +15,7 @@ import {
   getAuthApiUrl,
   getAuthClientHeaders,
   getAuthHeaders,
-  handleBackendError,
+  handleAuthBackendError as handleBackendError,
   setAuthCookies,
 } from "@/lib/http-error";
 import type {
@@ -31,6 +31,15 @@ import type {
 } from "@/modules/user/types";
 
 import { publicAuthSession } from "../authFlow";
+import {
+  authResponseSchema,
+  authMessageSchema,
+  authUserSchema,
+  emailSchema,
+  linkTokenSchema,
+  verificationInputSchema,
+  parseAuthResponse,
+} from "../contracts";
 
 export const userRouter = createTRPCRouter({
   /**
@@ -39,15 +48,20 @@ export const userRouter = createTRPCRouter({
    */
   register: baseProcedure
     .input(
-      z.object({
-        email: z.string().trim().email("Invalid email address"),
-        password: z
-          .string()
-          .min(10, "Password must be at least 10 characters")
-          .max(200),
-        name: z.string().trim().min(2).max(160).optional(),
-        display_name: z.string().trim().min(2).max(160).optional(),
-      }),
+      z
+        .object({
+          email: emailSchema,
+          password: z
+            .string()
+            .min(10, "Password must be at least 10 characters")
+            .max(200),
+          name: z.string().trim().min(2).max(160).optional(),
+          display_name: z.string().trim().min(2).max(160).optional(),
+        })
+        .refine((value) => !!(value.name || value.display_name), {
+          message: "Name is required",
+          path: ["display_name"],
+        }),
     )
     .mutation(async ({ input }): Promise<RegisterResponse> => {
       const name = (
@@ -66,10 +80,11 @@ export const userRouter = createTRPCRouter({
           { headers: await getAuthClientHeaders(), timeout: 25_000 },
         );
 
-        await setAuthCookies(response.data);
-        invalidateUserSession(response.data.access_token);
+        const data = parseAuthResponse(authResponseSchema, response.data);
+        await setAuthCookies(data);
+        invalidateUserSession(data.access_token);
 
-        const session = publicAuthSession(response.data);
+        const session = publicAuthSession(data);
         return {
           ...session,
           verification_required: !!session.verification_required,
@@ -85,7 +100,7 @@ export const userRouter = createTRPCRouter({
   login: baseProcedure
     .input(
       z.object({
-        email: z.string().trim().email("Invalid email address"),
+        email: emailSchema,
         password: z.string().min(1, "Password is required").max(200),
       }),
     )
@@ -100,12 +115,15 @@ export const userRouter = createTRPCRouter({
           { headers: await getAuthClientHeaders(), timeout: 25_000 },
         );
 
-        await setAuthCookies(response.data);
-        invalidateUserSession(response.data.access_token);
+        const data = parseAuthResponse(authResponseSchema, response.data);
+        await setAuthCookies(data);
+        invalidateUserSession(data.access_token);
 
-        return publicAuthSession(response.data);
+        return publicAuthSession(data);
       } catch (error) {
-        return handleBackendError(error, "Invalid email or password");
+        return handleBackendError(error, "Could not sign in", {
+          clearUnauthorizedSession: false,
+        });
       }
     }),
 
@@ -128,11 +146,14 @@ export const userRouter = createTRPCRouter({
           { headers: await getAuthClientHeaders(), timeout: 25_000 },
         );
 
-        await setAuthCookies(response.data);
-        invalidateUserSession(response.data.access_token);
-        return publicAuthSession(response.data);
+        const data = parseAuthResponse(authResponseSchema, response.data);
+        await setAuthCookies(data);
+        invalidateUserSession(data.access_token);
+        return publicAuthSession(data);
       } catch (error) {
-        return handleBackendError(error, "Google authentication failed");
+        return handleBackendError(error, "Google authentication failed", {
+          clearUnauthorizedSession: false,
+        });
       }
     }),
 
@@ -145,30 +166,74 @@ export const userRouter = createTRPCRouter({
       x_login_enabled: boolean;
     }> => {
       try {
-        return (await axios.get(`${getAuthApiUrl()}/config`, { timeout: 8000 }))
-          .data;
+        return parseAuthResponse(
+          z.object({
+            google_client_id: z.string().min(1).nullable(),
+            x_login_enabled: z.boolean(),
+          }),
+          (await axios.get(`${getAuthApiUrl()}/config`, { timeout: 8000 }))
+            .data,
+        );
       } catch (error) {
         return handleBackendError(error, "Could not load sign-in options");
       }
     },
   ),
 
-  /**
-   * Fetches the current authenticated user from the backend identity service.
-   * Utilizes getUserProcedure session caching to avoid redundant roundtrips.
-   */
-  me: getUserProcedure.query(async ({ ctx }): Promise<AuthUser> => {
+  me: getUserProcedure.query(async ({ ctx }): Promise<AuthUser | null> => {
     if (!ctx.user) {
-      throw new TRPCError({ code: "UNAUTHORIZED", message: "Not signed in" });
+      return null
+
     }
-    return ctx.user as AuthUser;
+
+    return ctx.user ? ctx.user  as AuthUser: null;
   }),
 
-  /**
-   * Fast client profile query returning the context user (or null if unauthenticated).
-   */
+  
   profile: getUserProcedure.query(({ ctx }) => {
     return (ctx.user as AuthUser | null) ?? null;
+  }),
+
+  onboarding: authedProcedure.query(
+    async ({
+      ctx,
+    }): Promise<{
+      completed_at: string | null;
+      workspace_id: string;
+      workspace_name: string;
+      can_connect: boolean;
+    }> => {
+      try {
+        return (
+          await axios.get(`${getAuthApiUrl()}/onboarding`, {
+            headers: await getAuthHeaders(ctx.token),
+            timeout: 8000,
+          })
+        ).data;
+      } catch (error) {
+        return handleBackendError(error, "Could not load your setup");
+      }
+    },
+  ),
+
+  completeOnboarding: authedProcedure.mutation(async ({ ctx }) => {
+    try {
+      await axios.post(
+        `${getAuthApiUrl()}/onboarding/complete`,
+        {},
+        {
+          headers: await getAuthHeaders(ctx.token),
+          timeout: 8000,
+        },
+      );
+      invalidateUserSession(ctx.token);
+      return { success: true };
+    } catch (error) {
+      return handleBackendError(
+        error,
+        "Could not save your setup. Please try again.",
+      );
+    }
   }),
 
   /**
@@ -177,8 +242,8 @@ export const userRouter = createTRPCRouter({
   updateProfile: authedProcedure
     .input(
       z.object({
-        name: z.string().trim().min(1).max(160).optional(),
-        display_name: z.string().trim().min(1).max(160).optional(),
+        name: z.string().trim().min(2).max(160).optional(),
+        display_name: z.string().trim().min(2).max(160).optional(),
       }),
     )
     .mutation(async ({ input, ctx }): Promise<AuthUser> => {
@@ -194,15 +259,13 @@ export const userRouter = createTRPCRouter({
         const response = await axios.patch<AuthUser>(
           `${getAuthApiUrl()}/me`,
           { name },
-          { headers: await getAuthHeaders(ctx.token) },
+          { headers: await getAuthHeaders(ctx.token), timeout: 8000 },
         );
 
         invalidateUserSession(ctx.token);
 
-        return {
-          ...response.data,
-          display_name: response.data.name,
-        };
+        const data = parseAuthResponse(authUserSchema, response.data);
+        return { ...data, display_name: data.name };
       } catch (error) {
         return handleBackendError(error, "Could not update profile");
       }
@@ -219,7 +282,7 @@ export const userRouter = createTRPCRouter({
         await axios.post(
           `${getAuthApiUrl()}/logout`,
           {},
-          { headers: await getAuthHeaders(token) },
+          { headers: await getAuthHeaders(token), timeout: 8000 },
         );
       }
     } catch {
@@ -237,14 +300,14 @@ export const userRouter = createTRPCRouter({
   logoutAll: authedProcedure.mutation(async ({ ctx }) => {
     try {
       invalidateUserSession(ctx.token);
-      await axios.post(
+      const response = await axios.post(
         `${getAuthApiUrl()}/logout-all`,
         {},
-        { headers: await getAuthHeaders(ctx.token) },
+        { headers: await getAuthHeaders(ctx.token), timeout: 8000 },
       );
+      if (response.status !== 204)
+        throw new Error("Session revocation was not confirmed");
     } catch (error) {
-      await clearAuthCookies();
-      invalidateUserSession();
       return handleBackendError(error, "Could not terminate all sessions");
     }
 
@@ -262,9 +325,20 @@ export const userRouter = createTRPCRouter({
         `${getAuthApiUrl()}/sessions`,
         {
           headers: await getAuthHeaders(),
+          timeout: 8000,
         },
       );
-      return response.data;
+      return parseAuthResponse(
+        z.array(
+          z.object({
+            id: z.string().uuid(),
+            created_at: z.string().datetime({ offset: true }),
+            expires_at: z.string().datetime({ offset: true }),
+            current: z.boolean(),
+          }),
+        ),
+        response.data,
+      );
     } catch (error) {
       return handleBackendError(error, "Could not retrieve sessions");
     }
@@ -274,15 +348,18 @@ export const userRouter = createTRPCRouter({
    * Revokes a specific session by ID.
    */
   revokeSession: authedProcedure
-    .input(z.object({ sessionId: z.string().min(1) }))
+    .input(z.object({ sessionId: z.string().uuid() }))
     .mutation(async ({ input }) => {
       try {
-        await axios.delete(
+        const response = await axios.delete(
           `${getAuthApiUrl()}/sessions/${encodeURIComponent(input.sessionId)}`,
           {
             headers: await getAuthHeaders(),
+            timeout: 8000,
           },
         );
+        if (response.status !== 204)
+          throw new Error("Session revocation was not confirmed");
         return { success: true };
       } catch (error) {
         return handleBackendError(error, "Could not revoke session");
@@ -298,9 +375,9 @@ export const userRouter = createTRPCRouter({
         const response = await axios.post<MessageResponse>(
           `${getAuthApiUrl()}/email/request-verification`,
           {},
-          { headers: await getAuthHeaders() },
+          { headers: await getAuthHeaders(), timeout: 25_000 },
         );
-        return response.data;
+        return parseAuthResponse(authMessageSchema, response.data);
       } catch (error) {
         return handleBackendError(
           error,
@@ -313,12 +390,18 @@ export const userRouter = createTRPCRouter({
   verificationStatus: authedProcedure.query(
     async ({ ctx }): Promise<MessageResponse> => {
       try {
-        return (
-          await axios.get<MessageResponse>(`${getAuthApiUrl()}/email/status`, {
-            headers: await getAuthHeaders(ctx.token),
-            timeout: 8000,
-          })
-        ).data;
+        return parseAuthResponse(
+          authMessageSchema,
+          (
+            await axios.get<MessageResponse>(
+              `${getAuthApiUrl()}/email/status`,
+              {
+                headers: await getAuthHeaders(ctx.token),
+                timeout: 8000,
+              },
+            )
+          ).data,
+        );
       } catch (error) {
         return handleBackendError(error, "Could not check verification status");
       }
@@ -329,7 +412,7 @@ export const userRouter = createTRPCRouter({
    * Alias for resending verification code.
    */
   resendVerification: getUserProcedure
-    .input(z.object({ email: z.string().trim().email() }))
+    .input(z.object({ email: emailSchema }))
     .mutation(async ({ input, ctx }): Promise<AuthMessage> => {
       try {
         const ownsEmail =
@@ -342,7 +425,7 @@ export const userRouter = createTRPCRouter({
             { headers: await getAuthHeaders(ctx.token), timeout: 25_000 },
           );
           invalidateUserSession(ctx.token);
-          return result.data;
+          return parseAuthResponse(authMessageSchema, result.data);
         }
         const response = await axios.post<MessageResponse>(
           `${getAuthApiUrl()}/email/${ownsEmail ? "request-verification" : "resend"}`,
@@ -354,8 +437,9 @@ export const userRouter = createTRPCRouter({
             timeout: 25_000,
           },
         );
-        return response.data;
+        return parseAuthResponse(authMessageSchema, response.data);
       } catch (error) {
+        invalidateUserSession(ctx.token);
         return handleBackendError(error, "Could not resend verification code");
       }
     }),
@@ -364,12 +448,7 @@ export const userRouter = createTRPCRouter({
    * Confirms email address with a verification token.
    */
   verifyEmail: baseProcedure
-    .input(
-      z.object({
-        email: z.string().email().optional(),
-        token: z.string().min(1, "Verification token is required"),
-      }),
-    )
+    .input(verificationInputSchema)
     .mutation(async ({ input }): Promise<MessageResponse> => {
       try {
         const response = await axios.post<MessageResponse>(
@@ -380,6 +459,10 @@ export const userRouter = createTRPCRouter({
           },
           { headers: await getAuthClientHeaders(), timeout: 15_000 },
         );
+        const message = parseAuthResponse(
+          authMessageSchema.extend({ outcome: z.literal("verified") }),
+          response.data,
+        );
         const sessionToken = await getAccessToken();
         invalidateUserSession(sessionToken);
         let authenticated = false;
@@ -389,15 +472,16 @@ export const userRouter = createTRPCRouter({
               headers: await getAuthHeaders(sessionToken),
               timeout: 8000,
             });
+            const user = parseAuthResponse(authUserSchema, me.data);
             authenticated =
-              me.data.email_verified &&
+              user.email_verified &&
               (!input.email ||
-                me.data.email.toLowerCase() === input.email.toLowerCase());
+                user.email.toLowerCase() === input.email.toLowerCase());
           } catch {
             /* Verification succeeded; an expired session can sign in again. */
           }
         }
-        return { ...response.data, authenticated };
+        return { ...message, authenticated };
       } catch (error) {
         return handleBackendError(error, "Email verification failed");
       }
@@ -407,9 +491,7 @@ export const userRouter = createTRPCRouter({
    * Requests a password recovery link.
    */
   forgotPassword: baseProcedure
-    .input(
-      z.object({ email: z.string().trim().email("Invalid email address") }),
-    )
+    .input(z.object({ email: emailSchema }))
     .mutation(async ({ input }): Promise<MessageResponse> => {
       try {
         const response = await axios.post<MessageResponse>(
@@ -419,10 +501,8 @@ export const userRouter = createTRPCRouter({
           },
           { headers: await getAuthClientHeaders(), timeout: 25_000 },
         );
-        return {
-          ...response.data,
-          detail: response.data.message,
-        };
+        const message = parseAuthResponse(authMessageSchema, response.data);
+        return { ...message, detail: message.message };
       } catch (error) {
         return handleBackendError(error, "Could not start password recovery");
       }
@@ -434,7 +514,7 @@ export const userRouter = createTRPCRouter({
   resetPassword: baseProcedure
     .input(
       z.object({
-        token: z.string().min(1, "Reset token is required"),
+        token: linkTokenSchema,
         password: z
           .string()
           .min(10, "Password must be at least 10 characters")
@@ -451,9 +531,13 @@ export const userRouter = createTRPCRouter({
           },
           { headers: await getAuthClientHeaders(), timeout: 15_000 },
         );
+        const message = parseAuthResponse(
+          authMessageSchema.extend({ outcome: z.literal("password_updated") }),
+          response.data,
+        );
         await clearAuthCookies();
         invalidateUserSession();
-        return response.data;
+        return message;
       } catch (error) {
         return handleBackendError(error, "Password reset failed");
       }
@@ -478,9 +562,10 @@ export const userRouter = createTRPCRouter({
           timeout: 8000,
         },
       );
-      await setAuthCookies(response.data);
+      const data = parseAuthResponse(authResponseSchema, response.data);
+      await setAuthCookies(data);
       invalidateUserSession(token);
-      return publicAuthSession(response.data);
+      return publicAuthSession(data);
     } catch (error) {
       return handleBackendError(error, "Could not check your session");
     }

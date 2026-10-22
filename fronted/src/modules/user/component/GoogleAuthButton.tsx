@@ -1,14 +1,13 @@
 "use client";
 
 import { reloadAuthPage } from "../authFlow";
-
 import Script from "next/script";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTRPC } from "@/trpc/client";
 import { nextAuthPath, verificationPath } from "../authFlow";
-import { SiGoogle } from "@icons-pack/react-simple-icons";
 import { Button } from "@/components/ui/button";
 
 interface GoogleIdentity {
@@ -18,14 +17,34 @@ interface GoogleIdentity {
   }): void;
   renderButton(
     container: HTMLElement,
-    options: { theme: string; size: string; width: number; text: string },
+    options: {
+      type: "standard";
+      theme: string;
+      size: string;
+      text: string;
+      width: number;
+    },
   ): void;
   cancel(): void;
 }
+
 function googleIdentity(): GoogleIdentity | undefined {
   return (
     window as Window & { google?: { accounts?: { id?: GoogleIdentity } } }
   ).google?.accounts?.id;
+}
+
+function GoogleMark() {
+  return (
+    <Image
+      src="/google.png"
+      width={20}
+      height={20}
+      alt=""
+      aria-hidden="true"
+      className="size-5 shrink-0 object-contain"
+    />
+  );
 }
 
 export default function GoogleAuthButton({
@@ -69,14 +88,25 @@ export default function GoogleAuthButton({
         if (active) mutate({ id_token: credential });
       },
     });
-    identity.renderButton(container, {
-      theme: "outline",
-      size: "large",
-      width: Math.min(384, container.clientWidth || 320),
-      text: "continue_with",
-    });
+    let lastWidth = 0;
+    const render = () => {
+      const width = Math.min(400, Math.floor(container.clientWidth));
+      if (width <= 0 || width === lastWidth) return;
+      lastWidth = width;
+      identity.renderButton(container, {
+        type: "standard",
+        theme: "outline",
+        size: "large",
+        text: "continue_with",
+        width,
+      });
+    };
+    render();
+    const observer = new ResizeObserver(render);
+    observer.observe(container);
     return () => {
       active = false;
+      observer.disconnect();
       identity.cancel();
       container.replaceChildren();
     };
@@ -86,6 +116,7 @@ export default function GoogleAuthButton({
     return (
       <Button
         className="secondary-btn h-10 w-full rounded-md"
+        aria-label="Continue with Google"
         disabled
         title={
           loading
@@ -93,11 +124,14 @@ export default function GoogleAuthButton({
             : "Google sign-in is currently unavailable"
         }
       >
-        <SiGoogle className="size-4" />
+        <GoogleMark />
       </Button>
     );
   return (
-    <div className="space-y-2">
+    <div
+      className={`relative h-10 w-full min-w-0 rounded-md focus-within:ring-2 focus-within:ring-ring/50 ${signIn.isPending ? "pointer-events-none opacity-60" : ""}`}
+      aria-busy={signIn.isPending}
+    >
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
@@ -110,19 +144,32 @@ export default function GoogleAuthButton({
         }}
       />
       {!ready && (
-        <Button className="secondary-btn h-10 w-full rounded-md" disabled>
-          <SiGoogle className="size-4" /> Continue with Google
+        <Button
+          className="secondary-btn h-10 w-full rounded-md"
+          aria-label="Continue with Google"
+          disabled
+        >
+          <GoogleMark />
         </Button>
       )}
+      {ready && (
+        <div
+          aria-hidden="true"
+          className="secondary-btn pointer-events-none flex h-10 w-full justify-center rounded-md"
+        >
+          <GoogleMark />
+        </div>
+      )}
+      {/* The official control receives the click and keyboard input directly.
+          Its full-width hit area sits over our decorative icon-only face. */}
       <div
         ref={holder}
-        className={
-          signIn.isPending ? "pointer-events-none opacity-60" : "w-full"
-        }
+        className="absolute inset-0 h-10 w-full opacity-0"
+        aria-disabled={signIn.isPending || undefined}
         aria-busy={signIn.isPending}
       />
       {signIn.isPending && (
-        <p className="text-xs text-muted-foreground" role="status">
+        <p className="sr-only" role="status">
           Signing in with Google…
         </p>
       )}

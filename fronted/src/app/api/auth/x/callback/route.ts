@@ -9,7 +9,10 @@ import {
 import { invalidateUserSession } from "@/trpc/init";
 import { readXLoginCookie, X_LOGIN_COOKIE } from "@/modules/user/socialAuth";
 import { verificationPath } from "@/modules/user/authFlow";
-import type { AuthResponse } from "@/modules/user/types";
+import {
+  authResponseSchema,
+  parseAuthResponse,
+} from "@/modules/user/contracts";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -67,9 +70,7 @@ export async function GET(request: Request) {
               : "failed",
       );
     }
-    const session: AuthResponse = await result.json();
-    if (!session.access_token || !session.user_id || !session.workspace_id)
-      return failure("failed");
+    const session = parseAuthResponse(authResponseSchema, await result.json());
     await setAuthCookies(session);
     invalidateUserSession();
     const destination = session.verification_required

@@ -20,7 +20,7 @@ from app.modules.assistant.brand import brand_prompt_context
 from app.modules.assistant.llm_client import LLMClient, default_llm_client
 from app.modules.assistant.models import AssistantRun, VoiceProfile
 from app.modules.assistant.registry import assistant_registry
-from app.modules.billing.entitlements import check_assistant_usage_limit
+from app.modules.billing.credits import finish_run, reserve_run
 from app.modules.billing.models import UsageLedger
 from app.modules.channels.base import Issue
 from app.modules.channels.models import ConnectedAccount
@@ -143,9 +143,10 @@ async def execute_feature(
         created_at=datetime.now(UTC),
     )
     if db:
-        check_assistant_usage_limit(db, workspace_id)
-        db.add(record)
-        db.commit()  # Reserve one run before the provider call, under the workspace lock.
+        reserve_run(db, record)
+        db.commit()  # Persist the numeric reservation before calling the provider.
+    run_id = record.id if db else None
+    provider_tokens = 0
     issues = []
     try:
         if inputs.get("source_url"):
@@ -207,8 +208,9 @@ async def execute_feature(
         parsed, response = await (llm or default_llm_client).generate_structured(
             messages=messages, response_model=feature.output_schema
         )
-        record.tokens_used = response.total_tokens
-        record.cost_micros = calculate_cost_micros(response.total_tokens)
+        provider_tokens = response.total_tokens
+        record.tokens_used = provider_tokens
+        record.cost_micros = calculate_cost_micros(provider_tokens)
         output = parsed.model_dump()
         context = dict(validation_context or {})
         if target != "shared":
@@ -233,6 +235,8 @@ async def execute_feature(
             raise HTTPException(
                 422, {"message": "Generated draft failed platform validation", "issues": errors}
             )
+        if db:
+            finish_run(db, record.id, workspace_id, success=True)
         record.status = "succeeded"
         if db:
             db.add(
@@ -245,29 +249,40 @@ async def execute_feature(
                 )
             )
             db.commit()
-            db.refresh(record)
         return output, issues, record
     except (Exception, asyncio.CancelledError) as exc:
-        if getattr(exc, "tokens_used", 0):
-            record.tokens_used = exc.tokens_used
-            record.cost_micros = calculate_cost_micros(record.tokens_used)
-        record.status = "failed"
-        record.error = (
-            str(exc.detail)[:1000] if isinstance(exc, HTTPException) else type(exc).__name__
-        )
+        tokens_used = getattr(exc, "tokens_used", 0) or provider_tokens
+        cost_micros = calculate_cost_micros(tokens_used)
+        error = str(exc.detail)[:1000] if isinstance(exc, HTTPException) else type(exc).__name__
         if db:
-            db.add(record)
-            if record.tokens_used:
+            # A failed flush/commit must be rolled back before refunding. Re-read
+            # durable state so a retry cannot release a settled credit twice.
+            db.rollback()
+            record = db.get(AssistantRun, run_id)
+            finish_run(db, run_id, workspace_id, success=False)
+            if record.status != "succeeded":
+                record.status, record.error = "failed", error
+                record.tokens_used, record.cost_micros = tokens_used, cost_micros
+            if tokens_used and not db.scalar(
+                select(UsageLedger.id).where(
+                    UsageLedger.workspace_id == workspace_id,
+                    UsageLedger.kind == "assistant_tokens",
+                    UsageLedger.reference_id == run_id,
+                )
+            ):
                 db.add(
                     UsageLedger(
                         workspace_id=workspace_id,
                         kind="assistant_tokens",
-                        amount=record.tokens_used,
-                        reference_id=record.id,
-                        metadata_json={"cost_micros": record.cost_micros},
+                        amount=tokens_used,
+                        reference_id=run_id,
+                        metadata_json={"cost_micros": cost_micros},
                     )
                 )
             db.commit()
+        else:
+            record.status, record.error = "failed", error
+
         raise
 
 

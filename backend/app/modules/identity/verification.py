@@ -124,6 +124,8 @@ def verify_email_code(db, email, code):
     if user is None or not user.is_active:
         raise HTTPException(400, "Code is invalid or expired. Request a new code")
     user = lock_user(db, user.id)
+    if not user or not user.is_active:
+        raise HTTPException(400, "Code is invalid or expired. Request a new code")
     challenge = db.scalar(
         select(EmailVerificationToken)
         .where(
@@ -159,6 +161,8 @@ def verify_email_code(db, email, code):
 
 def request_password_reset(db, user):
     user = lock_user(db, user.id)
+    if not user or not user.is_active:
+        raise HTTPException(400, "Unable to recover this account")
     check_send_allowance(db, PasswordResetToken, user.id)
     raw = new_token(48)
     reset = PasswordResetToken(

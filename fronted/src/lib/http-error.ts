@@ -200,6 +200,7 @@ export const formatBackendErrorDetail = (
 export const handleBackendError = async (
   error: unknown,
   fallbackMessage: string,
+  options: { clearUnauthorizedSession?: boolean } = {},
 ): Promise<never> => {
   if (axios.isAxiosError(error)) {
     console.error("Backend API error", {
@@ -231,7 +232,8 @@ export const handleBackendError = async (
     if (status === 401) {
       trpcCode = "UNAUTHORIZED";
       // Clear invalid session cookies automatically
-      await clearAuthCookies().catch(() => {});
+      if (options.clearUnauthorizedSession !== false)
+        await clearAuthCookies().catch(() => {});
     } else if (status === 403 || status === 402) {
       trpcCode = "FORBIDDEN";
     } else if (status === 404) {
@@ -267,3 +269,27 @@ export const handleBackendError = async (
     message: error instanceof Error ? error.message : fallbackMessage,
   });
 };
+
+/** Auth errors never expose infrastructure details, provider bodies or raw exceptions. */
+export async function handleAuthBackendError(
+  error: unknown,
+  fallback: string,
+  options: { clearUnauthorizedSession?: boolean } = {},
+): Promise<never> {
+  if (error instanceof TRPCError) throw error;
+  if (
+    axios.isAxiosError(error) &&
+    error.response &&
+    error.response.status < 500
+  ) {
+    return handleBackendError(error, fallback, options);
+  }
+  console.error("Authentication service failure", {
+    status: axios.isAxiosError(error) ? error.response?.status : undefined,
+  });
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message:
+      "Authentication service is temporarily unavailable. Please try again.",
+  });
+}

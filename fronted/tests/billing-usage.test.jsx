@@ -175,6 +175,26 @@ test("unlimited post plans have no monthly cap or slot-based pricing copy", () =
     />,
   );
   expect(billing).toContain("AI credits reset");
+  expect(billing).toContain("Credits renew monthly, including on yearly plans.");
   expect(billing).not.toContain("AI and post allowances reset");
   expect(billing).not.toContain("One post across all selected channels");
+});
+
+test("gifted credits keep AI available after monthly exhaustion and show that bonuses carry forward", () => {
+  const gifted = {
+    ...usage,
+    ai_credits: { used: 20, limit: 520, remaining: 500 },
+    ai_credit_details: {
+      monthly_limit: 20, monthly_used: 20, monthly_reserved: 0, monthly_remaining: 0,
+      bonus_credits: 500, bonus_reserved: 0, bonus_used: 0, bonus_remaining: 500,
+    },
+  };
+  expect(aiExhausted(gifted)).toBe(false);
+  const notice = renderToStaticMarkup(<AiUsageNotice usage={gifted} />);
+  expect(notice).toContain("500 bonus credits available");
+  expect(notice).toContain("Bonus credits stay available until used");
+  expect(notice).not.toContain("Your AI credits are used up");
+  const billing = renderToStaticMarkup(<BillingOverview data={{ usage: gifted, subscription: null, can_manage_billing: true }} />);
+  expect(billing).toContain("Unused monthly credits don’t roll over");
+  expect(billing).toContain("500 bonus credits available");
 });

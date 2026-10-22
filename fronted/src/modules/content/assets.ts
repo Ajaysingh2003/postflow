@@ -65,79 +65,70 @@ export async function uploadAsset(
   onStage?: (stage: "uploading" | "scanning") => void,
   signal?: AbortSignal,
 ): Promise<SourceAsset> {
-  const body = new FormData();
-  body.append("file", file);
-  body.append("content_type", fileType(file));
-  body.append("purpose", purpose);
-  onStage?.("uploading");
-  // Upload progress is distinct from the server's verification step.
-  const data = await new Promise<{
-    id: string;
-    original_filename: string;
-    content_type: string;
-    actual_size: number;
-    status: string;
-  }>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    const abort = () => xhr.abort();
-    if (signal?.aborted) {
-      reject(new DOMException("Cancelled", "AbortError"));
-      return;
-    }
-    signal?.addEventListener("abort", abort, { once: true });
-    const cleanup = () => signal?.removeEventListener("abort", abort);
-    xhr.open("POST", "/api/media/attachments");
-    xhr.timeout = 180000;
-    xhr.upload.onload = () => onStage?.("scanning");
-    xhr.onload = () => {
-      cleanup();
-      let result;
-      try {
-        result = JSON.parse(xhr.responseText);
-      } catch {
-        reject(
-          new Error(
-            "The file service returned an incomplete response. Please retry.",
-          ),
-        );
-        return;
-      }
-      if (xhr.status < 200 || xhr.status >= 300) {
-        reject(
-          new Error(
-            typeof result.detail === "string"
-              ? result.detail
-              : "Could not upload this file. Please retry.",
-          ),
-        );
-        return;
-      }
-      if (result.status !== "ready") {
-        reject(new Error("This file could not be verified. Please retry."));
-        return;
-      }
-      resolve(result);
-    };
-    xhr.onerror = () => {
-      cleanup();
-      reject(
-        new Error("Upload lost connection. Check your connection and retry."),
+  if (purpose === "assistant") validateSource(file);
+  else validatePostAsset(file, []);
+  const requestSignal = AbortSignal.any([
+    ...(signal ? [signal] : []),
+    AbortSignal.timeout(180_000),
+  ]);
+  async function metadata(path: string, body: object) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: requestSignal,
+      cache: "no-store",
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok)
+      throw new Error(
+        typeof result?.detail === "string"
+          ? result.detail
+          : "Could not verify this file. Please retry.",
       );
+    if (!result) throw new Error("The file service returned an incomplete response. Please retry.");
+    return result;
+  }
+  onStage?.("uploading");
+  try {
+    const ticket = await metadata("/api/media/uploads", {
+      filename: file.name,
+      content_type: fileType(file),
+      size: file.size,
+      purpose,
+    });
+    if (!ticket.asset_id || !ticket.upload_url || ticket.method !== "PUT")
+      throw new Error("Could not start this upload. Please retry.");
+    // Only metadata reaches Next.js. File bytes go straight to private R2 quarantine.
+    const uploaded = await fetch(ticket.upload_url, {
+      method: "PUT",
+      headers: ticket.headers,
+      body: file,
+      credentials: "omit",
+      mode: "cors",
+      redirect: "error",
+      signal: requestSignal,
+    });
+    if (!uploaded.ok)
+      throw new Error("Could not upload to file storage. Please retry or contact support.");
+    onStage?.("scanning");
+    const data = await metadata(
+      `/api/media/uploads/${encodeURIComponent(ticket.asset_id)}/complete`,
+      {},
+    );
+    if (data.status !== "ready")
+      throw new Error("This file could not be verified. Please retry.");
+    return {
+      asset_id: data.id,
+      name: data.original_filename,
+      content_type: data.content_type,
+      size: data.actual_size,
     };
-    xhr.ontimeout = () => {
-      cleanup();
-      reject(new Error("Upload timed out. Try a smaller file or retry."));
-    };
-    xhr.onabort = () => {
-      cleanup();
-      reject(new DOMException("Cancelled", "AbortError"));
-    };
-    xhr.send(body);
-  });
-  return {
-    asset_id: data.id,
-    name: data.original_filename,
-    content_type: data.content_type,
-    size: data.actual_size,
-  };
+  } catch (error) {
+    if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
+    if (requestSignal.aborted) throw new Error("Upload timed out. Please retry.");
+    if (error instanceof TypeError)
+      throw new Error("File storage could not be reached. Check your connection and retry.");
+    throw error;
+  }
 }

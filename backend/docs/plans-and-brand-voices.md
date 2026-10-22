@@ -20,7 +20,8 @@ the comparison table share `modules/billing/planAllowances.ts`. Public paid plan
 IDs are `starter`, `pro`, and `business`. Legacy `creator`/`agency` IDs use the
 Starter/Business AI and voice allowances while preserving their other limits.
 AI credits reset monthly, including annual subscriptions. Consumed usage is not
-reset by upgrading the policy. Manual bonus/custom grants remain intact.
+reset by upgrading the policy. Manual custom limits remain intact. Numeric monthly usage and one-time bonus
+credits are documented in [AI credit operations](ai-credit-operations.md).
 Channel request limits and the existing provider spending guard still apply.
 
 ## Brand profile behavior

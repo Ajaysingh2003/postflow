@@ -9,6 +9,7 @@ export type AuthUser = {
   name: string;
   email_verified: boolean;
   workspace_id: string;
+  onboarding_completed_at?: string | null;
   // UI backwards compatibility:
   display_name?: string | null;
   email_verified_at?: string | null;
@@ -24,6 +25,7 @@ export type AuthResponse = {
   name: string;
   email_verified: boolean;
   verification_sent?: boolean;
+  verification_error?: string | null;
   retry_after?: number;
   user?: AuthUser;
   verification_required?: boolean;
@@ -43,11 +45,14 @@ export type RegisterResponse = TokenResponse & {
 
 export type MessageResponse = {
   message: string;
+  outcome?: "completed" | "accepted" | "verified" | "password_updated";
   development_token?: string | null;
   retry_after?: number;
   expires_in?: number | null;
   authenticated?: boolean;
   already_verified?: boolean;
+  delivery_status?: "accepted" | "sent" | "failed" | null;
+  email?: string | null;
   // Backwards compatibility:
   detail?: string;
 };

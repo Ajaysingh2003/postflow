@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTRPCClient } from "@/trpc/client";
+import { linkTokenSchema } from "../contracts";
 import { passwordSchema } from "../authFlow";
 
 export default function ResetPasswordForm({ token }: { token: string }) {
@@ -30,7 +31,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
       setError(err.message || "Could not update your password");
     },
   });
-  if (!token)
+  if (!linkTokenSchema.safeParse(token).success)
     return (
       <div className="space-y-4">
         <p role="alert" className="text-sm text-muted-foreground">
@@ -50,6 +51,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
       className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault();
+        if (reset.isPending) return;
         const parsed = passwordSchema.safeParse(password);
         if (!parsed.success) {
           setError(parsed.error.issues[0].message);
@@ -93,6 +95,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
         </label>
         <Input
           className="rounded-md border-border !bg-input/30"
+          maxLength={200}
           id="confirm-password"
           type="password"
           autoComplete="new-password"

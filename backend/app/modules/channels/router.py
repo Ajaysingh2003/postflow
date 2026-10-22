@@ -15,9 +15,10 @@ from app.core.dependencies import (
     membership_for,
     require_roles,
 )
+from app.core.security import token_hash, utcnow
 from app.db.session import get_db
 from app.modules.channels.base import Capabilities
-from app.modules.channels.models import ConnectedAccount
+from app.modules.channels.models import ConnectedAccount, OAuthState
 from app.modules.channels.oauth import (
     create_oauth_state,
     decrypt_token,
@@ -193,9 +194,12 @@ async def start_oauth(
         **options,
     )
 
-    if auth_start.metadata.get("requested_scopes"):
+    if auth_start.metadata.get("requested_scopes") or payload:
         metadata = json.loads(decrypt_token(state_record.encrypted_metadata) or "{}")
-        state_record.encrypted_metadata = encrypt_token(json.dumps({**metadata, "requested_scopes": auth_start.metadata["requested_scopes"]}))
+        if auth_start.metadata.get("requested_scopes"):
+            metadata["requested_scopes"] = auth_start.metadata["requested_scopes"]
+        metadata["return_to"] = payload.return_to if payload else "/dashboard/channels"
+        state_record.encrypted_metadata = encrypt_token(json.dumps(metadata))
         db.commit()
     return AuthStartResponse(auth_url=auth_start.auth_url, state=raw_state)
 
@@ -210,6 +214,8 @@ async def handle_callback_post(
     Process OAuth callback from frontend or direct API exchange.
     Verifies and consumes state, then invokes adapter to exchange tokens.
     """
+    # Errors also consume the challenge, so a cancelled flow cannot be replayed.
+    state_record = verify_and_consume_oauth_state(db, platform, payload.state)
     if payload.error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -217,9 +223,6 @@ async def handle_callback_post(
         )
 
     adapter = channel_registry.require(platform)
-
-    # Verify and consume state (protects against replay and CSRF)
-    state_record = verify_and_consume_oauth_state(db, platform, payload.state)
 
     membership = membership_for(db, state_record.workspace_id, state_record.user_id)
     if membership.role not in {"owner", "admin"}:
@@ -299,23 +302,38 @@ async def handle_callback_get(
         or "application/xhtml+xml" in accept
         or not accept.startswith("application/json")
     )
+    # The destination comes only from our live, encrypted state, never callback input.
+    return_to = "/dashboard/channels"
+    state_record = db.scalar(
+        select(OAuthState).where(
+            OAuthState.state_hash == token_hash(state),
+            OAuthState.platform == platform.lower(),
+            OAuthState.expires_at > utcnow(),
+        )
+    )
+    if state_record and state_record.encrypted_metadata:
+        metadata = json.loads(decrypt_token(state_record.encrypted_metadata) or "{}")
+        if metadata.get("return_to") == "/onboarding?step=connect":
+            return_to = "/onboarding?step=connect"
+    base_url = f"{get_settings().frontend_url.rstrip('/')}{return_to}"
+    separator = "&" if "?" in return_to else "?"
 
     try:
         account_resp = await handle_callback_post(platform, payload, db)
         if is_browser:
-            settings = get_settings()
             return RedirectResponse(
-                url=f"{settings.frontend_url.rstrip('/')}/dashboard/channels?connected={platform}",
+                url=f"{base_url}{separator}connected={urllib.parse.quote(platform, safe='')}",
                 status_code=302,
             )
         return account_resp
     except Exception as exc:
         if is_browser:
-            settings = get_settings()
             err_detail = getattr(exc, "detail", str(exc))
+            if return_to.startswith("/onboarding"):
+                err_detail = "Connection wasn't completed. You can try again or connect later."
             encoded_err = urllib.parse.quote(str(err_detail))
             return RedirectResponse(
-                url=f"{settings.frontend_url.rstrip('/')}/dashboard/channels?error={encoded_err}",
+                url=f"{base_url}{separator}error={encoded_err}",
                 status_code=302,
             )
         raise

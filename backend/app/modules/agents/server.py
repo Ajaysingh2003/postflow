@@ -76,11 +76,13 @@ PUBLISH = ToolAnnotations(
 def get_workspace() -> dict[str, Any]:
     """Get the connected workspace, your role and current plan allowance."""
     with agent_context() as (db, user, workspace):
+        usage = get_plan_limits_summary(db, workspace.id)
+        db.commit()
         return {
             "id": workspace.id,
             "name": workspace.name,
             "role": membership_for(db, workspace.id, user.id).role,
-            "usage": get_plan_limits_summary(db, workspace.id),
+            "usage": usage,
         }
 
 

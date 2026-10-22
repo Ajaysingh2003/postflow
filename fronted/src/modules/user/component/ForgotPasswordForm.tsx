@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTRPCClient } from "@/trpc/client";
+import { emailSchema } from "../contracts";
 import { authRetrySeconds } from "../authFlow";
 
 export default function ForgotPasswordForm() {
@@ -32,6 +33,7 @@ export default function ForgotPasswordForm() {
       setCooldown(result.retry_after || 60);
     },
     onError(err) {
+      setNotice("");
       setError(err.message || "Could not request a reset link");
       setCooldown(authRetrySeconds(err));
     },
@@ -42,7 +44,15 @@ export default function ForgotPasswordForm() {
         method="post"
         onSubmit={(event) => {
           event.preventDefault();
-          request.mutate({ email: email.trim() });
+          if (request.isPending || cooldown > 0) return;
+          setNotice("");
+          setError("");
+          const parsed = emailSchema.safeParse(email);
+          if (!parsed.success) {
+            setError(parsed.error.issues[0].message);
+            return;
+          }
+          request.mutate({ email: parsed.data });
         }}
         className="space-y-4"
       >
@@ -58,17 +68,21 @@ export default function ForgotPasswordForm() {
             id="forgot-email"
             type="email"
             required
+            maxLength={254}
             autoComplete="email"
             value={email}
             disabled={request.isPending}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setNotice("");
+              setError("");
+            }}
             placeholder="you@example.com"
           />
         </div>
         {notice && (
           <p role="status" className="text-sm leading-6 text-muted-foreground">
-            {notice}. Check your inbox and spam folder. Reset links expire after
-            20 minutes.
+            {notice} No email? Check the address, wait a minute, then try again.
           </p>
         )}
         {error && (
@@ -85,7 +99,7 @@ export default function ForgotPasswordForm() {
             <Loader2 className="mr-2 size-4 animate-spin" />
           )}
           {request.isPending
-            ? "Sending…"
+            ? "Requesting…"
             : cooldown
               ? `Send again in ${cooldown}s`
               : "Send reset link"}

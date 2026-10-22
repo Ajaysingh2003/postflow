@@ -46,14 +46,14 @@ test("all password forms share the backend's length rules without trimming a pas
   for (const form of [
     <LoginForm />,
     <RegisterForm />,
-    <ResetPasswordForm token="a-valid-token" />,
+    <ResetPasswordForm token="a-valid-complete-token-from-email" />,
     <VerifyOTPForm email="a@example.com" />,
   ]) {
     expect(render(form)).toContain('method="post"');
   }
-  expect(render(<ResetPasswordForm token="a-valid-token" />)).toContain(
-    'id="confirm-password"',
-  );
+  expect(
+    render(<ResetPasswordForm token="a-valid-complete-token-from-email" />),
+  ).toContain('id="confirm-password"');
 });
 
 test("redirects preserve internal destination and reject external hosts, controls and auth loops", () => {
@@ -140,7 +140,7 @@ test("missing reset links, server failures and loading have honest recovery stat
   expect(error).toContain("Try again");
   expect(error).not.toContain("private stack");
   expect(authRetrySeconds({ data: { retryAfter: 123 } })).toBe(123);
-  expect(authRetrySeconds({ data: { retryAfter: -1 } })).toBe(60);
+  expect(authRetrySeconds({ data: { retryAfter: -1 } })).toBe(0);
 });
 
 test("auth mutations reject cross-site origins while supporting the trusted HTTPS proxy", () => {
@@ -175,4 +175,10 @@ test("auth mutations reject cross-site origins while supporting the trusted HTTP
       "same-origin",
     ),
   ).toBe(true);
+});
+
+test("only actual rate limits receive a fallback cooldown", () => {
+  expect(authRetrySeconds(new Error("Network unavailable"))).toBe(0);
+  expect(authRetrySeconds({ data: { code: "BAD_REQUEST" } })).toBe(0);
+  expect(authRetrySeconds({ data: { code: "TOO_MANY_REQUESTS" } })).toBe(60);
 });

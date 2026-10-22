@@ -21,6 +21,7 @@ export default async function VerifyOTPPage({ searchParams }: Props) {
       email={email}
       token={token}
       initialCooldown={status?.retry_after || 0}
+      initialError={status?.delivery_status === "failed" ? status.message : ""}
     />
   );
 }

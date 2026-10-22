@@ -8,7 +8,7 @@ Tracks and limits:
 """
 
 from calendar import monthrange
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -233,27 +233,6 @@ def _post_usage_query(workspace_id, start, end):
     )
 
 
-def _ai_usage_query(workspace_id, start, end, now):
-    from app.modules.assistant.models import AssistantRun
-
-    # Failed/cancelled attempts remain auditable without consuming credits. In-flight
-    # reservations block concurrent overspend; crashed requests expire after 30 minutes.
-    return (
-        select(func.count())
-        .select_from(AssistantRun)
-        .where(
-            AssistantRun.workspace_id == workspace_id,
-            AssistantRun.created_at >= start,
-            AssistantRun.created_at < end,
-            (AssistantRun.status == "succeeded")
-            | (
-                (AssistantRun.status == "running")
-                & (AssistantRun.created_at >= now - timedelta(minutes=30))
-            ),
-        )
-    )
-
-
 def check_connected_accounts_limit(db: Session, workspace_id: str) -> None:
     """Enforce workspace connected accounts limit."""
     lock_workspace(db, workspace_id)
@@ -306,21 +285,10 @@ def check_scheduled_posts_limit(
 
 
 def check_assistant_usage_limit(db: Session, workspace_id: str) -> None:
-    """Enforce workspace monthly AI assistant runs quota."""
-    lock_workspace(db, workspace_id)
-    limit = entitlement_limit(db, workspace_id, "ai_credits")
-    if limit is None:
-        return
-    now = datetime.now(UTC)
-    start, end = usage_window(current_subscription(db, workspace_id), now)
-    count = db.scalar(_ai_usage_query(workspace_id, start, end, now)) or 0
+    """Read numeric monthly/bonus counters under the workspace lock."""
+    from app.modules.billing.credits import check_available
 
-    if count >= limit:
-        plan = effective_plan(db, workspace_id)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Workspace has reached the monthly limit of {limit} AI assistant runs for the '{plan}' plan. Please upgrade to continue generating content.",
-        )
+    check_available(db, workspace_id, datetime.now(UTC))
 
 
 def get_plan_limits_summary(db: Session, workspace_id: str, now=None) -> dict[str, Any]:
@@ -364,7 +332,10 @@ def get_plan_limits_summary(db: Session, workspace_id: str, now=None) -> dict[st
         )
         or 0
     )
-    ai = db.scalar(_ai_usage_query(workspace_id, start, end, now)) or 0
+    from app.modules.billing.credits import summary as credit_summary
+
+    balance, ai, credit_details = credit_summary(db, workspace_id, now)
+    start, end = as_utc(balance.cycle_start), as_utc(balance.cycle_end)
 
     def detail(capability, used):
         limit = limits.get(capability)
@@ -380,5 +351,6 @@ def get_plan_limits_summary(db: Session, workspace_id: str, now=None) -> dict[st
         "cycle_end": end,
         "connected_accounts": detail("connected_accounts", accounts),
         "scheduled_posts": detail("scheduled_posts", posts),
-        "ai_credits": detail("ai_credits", ai),
+        "ai_credits": ai,
+        "ai_credit_details": credit_details,
     }

@@ -255,4 +255,5 @@ def get_plan_limits_endpoint(
 ) -> PlanLimitsResponse:
     """Retrieve current usage vs plan quota limits for connected accounts, scheduled posts, and AI credits."""
     summary = get_plan_limits_summary(db, workspace.id)
+    db.commit()
     return PlanLimitsResponse.model_validate(summary)

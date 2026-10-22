@@ -150,6 +150,10 @@ def run(kind: str) -> None:
                     if cleaned:
                         logger.info("cleaned %s abandoned uploads", cleaned)
                 if now_mono - last_token_refresh >= 300:
+                    from app.modules.billing.credits import recover_expired
+
+                    with SessionLocal() as db:
+                        recover_expired(db)
                     with SessionLocal() as db:
                         recover_stale_publications(db)
                         adapters = {

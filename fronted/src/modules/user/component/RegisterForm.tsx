@@ -38,10 +38,12 @@ export default function RegisterForm() {
       trpc.user.register.mutate(values),
     onSuccess: (result) => {
       if (result.verification_required) {
-        toast.success(
+        const notify = result.verification_sent ? toast.success : toast.warning;
+        notify(
           result.verification_sent
             ? "Check your email for the verification code"
-            : "Account created. Request a verification code to continue",
+            : result.verification_error ||
+                "Account created. Request a verification code to continue",
         );
         reloadAuthPage(
           verificationPath(
@@ -53,13 +55,18 @@ export default function RegisterForm() {
         return;
       }
 
-      toast.success("Account created. You can sign in now.");
+      toast.success("Your account is ready.");
       reloadAuthPage(nextAuthPath(window.location.search));
     },
-    onError: (error) => toast.error(error.message || "Registration failed"),
+    onError: (error) =>
+      form.setError("root.server", {
+        message: error.message || "Registration failed",
+      }),
   });
 
   const submitRegistration = (values: RegisterFormValues) => {
+    if (registerMutation.isPending) return;
+    form.clearErrors("root");
     registerMutation.mutate(values);
   };
 
@@ -83,10 +90,21 @@ export default function RegisterForm() {
             autoComplete="name"
             placeholder="Your name"
             className="rounded-md border-border !bg-input/30 text-foreground placeholder:text-muted-foreground focus-visible:ring-1"
+            disabled={registerMutation.isPending}
+            aria-invalid={!!form.formState.errors.display_name}
+            aria-describedby={
+              form.formState.errors.display_name
+                ? "display_name-error"
+                : undefined
+            }
             {...form.register("display_name")}
           />
           {form.formState.errors.display_name && (
-            <p className="mt-1 text-xs text-destructive">
+            <p
+              id="display_name-error"
+              role="alert"
+              className="mt-1 text-xs text-destructive"
+            >
               {form.formState.errors.display_name.message}
             </p>
           )}
@@ -105,10 +123,19 @@ export default function RegisterForm() {
             autoComplete="email"
             placeholder="you@example.com"
             className="rounded-md border-border !bg-input/30 text-foreground placeholder:text-muted-foreground focus-visible:ring-1"
+            disabled={registerMutation.isPending}
+            aria-invalid={!!form.formState.errors.email}
+            aria-describedby={
+              form.formState.errors.email ? "email-error" : undefined
+            }
             {...form.register("email")}
           />
           {form.formState.errors.email && (
-            <p className="mt-1 text-xs text-destructive">
+            <p
+              id="email-error"
+              role="alert"
+              className="mt-1 text-xs text-destructive"
+            >
               {form.formState.errors.email.message}
             </p>
           )}
@@ -127,15 +154,29 @@ export default function RegisterForm() {
             autoComplete="new-password"
             placeholder="At least 10 characters"
             className="rounded-md border-border !bg-input/30 text-foreground placeholder:text-muted-foreground focus-visible:ring-1"
+            disabled={registerMutation.isPending}
+            aria-invalid={!!form.formState.errors.password}
+            aria-describedby={
+              form.formState.errors.password ? "password-error" : undefined
+            }
             {...form.register("password")}
           />
           {form.formState.errors.password && (
-            <p className="mt-1 text-xs text-destructive">
+            <p
+              id="password-error"
+              role="alert"
+              className="mt-1 text-xs text-destructive"
+            >
               {form.formState.errors.password.message}
             </p>
           )}
         </div>
 
+        {form.formState.errors.root?.server && (
+          <p role="alert" className="text-sm text-destructive">
+            {form.formState.errors.root.server.message}
+          </p>
+        )}
         <Button
           type="submit"
           disabled={registerMutation.isPending}

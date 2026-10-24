@@ -23,6 +23,46 @@ components use the nullable profile lookup. Both `createCheckout` and the older
 `Createcheckout` procedure share one validated implementation. Public pricing reads
 the backend catalog; an unavailable backend no longer substitutes stale prices.
 
+## Dodo is the price source
+
+`GET /api/v1/billing/plans` reads the nine configured products through Dodo's
+official `GET /products/{id}` API. There are no runtime fallback price amounts.
+Plan names/descriptions stay in Draftva and entitlement limits still come from
+PostgreSQL; editing a Dodo product does not change AI credit or team allowances.
+
+To change a price, edit the corresponding recurring product in Dodo. Keeping
+the same product ID needs **no code change or redeployment**. Replacing a product
+requires updating its `.env` mapping and restarting the backend services.
+Use monthly (1 Month), quarterly (3 Month), and annual (1 Year or 12 Month)
+products. A mismatched interval, unsupported pricing type, missing product, or
+malformed provider response returns 503 rather than showing an invented price.
+The subscription's total lifetime is not its payment frequency.
+
+Only sanitized price fields are shared in Redis. Configuration/mode/credential
+changes use different cache keys. The default `BILLING_CATALOG_CACHE_TTL_SECONDS`
+is 60 (configurable 15–300). One distributed lease refreshes the full catalog,
+with at most three concurrent reads and an overall
+`BILLING_CATALOG_TIMEOUT_SECONDS` deadline of 8 seconds (configurable 1–20).
+Provider failures are negatively cached for 10 seconds. Redis failures fail
+closed instead of making unlimited uncached Dodo calls. Expired snapshots and
+hardcoded prices are never served as fallback data.
+
+Open cards refresh every 30 seconds and on window focus, so updates normally
+appear within **90 seconds**. Home and Pricing server pages load pricing per
+request instead of freezing it into a production build. Pricing errors have
+retry controls and skeletons. A background pricing failure replaces the cards
+with an error; it does not leave an old quote silently available forever.
+
+Cards display the product's base price in its currency, converting the smallest
+currency unit correctly. Configured product discounts are disclosed as applied
+at checkout. Dodo confirms discounts, currency conversion and applicable taxes
+before payment. The API key and private product/delivery fields never reach the
+browser. This integration only reads products; it does not create/reprice them
+or alter existing subscriptions. No database migration is needed.
+
+Official contract: [Dodo product retrieval](https://github.com/dodopayments/dodopayments-python/blob/main/src/dodopayments/resources/products/products.py)
+and [recurring price fields](https://github.com/dodopayments/dodopayments-python/blob/main/src/dodopayments/types/price.py).
+
 ## Dodo product configuration
 
 The backend chooses Dodo product IDs from `.env`, never from an arbitrary client
@@ -70,17 +110,15 @@ The current name takes precedence if both are set. Compatibility works in runtim
 settings and the offline production preflight. Changes require restarting the API
 to reload its cached settings. The local API was restarted and `/ready` returned 200.
 
-On 23 October 2026, read-only live product lookups returned 200 for all nine configured
-products. The products under the existing `*_QUARTERLY` keys have a six-month billing
-frequency, not three months. At the user's direction, the selector now reads
-**Every 6 months** and the cards show the total price per six months. The internal
-`quarterly` key remains compatible with existing clients and environment names;
-the public interval metadata is `half_year`. Generic discount badges and the
-comparison against a single month's price were removed. The live
-Starter checkout still uses the older Creator name and 300-credit product description;
-application Starter entitlements remain 1,000 credits. Provider descriptions should
-be aligned in the Dodo dashboard. No products, prices, subscriptions or payments
-were changed during these checks.
+On 24 October 2026, read-only live lookups confirmed that all three configured
+`*_QUARTERLY` products now bill every **3 months** in USD: Starter **$24**, Pro
+**$78**, and Business **$132**. Earlier six-month configuration is superseded.
+Both the public pricing selector and sidebar upgrade dialog show **Quarterly**;
+cards show the full total per **3 months**. Public interval metadata is `quarter`.
+Monthly prices remain $9/$29/$49 and annual totals remain $86/$182/$470.
+Generic discount badges and comparisons against a single month's price remain
+removed. No Dodo products, prices, subscriptions or payments were changed by
+these read-only checks or the display correction.
 
 Live API keys, products and webhook secrets must all belong to Dodo live mode.
 Payment access still activates through the verified webhook, not a checkout redirect.

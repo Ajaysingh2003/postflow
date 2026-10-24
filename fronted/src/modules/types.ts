@@ -11,6 +11,12 @@ export interface BillingCycleConfig {
   price_id: string;
   currency?: string;
   interval?: string;
+  amount_minor?: number;
+  currency_decimals?: number;
+  payment_frequency_count?: number;
+  payment_frequency_interval?: "Month" | "Year";
+  tax_inclusive?: boolean;
+  discount_bps?: number;
 }
 
 export interface PlanConfig {

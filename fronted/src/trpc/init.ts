@@ -212,12 +212,12 @@ export const getUserProcedure = baseProcedure.use(async ({ ctx, next }) => {
 });
 
 export const authedProcedure = getUserProcedure.use(async ({ ctx, next }) => {
-  // if (!ctx.user || !ctx.token) {
-  //   throw new TRPCError({
-  //     code: "UNAUTHORIZED",
-  //     message: "Authentication required",
-  //   });
-  // }
+  if (!ctx.user || !ctx.token) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Authentication required",
+    });
+  }
 
   return next({
     ctx: {

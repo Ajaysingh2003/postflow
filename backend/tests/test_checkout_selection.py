@@ -12,6 +12,18 @@ from app.modules.billing.reconciliation import _plan_code
 from app.modules.billing.schemas import CheckoutRequest
 
 
+def test_catalog_returns_provider_prices_and_three_month_quarterly_billing(client, billing_catalog):
+    plans = client.get("/api/v1/billing/plans").json()
+    expected = {"starter": (9, 24, 86), "pro": (29, 78, 182), "business": (49, 132, 470)}
+    for code, amounts in expected.items():
+        cycles = plans[code]["billing_cycles"]
+        assert (
+            tuple(cycles[cycle]["amount"] for cycle in ("monthly", "quarterly", "annually"))
+            == amounts
+        )
+        assert cycles["quarterly"]["interval"] == "quarter"
+
+
 @pytest.mark.parametrize(
     "plan,legacy", [("starter", "STARTER"), ("pro", "PRO"), ("business", "AGENCY")]
 )

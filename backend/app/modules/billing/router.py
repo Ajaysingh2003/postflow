@@ -15,7 +15,7 @@ from app.core.dependencies import (
 )
 from app.core.security import utcnow
 from app.db.session import get_db
-from app.modules.billing import service
+from app.modules.billing import catalog, service
 from app.modules.billing.entitlements import (
     PLAN_DEFAULTS,
     effective_plan,
@@ -50,95 +50,27 @@ def parse_datetime(value: object) -> datetime | None:
 
 
 @router.get("/billing/plans")
-def get_plans(db: Session = Depends(get_db)) -> dict:
-    plans = {
-        "starter": {
-            "id": "starter",
-            "name": "Starter",
-            "description": "Ideal for founders & creators scaling their personal brand.",
-            "popular": False,
-            "trial_days": 0,
-            "billing_cycles": {
-                "monthly": {
-                    "amount": 9,
-                    "price_id": "starter_monthly",
-                    "currency": "USD",
-                    "interval": "month",
-                },
-                "quarterly": {
-                    "amount": 24,
-                    "price_id": "starter_quarterly",
-                    "currency": "USD",
-                    "interval": "half_year",
-                },
-                "annually": {
-                    "amount": 86,
-                    "price_id": "starter_annually",
-                    "currency": "USD",
-                    "interval": "year",
-                },
-            },
-        },
-        "pro": {
-            "id": "pro",
-            "name": "Pro",
-            "description": "For growth leaders & high-volume teams running campaigns.",
-            "popular": True,
-            "trial_days": 0,
-            "billing_cycles": {
-                "monthly": {
-                    "amount": 29,
-                    "price_id": "pro_monthly",
-                    "currency": "USD",
-                    "interval": "month",
-                },
-                "quarterly": {
-                    "amount": 78,
-                    "price_id": "pro_quarterly",
-                    "currency": "USD",
-                    "interval": "half_year",
-                },
-                "annually": {
-                    "amount": 182,
-                    "price_id": "pro_annually",
-                    "currency": "USD",
-                    "interval": "year",
-                },
-            },
-        },
-        "business": {
-            "id": "business",
-            "name": "Business",
-            "description": "For agencies managing client workspaces and larger publishing schedules.",
-            "popular": False,
-            "trial_days": 0,
-            "billing_cycles": {
-                "monthly": {
-                    "amount": 49,
-                    "price_id": "business_monthly",
-                    "currency": "USD",
-                    "interval": "month",
-                },
-                "quarterly": {
-                    "amount": 132,
-                    "price_id": "business_quarterly",
-                    "currency": "USD",
-                    "interval": "half_year",
-                },
-                "annually": {
-                    "amount": 470,
-                    "price_id": "business_annually",
-                    "currency": "USD",
-                    "interval": "year",
-                },
-            },
-        },
+async def get_plans(response: Response, db: Session = Depends(get_db)) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    prices = await catalog.get_prices(get_settings())
+    descriptions = {
+        "starter": "Ideal for founders & creators scaling their personal brand.",
+        "pro": "For growth leaders & high-volume teams running campaigns.",
+        "business": "For agencies managing client workspaces and larger publishing schedules.",
     }
-
     configured = {plan.code: plan for plan in db.scalars(select(Plan).where(Plan.active.is_(True)))}
-    for code, details in plans.items():
-        details["limits"] = plan_limits(code, configured.get(code))
-    return plans
+    return {
+        code: {
+            "id": code,
+            "name": code.title(),
+            "description": descriptions[code],
+            "popular": code == "pro",
+            "trial_days": 0,
+            "billing_cycles": prices[code],
+            "limits": plan_limits(code, configured.get(code)),
+        }
+        for code in catalog.PLAN_CODES
+    }
 
 
 @router.get("/billing/usage", response_model=BillingUsageResponse)

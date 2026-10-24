@@ -11,6 +11,7 @@ import {
   ArrowDataTransferVerticalIcon,
 } from "@hugeicons/core-free-icons";
 import type { PlanConfig } from "@/modules/types";
+import { CATALOG_QUERY_OPTIONS } from "../catalogQuery";
 
 export function planFeatures(plan: PlanConfig): FeatureItem[] {
   const limits = plan.limits;
@@ -57,7 +58,11 @@ export function planFeatures(plan: PlanConfig): FeatureItem[] {
 
 export function PricingSkeleton() {
   return (
-    <div className="w-full h-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+    <div
+      role="status"
+      aria-label="Loading pricing plans"
+      className="w-full h-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto"
+    >
       {[1, 2, 3].map((i) => (
         <div
           key={i}
@@ -70,21 +75,29 @@ export function PricingSkeleton() {
 
 function PricingCardSection({
   timeLine,
+  workspaceId,
+  maxWidth
 }: {
   timeLine: "monthly" | "quarterly" | "annually";
+  workspaceId?: string;
+  maxWidth?:string
 }) {
   const trpc = useTRPC();
-  const { data } = useSuspenseQuery(trpc.billing.getPlans.queryOptions());
+  const { data, error, isFetching } = useSuspenseQuery(
+    trpc.billing.getPlans.queryOptions(undefined, CATALOG_QUERY_OPTIONS),
+  );
+  if (error && !isFetching) throw error;
 
   const plans = data as BillingConfigResponse;
 
   return (
-    <div className="w-full h-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+    <div className={`w-full h-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 ${maxWidth?maxWidth:"max-w-6xl"} mx-auto`}>
       {plans?.["starter"] && (
         <PlanCard
           feature={planFeatures(plans["starter"])}
           timeLine={timeLine}
           plan={plans["starter"]}
+          workspaceId={workspaceId}
         />
       )}
       {plans?.["pro"] && (
@@ -93,12 +106,14 @@ function PricingCardSection({
           popular={true}
           plan={plans["pro"]}
           timeLine={timeLine}
+          workspaceId={workspaceId}
         />
       )}
       {plans?.["business"] && (
         <PlanCard
           feature={planFeatures(plans["business"])}
           plan={plans["business"]}
+          workspaceId={workspaceId}
           timeLine={timeLine}
         />
       )}

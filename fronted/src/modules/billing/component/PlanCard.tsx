@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { FeatureItem, PlanConfig } from "@/modules/types";
 import React, { useRef, useState } from "react";
@@ -11,17 +12,24 @@ import { motion } from "motion/react";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { checkoutLoginPath, hasPurchasedSubscription, startPlanCheckout } from "../checkout";
+import {
+  checkoutLoginPath,
+  hasPurchasedSubscription,
+  startPlanCheckout,
+} from "../checkout";
+import { canonicalPlan, priceLabel } from "../upgradeModel";
 function PlanCard({
   plan,
   timeLine,
   popular = false,
   feature,
+  workspaceId,
 }: {
   plan: PlanConfig;
   timeLine: "monthly" | "quarterly" | "annually";
   popular?: boolean;
   feature?: FeatureItem[];
+  workspaceId?: string;
 }) {
   const [hoverSeeAll, sethoverSeeAll] = useState(false);
 
@@ -32,7 +40,12 @@ function PlanCard({
         popular && "bg-background-card-popular",
       )}
     >
-      <PlanCardHeader popular={popular} timeLine={timeLine} plan={plan} />
+      <PlanCardHeader
+        popular={popular}
+        timeLine={timeLine}
+        plan={plan}
+        workspaceId={workspaceId}
+      />
       <div
         className={cn(
           "px-5 mt-4 pb-2 flex flex-col flex-1 justify-between",
@@ -60,6 +73,7 @@ function PlanCard({
           ))}
         </ul>
         <Button
+          asChild
           // key={i}
           onMouseEnter={() => {
             sethoverSeeAll(true);
@@ -74,27 +88,29 @@ function PlanCard({
                          relative
                         `}
         >
-          Explore all feature{" "}
-          <span
-            className={cn(
-              "bg-gray-300 overflow-hidden rounded-full size-5 text-center flex items-center justify-center ",
-              popular && "bg-stone-700",
-            )}
-          >
-            <motion.div
-              initial={{ x: 10 }}
-              animate={{ x: hoverSeeAll ? [0, 20, 0] : 0 }}
-              transition={{
-                duration: 0.3,
-                ease: "easeInOut",
-              }}
-              className="w-full flex items-start justify-center gap-1"
+          <Link href="/pricing#compare-plans">
+            Explore all features{" "}
+            <span
+              className={cn(
+                "bg-gray-300 overflow-hidden rounded-full size-5 text-center flex items-center justify-center ",
+                popular && "bg-stone-700",
+              )}
             >
-              <ArrowRight
-                className={cn("size-4", popular && "text-stone-300")}
-              />
-            </motion.div>
-          </span>
+              <motion.div
+                initial={{ x: 10 }}
+                animate={{ x: hoverSeeAll ? [0, 20, 0] : 0 }}
+                transition={{
+                  duration: 0.3,
+                  ease: "easeInOut",
+                }}
+                className="w-full flex items-start justify-center gap-1"
+              >
+                <ArrowRight
+                  className={cn("size-4", popular && "text-stone-300")}
+                />
+              </motion.div>
+            </span>
+          </Link>
         </Button>
       </div>
     </div>
@@ -107,10 +123,12 @@ function PlanCardHeader({
   plan,
   timeLine,
   popular,
+  workspaceId,
 }: {
   plan: PlanConfig;
   timeLine: "monthly" | "quarterly" | "annually";
   popular: boolean;
+  workspaceId?: string;
 }) {
   const trpc = useTRPC();
   const router = useRouter();
@@ -121,44 +139,78 @@ function PlanCardHeader({
   const portal = useMutation(trpc.billing.portal.mutationOptions());
   const profile = useQuery(trpc.user.profile.queryOptions());
   const billing = useQuery({
-    ...trpc.studio.billingUsage.queryOptions({}),
+    ...trpc.studio.billingUsage.queryOptions({ workspace_id: workspaceId }),
     enabled: !!profile.data,
     retry: false,
     staleTime: 15_000,
   });
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const actionLabel = hasPurchasedSubscription(billing.data) ? "Upgrade" : "Get started";
+  const isCurrent =
+    !!billing.data &&
+    billing.data.usage.plan_code !== "free" &&
+    canonicalPlan(billing.data.usage.plan_code) === canonicalPlan(plan.id);
+  const cannotManage = !!billing.data && !billing.data.can_manage_billing;
+  const actionLabel = isCurrent
+    ? "Current plan"
+    : hasPurchasedSubscription(billing.data)
+      ? "Upgrade"
+      : "Get started";
+  const price = priceLabel(plan, timeLine);
   async function choosePlan() {
     if (starting.current) return;
     starting.current = true;
     setCheckingSession(true);
     setCheckoutError(null);
-    const returnTo = window.location.pathname + window.location.search + window.location.hash;
+    const returnTo =
+      window.location.pathname + window.location.search + window.location.hash;
     try {
       await startPlanCheckout({
         input: {
           plan_code: plan.id as "starter" | "pro" | "business",
           billing_cycle: timeLine,
         },
-        getUser: () => queryClient.fetchQuery({
-          ...trpc.user.profile.queryOptions(),
-          staleTime: 0,
-          retry: false,
-        }),
+        getUser: () =>
+          queryClient.fetchQuery({
+            ...trpc.user.profile.queryOptions(),
+            staleTime: 0,
+            retry: false,
+          }),
         checkout: (input) => mutate.mutateAsync(input),
-        getBilling: () => queryClient.fetchQuery({
-          ...trpc.studio.billingUsage.queryOptions({}), staleTime: 0, retry: false,
-        }),
+        getBilling: async () => {
+          if (workspaceId) {
+            const workspace = await queryClient.fetchQuery({
+              ...trpc.workspace.current.queryOptions(),
+              staleTime: 0,
+              retry: false,
+            });
+            if (workspace.id !== workspaceId)
+              throw new Error(
+                "Your workspace changed. Close this dialog and reopen it to choose a plan.",
+              );
+          }
+          return queryClient.fetchQuery({
+            ...trpc.studio.billingUsage.queryOptions({
+              workspace_id: workspaceId,
+            }),
+            staleTime: 0,
+            retry: false,
+          });
+        },
         openPortal: () => portal.mutateAsync(),
         push: (path) => router.push(path),
         open: (url) => window.location.assign(url),
         returnTo,
       });
     } catch (error) {
-      if ((error as { data?: { code?: string } }).data?.code === "UNAUTHORIZED") {
+      if (
+        (error as { data?: { code?: string } }).data?.code === "UNAUTHORIZED"
+      ) {
         router.push(checkoutLoginPath(returnTo));
       } else {
-        const message = error instanceof Error ? error.message : "Could not open checkout. Please try again.";
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Could not open checkout. Please try again.";
         setCheckoutError(message);
         toast.error(message);
       }
@@ -192,20 +244,39 @@ function PlanCardHeader({
       </p>
 
       <p className="font-bold space-x-2 items-center md:text-3xl lg:text-4xl text-accent">
-        <span className={cn(popular && "text-white")}>
-          ${plan?.billing_cycles?.[timeLine]?.amount}
-        </span>
-        <span className={cn("text-sm font-normal text-stone-500", popular && "text-white/80")}>
-          / {timeLine === "monthly" ? "month" : timeLine === "quarterly" ? "3 months" : "year"}
+        <span className={cn(popular && "text-white")}>{price.amount}</span>
+        <span
+          className={cn(
+            "text-sm font-normal text-stone-500",
+            popular && "text-white/80",
+          )}
+        >
+          {price.suffix}
         </span>
       </p>
 
+      {!!plan.billing_cycles[timeLine].discount_bps && (
+        <p
+          className={cn(
+            "text-xs text-muted-foreground",
+            popular && "text-white/70",
+          )}
+        >
+          Base price. Product discounts are applied at checkout.
+        </p>
+      )}
       <div className="">
         <Button
           type="button"
-          aria-label={`${actionLabel}: ${plan.name} ${timeLine === "quarterly" ? "every 3 months" : timeLine}`}
+          aria-label={`${actionLabel}: ${plan.name} ${price.interval.toLowerCase()}`}
           aria-busy={checkingSession || mutate.isPending || portal.isPending}
-          disabled={checkingSession || mutate.isPending || portal.isPending}
+          disabled={
+            isCurrent ||
+            cannotManage ||
+            checkingSession ||
+            mutate.isPending ||
+            portal.isPending
+          }
           onClick={choosePlan}
           variant={"outline"}
           className={`rounded-md   w-full capitalize font-semibold  cursor-pointer border px-3 py-1.5 md:py-2 text-xs md:text-sm transition-all duration-200 ${
@@ -216,9 +287,35 @@ function PlanCardHeader({
              relative
             `}
         >
-          {mutate.isPending ? "Opening checkout…" : portal.isPending ? "Opening billing…" : checkingSession ? "Checking your plan…" : actionLabel}
+          {mutate.isPending
+            ? "Opening checkout…"
+            : portal.isPending
+              ? "Opening billing…"
+              : checkingSession
+                ? "Checking your plan…"
+                : actionLabel}
         </Button>
-        {checkoutError && <p role="alert" className={cn("mt-2 text-sm text-red-600", popular && "text-red-300")}>{checkoutError}</p>}
+        {checkoutError && (
+          <p
+            role="alert"
+            className={cn(
+              "mt-2 text-sm text-red-600",
+              popular && "text-red-300",
+            )}
+          >
+            {checkoutError}
+          </p>
+        )}
+        {cannotManage && (
+          <p
+            className={cn(
+              "mt-2 text-xs text-muted-foreground",
+              popular && "text-white/70",
+            )}
+          >
+            Ask a workspace owner or billing admin to change the plan.
+          </p>
+        )}
       </div>
     </div>
   );

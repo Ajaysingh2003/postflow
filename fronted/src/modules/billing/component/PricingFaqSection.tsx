@@ -28,7 +28,7 @@ const FAQS: FaqItem[] = [
   {
     question: "Can I switch billing cycles or cancel at any time?",
     answer:
-      "Monthly, every-six-months, and annual billing are available. Existing subscribers can open billing management from Settings or the Upgrade button. Available changes, charges, and cancellation terms are shown by Dodo before you confirm.",
+      "Monthly, quarterly, and annual billing are available. Existing subscribers can open billing management from Settings or the Upgrade button. Available changes, charges, and cancellation terms are shown by Dodo before you confirm.",
   },
   {
     question: "Are my social media accounts protected from bans or shadowbans?",

@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import PricingPlan from "./PricingPlan";
-import PricingCardSection, { PricingSkeleton } from "./PricingCardSection";
-import { Suspense } from "react";
+import PricingCardSection from "./PricingCardSection";
+import { PricingCatalogBoundary } from "./PricingCatalogBoundary";
 
 function PricingSection() {
   const [timeLine, setTimeLine] = useState<
@@ -16,7 +16,7 @@ function PricingSection() {
         {/* ── Typography Header Block ── */}
         <div className="flex flex-col items-center text-center max-w-3xl mx-auto mb-10 sm:mb-14">
           <div className="inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-[#fbfbf9] px-3.5 py-1 text-xs font-semibold text-neutral-800 shadow-2xs">
-            <span className="size-1.5 rounded-full bg-[#4ff576] animate-pulse" />
+            <span className="size-1.5 rounded-full bg-[#bbdcc3] animate-pulse" />
             <span className="font-heading">Predictable Tier Pricing</span>
             <span className="text-neutral-300">•</span>
             <span className="font-subheading text-neutral-500">
@@ -54,9 +54,9 @@ function PricingSection() {
 
         {/* ── Pricing Cards Grid ── */}
         <div className="w-full h-full px-4 md:px-0">
-          <Suspense fallback={<PricingSkeleton />}>
+          <PricingCatalogBoundary>
             <PricingCardSection timeLine={timeLine} />
-          </Suspense>
+          </PricingCatalogBoundary>
         </div>
       </div>
     </section>

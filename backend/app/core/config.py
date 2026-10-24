@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     dodo_webhook_secret: str | None = None
     dodo_api_base: str = "https://test.dodopayments.com"
     dodo_return_url: str = "http://localhost:3000/settings/billing"
+    billing_catalog_cache_ttl_seconds: int = Field(default=60, ge=15, le=300)
+    billing_catalog_timeout_seconds: int = Field(default=8, ge=1, le=20)
     dodo_product_starter: str | None = Field(
         default=None,
         validation_alias=AliasChoices("dodo_product_starter", "product_starter_monthly"),

@@ -27,13 +27,13 @@ export type BillingCycle = CheckoutInput["billing_cycle"];
 export function hasPurchasedSubscription(billing?: BillingUsage) {
   const subscription = billing?.subscription;
   return !!subscription && subscription.plan_code !== "free" &&
-    ["active", "renewed", "updated", "plan_changed", "on_hold", "cancelled", "expired"].includes(subscription.status);
+    ["active", "trialing", "renewed", "updated", "plan_changed", "on_hold", "cancelled", "expired"].includes(subscription.status);
 }
 
 export function subscriptionNeedsManagement(billing?: BillingUsage) {
   if (!hasPurchasedSubscription(billing)) return false;
   const subscription = billing!.subscription!;
-  return ["active", "renewed", "updated", "plan_changed", "on_hold"].includes(subscription.status) ||
+  return ["active", "trialing", "renewed", "updated", "plan_changed", "on_hold"].includes(subscription.status) ||
     (subscription.status === "cancelled" && !!subscription.current_period_end &&
       new Date(subscription.current_period_end).getTime() > Date.now());
 }

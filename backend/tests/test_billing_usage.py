@@ -283,7 +283,7 @@ def test_running_request_reserves_last_credit_until_failure(workspace):
 
 
 def test_annual_usage_only_counts_current_month_and_public_plans_use_configured_limits(
-    workspace, client
+    workspace, client, billing_catalog
 ):
     ws, user = workspace
     now = datetime(2026, 10, 8, 12, tzinfo=UTC)
@@ -514,7 +514,9 @@ def test_paid_trial_grace_and_remaining_term_include_unlimited_posts(workspace, 
         assert get_plan_limits_summary(db, ws)["scheduled_posts"]["limit"] is None
 
 
-def test_public_paid_plans_normalize_old_limits_without_changing_ai_or_prices(client):
+def test_public_paid_plans_normalize_old_limits_without_changing_ai_or_prices(
+    client, billing_catalog
+):
     original = client.get("/api/v1/billing/plans").json()
     with SessionLocal.begin() as db:
         for code in ("starter", "pro", "business"):

@@ -614,7 +614,7 @@ export function AppSidebar() {
             onBrandIntent={preloadBrand}
           />
 
-          <div className="w-full h-full">
+          <div className="mt-auto w-full shrink-0 pt-2">
             <UpgradeSubscription/>
           </div>
         </SidebarContent>

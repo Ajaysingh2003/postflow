@@ -1,123 +1,141 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Sparkles } from "lucide-react";
-
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import dynamic from "next/dynamic";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowUpRight, RefreshCw, Sparkles } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsLink } from "@/modules/settings/SettingsProvider";
-import { cn } from "@/lib/utils";
-import PricingCardSection from "@/modules/billing/component/PricingCardSection";
-import PricingSection from "@/modules/billing/component/PricingSection";
+import { USAGE_QUERY_OPTIONS } from "@/modules/billing/usageModel";
+import { canonicalPlan, planName } from "@/modules/billing/upgradeModel";
+import { useTRPC } from "@/trpc/client";
 
-/**
- * Edit these to match your real plans. Keep each perk to something a free
- * user can actually feel, in plain words.
- */
-const PREMIUM_PERKS = [
-  "Connect more channels",
-  "Schedule more posts each month",
-  "More AI drafts in your own voice",
-  "Full analytics history",
-  "Early access to Agents",
-];
+const UpgradeSubscriptionDialog = dynamic(
+  () => import("./UpgradeSubscriptionDialog"),
+  { ssr: false },
+);
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C5CFC]/40";
-
-export function UpgradeSubscription({ isPremium = false }: { isPremium?: boolean }) {
-  const { open: sidebarOpen } = useSidebar();
+export function UpgradeSubscription() {
+  const { open, isMobile } = useSidebar();
+  const trpc = useTRPC();
+  const workspace = useQuery(trpc.workspace.current.queryOptions());
+  const billing = useQuery({
+    ...trpc.studio.billingUsage.queryOptions(
+      { workspace_id: workspace.data?.id },
+      USAGE_QUERY_OPTIONS,
+    ),
+    enabled: !!workspace.data?.id,
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
+  const expanded = open || isMobile;
 
-  // Premium users never see the prompt.
-  if (isPremium) return null;
+  if (workspace.isError || billing.isError) {
+    return (
+      <div className="rounded-xl border border-border bg-background p-3">
+        {expanded && (
+          <p className="mb-2 text-xs text-muted-foreground">
+            Your plan couldn’t load.
+          </p>
+        )}
+        <button
+          type="button"
+          aria-label="Retry loading your plan"
+          className="secondary-btn w-full justify-center rounded-lg"
+          onClick={() => {
+            void workspace.refetch();
+            void billing.refetch();
+          }}
+        >
+          <RefreshCw className="size-3.5" aria-hidden="true" />
+          {expanded && "Retry"}
+        </button>
+      </div>
+    );
+  }
+  if (!billing.data || !workspace.data) {
+    return (
+      <div
+        role="status"
+        aria-label="Loading workspace plan"
+        className="space-y-2 rounded-xl border border-border p-3"
+      >
+        <Skeleton className="h-4 w-2/3" />
+        {expanded && <Skeleton className="h-8 w-full rounded-lg" />}
+      </div>
+    );
+  }
+  const code = canonicalPlan(billing.data.usage.plan_code);
+  const highestPlan = code === "business";
+  const canManage = billing.data.can_manage_billing;
+  const label = highestPlan || !canManage ? "Plan & usage" : "Explore plans";
+  const buttonClass =
+    "primary-btn w-full justify-center rounded-lg text-xs! focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2";
 
   return (
     <>
-      {sidebarOpen ? (
-        <div className="rounded-xl border border-neutral-200 bg-white p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
-          <div className="flex items-center gap-2">
-            <Sparkles className="size-4 shrink-0 text-[#7C5CFC]" />
-            <p className="text-[13px] font-medium text-neutral-900 dark:text-neutral-100">
-              You&rsquo;re on the Free plan
+      <div className="rounded-xl border border-border bg-background p-3 shadow-xs">
+        {expanded && (
+          <>
+            <div className="flex items-center gap-2 text-[13px] font-semibold">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                <Sparkles className="size-3.5" aria-hidden="true" />
+              </span>
+              {planName(code)} plan
+            </div>
+            <p className="mb-3 mt-2 text-xs leading-5 text-muted-foreground">
+              {!canManage
+                ? "See this workspace’s allowance and usage."
+                : code === "free"
+                  ? "More room for your ideas, channels, and AI drafts."
+                  : highestPlan
+                    ? "Your workspace is on our most complete plan."
+                    : "Find more room for your growing workspace."}
             </p>
-          </div>
-          <p className="mt-1.5 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
-            Get more channels, posts, and AI drafts with Premium.
-          </p>
+          </>
+        )}
+        {highestPlan || !canManage ? (
+          <SettingsLink
+            section="billing"
+            aria-label={label}
+            className={buttonClass}
+          >
+            {expanded ? (
+              label
+            ) : (
+              <Sparkles className="size-4" aria-hidden="true" />
+            )}
+            {expanded && (
+              <ArrowUpRight className="size-3.5" aria-hidden="true" />
+            )}
+          </SettingsLink>
+        ) : (
           <button
             type="button"
-            onClick={() => setDialogOpen(true)}
+            aria-label={label}
             aria-haspopup="dialog"
-            className={cn(
-              "mt-3 flex h-8 w-full items-center justify-center rounded-lg bg-[#7C5CFC] text-[13px] font-medium text-white transition-colors hover:bg-[#6b4ae8]",
-              FOCUS_RING,
-            )}
+            className={buttonClass}
+            onClick={() => setDialogOpen(true)}
           >
-            Upgrade to Premium
+            {expanded ? (
+              label
+            ) : (
+              <Sparkles className="size-4" aria-hidden="true" />
+            )}
+            {expanded && (
+              <ArrowUpRight className="size-3.5" aria-hidden="true" />
+            )}
           </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          aria-label="Upgrade to Premium"
-          aria-haspopup="dialog"
-          className={cn(
-            "mx-auto flex size-9 items-center justify-center rounded-lg bg-[#7C5CFC]/10 text-[#7C5CFC] transition-colors hover:bg-[#7C5CFC]/20",
-            FOCUS_RING,
-          )}
-        >
-          <Sparkles className="size-4" />
-        </button>
+        )}
+      </div>
+      {dialogOpen && (
+        <UpgradeSubscriptionDialog
+          key={workspace.data.id}
+          workspaceId={workspace.data.id}
+          workspaceName={workspace.data.name}
+          onClose={() => setDialogOpen(false)}
+        />
       )}
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[1120px]">
-          <DialogHeader>
-            <DialogTitle>Upgrade to Premium</DialogTitle>
-            <DialogDescription>
-              Give your ideas more room. Premium includes:
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* <ul className="space-y-3 py-1">
-            {PREMIUM_PERKS.map((perk) => (
-              <li key={perk} className="flex items-start gap-2.5 text-sm">
-                <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-[#7C5CFC]/12 text-[#7C5CFC]">
-                  <Check className="size-3" strokeWidth={3} />
-                </span>
-                <span className="text-neutral-700 dark:text-neutral-300">
-                  {perk}
-                </span>
-              </li>
-            ))}
-          </ul> */}
-
-<PricingSection />
-
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>
-              Not now
-            </Button>
-            <SettingsLink
-              section="billing"
-              onClick={() => setDialogOpen(false)}
-              className="primary-btn inline-flex h-9 items-center justify-center rounded-lg px-4 text-[13px] font-medium"
-            >
-              See plans
-            </SettingsLink>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

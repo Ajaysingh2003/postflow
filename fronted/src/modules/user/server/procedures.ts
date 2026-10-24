@@ -180,7 +180,7 @@ export const userRouter = createTRPCRouter({
     },
   ),
 
-  me: authedProcedure.query(({ ctx }): AuthUser | null => ctx.user),
+  me: authedProcedure.query(({ ctx }): AuthUser => ctx.user),
 
   
   profile: getUserProcedure.query(({ ctx }) => {

@@ -26,6 +26,7 @@ export default function OnboardingView({
   initialStep?: OnboardingStep;
   connectionFailed?: boolean;
 }) {
+  
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { data: setup } = useSuspenseQuery(trpc.user.onboarding.queryOptions());

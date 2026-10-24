@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import React from "react";
+import React, { useId } from "react";
 import { motion } from "framer-motion";
 
 type PlanType = "monthly" | "quarterly" | "annually";
@@ -9,6 +9,7 @@ type PlanType = "monthly" | "quarterly" | "annually";
 type PricingTimelineType = {
   timeLine: PlanType;
   setTimeLine: React.Dispatch<React.SetStateAction<PlanType>>;
+  labels?: Partial<Record<PlanType, string>>;
 };
 
 const plans: {
@@ -29,17 +30,16 @@ const plans: {
   },
 ];
 
-
-function PricingPlan({
-  timeLine,
-  setTimeLine,
-}: PricingTimelineType) {
+function PricingPlan({ timeLine, setTimeLine, labels }: PricingTimelineType) {
+  const activeId = useId();
   return (
     <div
+      role="group"
+      aria-label="Billing frequency"
       style={{
         background: "#B9B9B913",
       }}
-      className="flex gap-1 rounded-md p-1"
+      className="flex max-w-full flex-wrap justify-center gap-1 rounded-md p-1"
     >
       {plans.map((plan) => {
         const isActive = plan.scope === timeLine;
@@ -47,6 +47,8 @@ function PricingPlan({
         return (
           <Button
             key={plan.scope}
+            type="button"
+            aria-pressed={isActive}
             onClick={() => setTimeLine(plan.scope)}
             variant="outline"
             className={`
@@ -86,7 +88,7 @@ function PricingPlan({
             {/* sliding active background */}
             {isActive && (
               <motion.span
-                layoutId="pricing-active-plan"
+                layoutId={activeId}
                 className="
                   absolute
                   inset-0
@@ -116,10 +118,8 @@ function PricingPlan({
                 ease: "easeOut",
               }}
             >
-              {plan.label}
+              {labels?.[plan.scope] ?? plan.label}
             </motion.span>
-
-
           </Button>
         );
       })}

@@ -36,7 +36,9 @@ def paid(code="pro"):
 @pytest.mark.parametrize(
     "code,credits,limit", [("starter", 300, 3), ("pro", 2000, 5), ("business", 5000, 10)]
 )
-def test_paid_plan_credits_profile_limits_and_no_trial(client, auth, code, credits, limit):
+def test_paid_plan_credits_profile_limits_and_no_trial(
+    client, auth, code, credits, limit, billing_catalog
+):
     paid(code)
     plans = client.get("/api/v1/billing/plans").json()
     assert plans[code]["trial_days"] == 0

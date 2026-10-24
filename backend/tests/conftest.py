@@ -56,3 +56,30 @@ def auth(client: TestClient) -> dict[str, str]:
     )
     assert response.status_code == 201, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+@pytest.fixture
+def billing_catalog(monkeypatch):
+    """Non-pricing feature tests use isolated provider prices, never live credentials."""
+    from app.modules.billing import catalog
+
+    async def prices(settings):
+        totals = {"starter": (9, 24, 86), "pro": (29, 78, 182), "business": (49, 132, 470)}
+        return {
+            plan: {
+                cycle: {
+                    "amount": amount,
+                    "amount_minor": amount * 100,
+                    "price_id": f"{plan}_{cycle}",
+                    "currency": "USD",
+                    "currency_decimals": 2,
+                    "interval": {"monthly": "month", "quarterly": "quarter", "annually": "year"}[
+                        cycle
+                    ],
+                }
+                for cycle, amount in zip(catalog.CYCLES, amounts, strict=True)
+            }
+            for plan, amounts in totals.items()
+        }
+
+    monkeypatch.setattr(catalog, "get_prices", prices)

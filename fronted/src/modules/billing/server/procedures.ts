@@ -1,10 +1,6 @@
 import axios from "axios";
 
-import {
-  authedProcedure,
-  createTRPCRouter,
-  baseProcedure,
-} from "@/trpc/init";
+import { authedProcedure, createTRPCRouter, baseProcedure } from "@/trpc/init";
 import {
   getApiBase,
   getAuthHeaders,
@@ -29,14 +25,19 @@ export interface SubscriptionData {
 
 const createCheckout = authedProcedure
   .input(checkoutInputSchema)
-  .mutation(async ({ input }): Promise<CheckoutResult> => {
+  .mutation(async ({ input, ctx }): Promise<CheckoutResult> => {
     try {
-      const response = await axios.post<{ checkout_url: string; session_id: string }>(
-        `${getApiBase()}/v1/billing/checkout`,
-        input,
-        { headers: await getAuthHeaders(), timeout: 25_000 },
-      );
-      return { url: response.data.checkout_url, session_id: response.data.session_id };
+      const response = await axios.post<{
+        checkout_url: string;
+        session_id: string;
+      }>(`${getApiBase()}/v1/billing/checkout`, input, {
+        headers: await getAuthHeaders(ctx.token, ctx.workspace_id),
+        timeout: 25_000,
+      });
+      return {
+        url: response.data.checkout_url,
+        session_id: response.data.session_id,
+      };
     } catch (error) {
       return handleBackendError(error, "Could not initiate checkout");
     }
@@ -49,18 +50,23 @@ export const billingRouter = createTRPCRouter({
   getPlans: baseProcedure.query(async (): Promise<BillingConfigResponse> => {
     try {
       const response = await axios.get<BillingConfigResponse>(
-        `${getApiBase()}/v1/billing/plans`, { timeout: 10_000 },
+        `${getApiBase()}/v1/billing/plans`,
+        { timeout: 15_000 },
       );
 
-      
-      if (!response.data?.starter || !response.data?.pro || !response.data?.business)
+      if (
+        !response.data?.starter ||
+        !response.data?.pro ||
+        !response.data?.business
+      )
         throw new Error("Plans are temporarily unavailable");
 
-
-      console.log(response.data,"leah jaye")
       return response.data;
     } catch (error) {
-      return handleBackendError(error, "Could not load pricing. Please try again.");
+      return handleBackendError(
+        error,
+        "Could not load pricing. Please try again.",
+      );
     }
   }),
 
@@ -88,16 +94,18 @@ export const billingRouter = createTRPCRouter({
   /**
    * Creates a Dodo customer portal session.
    */
-  portal: authedProcedure.mutation(async (): Promise<{ link: string }> => {
-    try {
-      const response = await axios.post<{ link: string }>(
-        `${getApiBase()}/v1/billing/portal`,
-        {},
-        { headers: await getAuthHeaders() },
-      );
-      return response.data;
-    } catch (error) {
-      return handleBackendError(error, "Could not open billing portal");
-    }
-  }),
+  portal: authedProcedure.mutation(
+    async ({ ctx }): Promise<{ link: string }> => {
+      try {
+        const response = await axios.post<{ link: string }>(
+          `${getApiBase()}/v1/billing/portal`,
+          {},
+          { headers: await getAuthHeaders(ctx.token, ctx.workspace_id) },
+        );
+        return response.data;
+      } catch (error) {
+        return handleBackendError(error, "Could not open billing portal");
+      }
+    },
+  ),
 });

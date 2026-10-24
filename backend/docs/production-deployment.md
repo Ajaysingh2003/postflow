@@ -77,6 +77,12 @@ ones. Fill Resend and a verified sender address, real LLM provider/model, R2 buc
 and credentials, and each social app you intend to offer. A credential being present
 does not prove that the provider has approved its permissions.
 
+The base `DODO_PRODUCT_STARTER`, `DODO_PRODUCT_PRO` and `DODO_PRODUCT_BUSINESS`
+variables select monthly products. Quarterly and annual pricing cards use separate
+`DODO_PRODUCT_<PLAN>_QUARTERLY` and `DODO_PRODUCT_<PLAN>_ANNUALLY` variables. Configure
+their recurring intervals and prices in Dodo; an unconfigured cycle cannot fall
+back to a monthly checkout. See [checkout and X recovery](checkout-and-x-refresh.md).
+
 The frontend hosting environment needs these values, followed by a redeploy:
 
 ```dotenv

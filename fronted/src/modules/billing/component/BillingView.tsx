@@ -251,7 +251,7 @@ export function BillingOverview({
           {data.can_manage_billing ? (
             <>
               <Button asChild className="primary-btn">
-                <Link href="/#pricing">
+                <Link href="/pricing">
                   {currentPaid ? "Compare plans" : "Upgrade plan"}
                   <ArrowUpRight className="size-4" />
                 </Link>

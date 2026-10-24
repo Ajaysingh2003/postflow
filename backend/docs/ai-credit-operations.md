@@ -37,7 +37,7 @@ An old monthly request finishing after rollover cannot consume the new month's
 allowance. Bonus holds survive rollover and settle/refund against the same
 wallet. Manual resets preserve active holds.
 
-Monthly Starter/Pro/Business allowances remain 1,000/5,000/8,000, including annual
+Monthly Starter/Pro/Business allowances are 300/2,000/5,000, including annual
 subscriptions. Windows retain the original monthly billing day and handle
 short months. An upgrade/downgrade does not erase current usage or move an
 unexpired stored window. On its next rollover, the current subscription's
@@ -71,6 +71,14 @@ are PostgreSQL features; application operations are audited on both databases.
 Do not automatically downgrade this migration: doing so would discard gifted
 balances and re-count usage that was intentionally reset. Restore a reviewed
 backup or write a corrective forward migration.
+
+Revision `20261024_paid_ai_allowances` updates `plans.limits.ai_credits` and
+existing plan-sourced AI entitlement grants to 300/2,000/5,000. Legacy Creator
+and Agency plans follow Starter and Business respectively. Apply it with
+`alembic upgrade head` through your normal deployment migration step. It leaves
+other plan limits, manual entitlement overrides, completed usage, active
+reservations and one-time bonus credits intact. Usage above the new allowance
+has no monthly credits remaining until the next reset; bonus credits still work.
 
 ## Terminal controls (recommended)
 

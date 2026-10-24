@@ -58,6 +58,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { settingsUrl } from "@/modules/settings/model";
 import { SettingsLink } from "@/modules/settings/SettingsProvider";
+import { UpgradeSubscription } from "./UpgradeSubscription";
 
 const BrandDialog = dynamic(
   () =>
@@ -76,7 +77,7 @@ const ROUTES = {
   content: "/dashboard/content",
   compose: "/dashboard/content",
   schedule: "/dashboard/schedule",
-  assistant: "/dashboard/assistant",
+  assistant: "/dashboard/content",
   repurpose: "/dashboard/assistant/repurpose",
   posts: "/dashboard/posts",
   channels: "/dashboard/channels",
@@ -376,8 +377,8 @@ function SidebarUserFooterContent() {
       },
     }),
   );
-  const name = data.name || data.display_name || "";
-  const email = data.email;
+  const name = data?.name || data?.display_name || "";
+  const email = data?.email || "";
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger
@@ -453,7 +454,7 @@ function SidebarUserFooter() {
 
 const MORE_CREATE_OPTIONS = [
   { label: "AI Draft", href: ROUTES.assistant, icon: Sparkles },
-  { label: "Repurpose Content", href: ROUTES.repurpose, icon: Repeat2 },
+
   { label: "Connect Channel", href: ROUTES.channels, icon: Plug },
 ] as const;
 
@@ -612,6 +613,10 @@ export function AppSidebar() {
             onBrandOpen={() => setBrandOpen(true)}
             onBrandIntent={preloadBrand}
           />
+
+          <div className="w-full h-full">
+            <UpgradeSubscription/>
+          </div>
         </SidebarContent>
 
         {/* FOOTER */}

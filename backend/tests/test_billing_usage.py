@@ -515,6 +515,7 @@ def test_paid_trial_grace_and_remaining_term_include_unlimited_posts(workspace, 
 
 
 def test_public_paid_plans_normalize_old_limits_without_changing_ai_or_prices(client):
+    original = client.get("/api/v1/billing/plans").json()
     with SessionLocal.begin() as db:
         for code in ("starter", "pro", "business"):
             db.add(Plan(code=code, name=code, limits={"scheduled_posts": 1, "ai_credits": 123}))
@@ -522,11 +523,12 @@ def test_public_paid_plans_normalize_old_limits_without_changing_ai_or_prices(cl
     for plan in catalog.values():
         assert plan["limits"]["scheduled_posts"] is None
         assert plan["limits"]["ai_credits"] == 123
-    assert catalog["starter"]["billing_cycles"]["monthly"]["amount"] == 29
+    for code, plan in catalog.items():
+        assert plan["billing_cycles"] == original[code]["billing_cycles"]
 
 
 @pytest.mark.parametrize(
-    "plan_code,allowance", [("starter", 1000), ("pro", 5000), ("business", 8000)]
+    "plan_code,allowance", [("starter", 300), ("pro", 2000), ("business", 5000)]
 )
 def test_yearly_paid_credits_renew_at_monthly_boundary_in_billing_home_and_enforcement(
     workspace, client, auth, monkeypatch, plan_code, allowance

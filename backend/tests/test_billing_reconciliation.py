@@ -316,7 +316,7 @@ def test_reconciling_older_subscription_never_overrides_current_workspace_plan(s
     assert tick(setup) == 2
     with SessionLocal() as db:
         assert effective_plan(db, setup[0]["workspace_id"]) == "pro"
-        assert entitlement_limit(db, setup[0]["workspace_id"], "ai_credits") == 5000
+        assert entitlement_limit(db, setup[0]["workspace_id"], "ai_credits") == 2000
         assert entitlement_limit(db, setup[0]["workspace_id"], "scheduled_posts") is None
 
 
@@ -480,7 +480,7 @@ def test_old_subscription_webhooks_and_refunds_cannot_downgrade_newer_plan(setup
     assert _post_signed(client, refund, "old-subscription-refund").status_code == 204
     with SessionLocal() as db:
         assert effective_plan(db, me["workspace_id"]) == "pro"
-        assert entitlement_limit(db, me["workspace_id"], "ai_credits") == 5000
+        assert entitlement_limit(db, me["workspace_id"], "ai_credits") == 2000
 
 
 def test_tick_can_be_interrupted_mid_lookup_without_advancing_unfinished_cursor(setup, monkeypatch):

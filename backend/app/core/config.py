@@ -1,12 +1,14 @@
 from functools import lru_cache
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
+    model_config = SettingsConfigDict(
+        env_file=".env", extra="ignore", hide_input_in_errors=True, populate_by_name=True
+    )
 
     app_env: str = "development"
     app_secret: str = "development-only-secret-change-me"
@@ -77,9 +79,51 @@ class Settings(BaseSettings):
     dodo_webhook_secret: str | None = None
     dodo_api_base: str = "https://test.dodopayments.com"
     dodo_return_url: str = "http://localhost:3000/settings/billing"
-    dodo_product_starter: str | None = None
-    dodo_product_pro: str | None = None
-    dodo_product_business: str | None = None
+    dodo_product_starter: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("dodo_product_starter", "product_starter_monthly"),
+    )
+    dodo_product_pro: str | None = Field(
+        default=None, validation_alias=AliasChoices("dodo_product_pro", "product_pro_monthly")
+    )
+    dodo_product_business: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "dodo_product_business", "product_business_monthly", "product_agency_monthly"
+        ),
+    )
+    dodo_product_starter_quarterly: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "dodo_product_starter_quarterly", "product_starter_quarterly"
+        ),
+    )
+    dodo_product_starter_annually: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("dodo_product_starter_annually", "product_starter_yearly"),
+    )
+    dodo_product_pro_quarterly: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("dodo_product_pro_quarterly", "product_pro_quarterly"),
+    )
+    dodo_product_pro_annually: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("dodo_product_pro_annually", "product_pro_yearly"),
+    )
+    dodo_product_business_quarterly: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "dodo_product_business_quarterly",
+            "product_business_quarterly",
+            "product_agency_quarterly",
+        ),
+    )
+    dodo_product_business_annually: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "dodo_product_business_annually", "product_business_yearly", "product_agency_yearly"
+        ),
+    )
     dodo_product_creator: str | None = None
     dodo_product_agency: str | None = None
     billing_reconcile_interval_seconds: int = Field(default=3600, ge=60)
@@ -244,7 +288,12 @@ class Settings(BaseSettings):
                 raise ValueError("Production billing must use the live Dodo API")
         return self
 
-    def dodo_product_id(self, plan_code: str) -> str | None:
+    def dodo_product_id(self, plan_code: str, billing_cycle: str = "monthly") -> str | None:
+        if plan_code not in {"starter", "creator", "pro", "business", "agency"}:
+            return None
+        if billing_cycle not in {"monthly", "quarterly", "annually"}:
+            return None
+        canonical = {"creator": "starter", "agency": "business"}.get(plan_code, plan_code)
         mapping = {
             "starter": self.dodo_product_starter or self.dodo_product_creator,
             "creator": self.dodo_product_creator or self.dodo_product_starter,
@@ -252,9 +301,17 @@ class Settings(BaseSettings):
             "business": self.dodo_product_business or self.dodo_product_agency,
             "agency": self.dodo_product_agency or self.dodo_product_business,
         }
-        val = mapping.get(plan_code)
+        val = (
+            mapping.get(plan_code)
+            if billing_cycle == "monthly"
+            else getattr(self, f"dodo_product_{canonical}_{billing_cycle}")
+        )
         if not val and not self.dodo_api_key and self.debug:
-            return f"pdt_mock_{plan_code}"
+            return (
+                f"pdt_mock_{plan_code}"
+                if billing_cycle == "monthly"
+                else f"pdt_mock_{plan_code}_{billing_cycle}"
+            )
         return val
 
 

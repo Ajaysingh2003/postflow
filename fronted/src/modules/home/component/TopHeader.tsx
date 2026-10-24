@@ -178,63 +178,11 @@ export default function TopHeader({ header ,description }: { header: React.React
 
         {/* Left curved lines */}
 
-        <div
-          className="
-            absolute
-            -left-[420px]
-            top-[-140px]
-            h-[760px]
-            w-[760px]
-            rounded-full
-            border-[24px]
-            border-[#ebeae5]/70
-          "
-        />
-
-        <div
-          className="
-            absolute
-            -left-[390px]
-            top-[-110px]
-            h-[700px]
-            w-[700px]
-            rounded-full
-            border
-            border-[#deddd7]/60
-          "
-        />
-
-        {/* Right curved lines */}
-
-        <div
-          className="
-            absolute
-            -right-[520px]
-            top-[390px]
-            h-[930px]
-            w-[930px]
-            rounded-full
-            border-[22px]
-            border-[#ebeae5]/70
-          "
-        />
-
-        <div
-          className="
-            absolute
-            -right-[470px]
-            top-[430px]
-            h-[840px]
-            w-[840px]
-            rounded-full
-            border
-            border-[#deddd7]/60
-          "
-        />
+        
 
         {/* Bottom fade */}
 
-        <div
+        {/* <div
           className="
             absolute
             inset-x-0
@@ -244,7 +192,7 @@ export default function TopHeader({ header ,description }: { header: React.React
             from-transparent
             to-[#faf9f5]
           "
-        />
+        /> */}
       </div>
 
       <div className="mx-auto w-full">
@@ -338,7 +286,8 @@ export default function TopHeader({ header ,description }: { header: React.React
 
                 {/* Trust signal */}
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex text-[16px]
+                      sm:text-[16px] items-center gap-1.5">
                   <ShieldCheck className="size-3.5 shrink-0 text-[#7d9c1a]" />
 
                   <span>No credit card required</span>

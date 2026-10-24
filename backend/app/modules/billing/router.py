@@ -60,7 +60,7 @@ def get_plans(db: Session = Depends(get_db)) -> dict:
             "trial_days": 0,
             "billing_cycles": {
                 "monthly": {
-                    "amount": 29,
+                    "amount": 9,
                     "price_id": "starter_monthly",
                     "currency": "USD",
                     "interval": "month",
@@ -69,10 +69,10 @@ def get_plans(db: Session = Depends(get_db)) -> dict:
                     "amount": 24,
                     "price_id": "starter_quarterly",
                     "currency": "USD",
-                    "interval": "quarter",
+                    "interval": "half_year",
                 },
                 "annually": {
-                    "amount": 19,
+                    "amount": 86,
                     "price_id": "starter_annually",
                     "currency": "USD",
                     "interval": "year",
@@ -87,19 +87,19 @@ def get_plans(db: Session = Depends(get_db)) -> dict:
             "trial_days": 0,
             "billing_cycles": {
                 "monthly": {
-                    "amount": 59,
+                    "amount": 29,
                     "price_id": "pro_monthly",
                     "currency": "USD",
                     "interval": "month",
                 },
                 "quarterly": {
-                    "amount": 49,
+                    "amount": 78,
                     "price_id": "pro_quarterly",
                     "currency": "USD",
-                    "interval": "quarter",
+                    "interval": "half_year",
                 },
                 "annually": {
-                    "amount": 39,
+                    "amount": 182,
                     "price_id": "pro_annually",
                     "currency": "USD",
                     "interval": "year",
@@ -114,19 +114,19 @@ def get_plans(db: Session = Depends(get_db)) -> dict:
             "trial_days": 0,
             "billing_cycles": {
                 "monthly": {
-                    "amount": 129,
+                    "amount": 49,
                     "price_id": "business_monthly",
                     "currency": "USD",
                     "interval": "month",
                 },
                 "quarterly": {
-                    "amount": 109,
+                    "amount": 132,
                     "price_id": "business_quarterly",
                     "currency": "USD",
-                    "interval": "quarter",
+                    "interval": "half_year",
                 },
                 "annually": {
-                    "amount": 89,
+                    "amount": 470,
                     "price_id": "business_annually",
                     "currency": "USD",
                     "interval": "year",
@@ -175,9 +175,11 @@ async def checkout(
     workspace: Workspace = Depends(get_current_workspace),
 ) -> CheckoutResponse:
     settings = get_settings()
-    product_id = settings.dodo_product_id(payload.plan_code)
+    product_id = settings.dodo_product_id(payload.plan_code, payload.billing_cycle)
     if not product_id:
-        raise HTTPException(status_code=422, detail="Unknown or unconfigured plan")
+        raise HTTPException(
+            status_code=422, detail="This plan or billing cycle is not configured for checkout"
+        )
     seat_limit = PLAN_DEFAULTS.get(payload.plan_code, {}).get("seats", 1) or 1
     if payload.seats > seat_limit:
         raise HTTPException(status_code=422, detail="Seat quantity exceeds this plan")

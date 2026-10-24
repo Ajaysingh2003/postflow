@@ -208,10 +208,16 @@ def _next_normal(db, state, pending, owner, settings):
 def _plan_code(settings, subscription, remote):
     if not remote.product_id:
         return subscription.plan_code
-    if settings.dodo_product_id(subscription.plan_code) == remote.product_id:
+    cycles = ("monthly", "quarterly", "annually")
+    if any(
+        settings.dodo_product_id(subscription.plan_code, cycle) == remote.product_id
+        for cycle in cycles
+    ):
         return subscription.plan_code
     for code in PLAN_DEFAULTS:
-        if code != "free" and settings.dodo_product_id(code) == remote.product_id:
+        if code != "free" and any(
+            settings.dodo_product_id(code, cycle) == remote.product_id for cycle in cycles
+        ):
             return code
     if remote.status != "active":
         # Unknown product mapping must not hide a verified loss of paid access.

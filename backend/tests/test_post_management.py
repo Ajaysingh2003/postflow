@@ -189,5 +189,8 @@ def test_post_filter_and_pagination_are_workspace_scoped(client, managed_post):
 @pytest.mark.anyio
 async def test_optional_management_oauth_permissions():
     for adapter, expected in [(RedditAdapter(), "edit"), (LinkedInAdapter(), "r_organization_social_feed"), (ThreadsAdapter(), "threads_read_replies")]:
-        auth = await adapter.build_auth_url("workspace", "state", manage_replies=True)
+        auth = await adapter.build_auth_url(
+            "workspace", "state", manage_replies=True,
+            redirect_uri=f"https://api.draftva.test/api/v1/channels/{adapter.platform}/callback",
+        )
         assert expected in auth.metadata["requested_scopes"]

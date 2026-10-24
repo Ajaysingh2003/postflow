@@ -30,23 +30,23 @@ PLAN_DEFAULTS = {
     },
     "starter": {
         "brand_profiles": 3,
-        "ai_credits": 1000,
+        "ai_credits": 300,
         "scheduled_posts": None,
         "seats": 3,
         "workspaces": 3,
         "connected_accounts": 5,
     },
-    "creator": {
-        "brand_profiles": 3,
-        "ai_credits": 1000,
-        "scheduled_posts": None,
-        "seats": 1,
-        "workspaces": 1,
-        "connected_accounts": 5,
-    },
+    # "creator": {
+    #     "brand_profiles": 3,
+    #     "ai_credits": 1000,
+    #     "scheduled_posts": None,
+    #     "seats": 1,
+    #     "workspaces": 1,
+    #     "connected_accounts": 5,
+    # },
     "pro": {
         "brand_profiles": 5,
-        "ai_credits": 5000,
+        "ai_credits": 2000,
         "scheduled_posts": None,
         "seats": 5,
         "workspaces": 5,
@@ -54,20 +54,20 @@ PLAN_DEFAULTS = {
     },
     "business": {
         "brand_profiles": 10,
-        "ai_credits": 8000,
+        "ai_credits": 5000,
         "scheduled_posts": None,
         "seats": 15,
         "workspaces": 10,
         "connected_accounts": 50,
     },
-    "agency": {
-        "brand_profiles": 10,
-        "ai_credits": 8000,
-        "scheduled_posts": None,
-        "seats": 25,
-        "workspaces": 25,
-        "connected_accounts": 100,
-    },
+    # "agency": {
+    #     "brand_profiles": 10,
+    #     "ai_credits": 8000,
+    #     "scheduled_posts": None,
+    #     "seats": 25,
+    #     "workspaces": 25,
+    #     "connected_accounts": 100,
+    # },
 }
 
 

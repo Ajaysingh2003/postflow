@@ -1,18 +1,17 @@
 import axios from "axios";
-import { z } from "zod";
 
 import {
   authedProcedure,
   createTRPCRouter,
-  getUserProcedure,
+  baseProcedure,
 } from "@/trpc/init";
 import {
   getApiBase,
   getAuthHeaders,
   handleBackendError,
 } from "@/lib/http-error";
-import { PAID_ALLOWANCES } from "../planAllowances";
 import type { BillingConfigResponse } from "@/modules/types";
+import { checkoutInputSchema } from "../checkout";
 
 export interface CheckoutResult {
   url: string;
@@ -28,214 +27,46 @@ export interface SubscriptionData {
   grace_until?: string | null;
 }
 
-export const defaultPlans: BillingConfigResponse = {
-  starter: {
-    id: "starter",
-    limits: {
-      ...PAID_ALLOWANCES.starter,
-      scheduled_posts: null,
-      connected_accounts: 5,
-      seats: 3,
-      workspaces: 3,
-    },
-    name: "Starter",
-    description: "Ideal for founders & creators scaling their personal brand.",
-    trial_days: 0,
-    billing_cycles: {
-      monthly: {
-        amount: 29,
-        price_id: "starter_monthly",
-        currency: "USD",
-        interval: "month",
-      },
-      quarterly: {
-        amount: 24,
-        price_id: "starter_quarterly",
-        currency: "USD",
-        interval: "quarter",
-      },
-      annually: {
-        amount: 19,
-        price_id: "starter_annually",
-        currency: "USD",
-        interval: "year",
-      },
-    },
-  },
-  pro: {
-    id: "pro",
-    limits: {
-      ...PAID_ALLOWANCES.pro,
-      scheduled_posts: null,
-      connected_accounts: 15,
-      seats: 5,
-      workspaces: 5,
-    },
-    name: "Pro",
-    description: "For growth leaders & high-volume teams running campaigns.",
-    popular: true,
-    trial_days: 0,
-    billing_cycles: {
-      monthly: {
-        amount: 59,
-        price_id: "pro_monthly",
-        currency: "USD",
-        interval: "month",
-      },
-      quarterly: {
-        amount: 49,
-        price_id: "pro_quarterly",
-        currency: "USD",
-        interval: "quarter",
-      },
-      annually: {
-        amount: 39,
-        price_id: "pro_annually",
-        currency: "USD",
-        interval: "year",
-      },
-    },
-  },
-  business: {
-    id: "business",
-    limits: {
-      ...PAID_ALLOWANCES.business,
-      scheduled_posts: null,
-      connected_accounts: 50,
-      seats: 15,
-      workspaces: 10,
-    },
-    name: "Business",
-    description:
-      "For agencies managing client workspaces and larger publishing schedules.",
-    trial_days: 0,
-    billing_cycles: {
-      monthly: {
-        amount: 129,
-        price_id: "business_monthly",
-        currency: "USD",
-        interval: "month",
-      },
-      quarterly: {
-        amount: 109,
-        price_id: "business_quarterly",
-        currency: "USD",
-        interval: "quarter",
-      },
-      annually: {
-        amount: 89,
-        price_id: "business_annually",
-        currency: "USD",
-        interval: "year",
-      },
-    },
-  },
-};
+const createCheckout = authedProcedure
+  .input(checkoutInputSchema)
+  .mutation(async ({ input }): Promise<CheckoutResult> => {
+    try {
+      const response = await axios.post<{ checkout_url: string; session_id: string }>(
+        `${getApiBase()}/v1/billing/checkout`,
+        input,
+        { headers: await getAuthHeaders(), timeout: 25_000 },
+      );
+      return { url: response.data.checkout_url, session_id: response.data.session_id };
+    } catch (error) {
+      return handleBackendError(error, "Could not initiate checkout");
+    }
+  });
 
 export const billingRouter = createTRPCRouter({
   /**
    * Retrieves available subscription plans without a trial.
    */
-  getPlans: getUserProcedure.query(async (): Promise<BillingConfigResponse> => {
+  getPlans: baseProcedure.query(async (): Promise<BillingConfigResponse> => {
     try {
       const response = await axios.get<BillingConfigResponse>(
-        `${getApiBase()}/v1/billing/plans`,
+        `${getApiBase()}/v1/billing/plans`, { timeout: 10_000 },
       );
-      if (response.data && Object.keys(response.data).length > 0) {
-        return response.data;
-      }
-    } catch {
-      // Fallback to default configured plans
+
+      
+      if (!response.data?.starter || !response.data?.pro || !response.data?.business)
+        throw new Error("Plans are temporarily unavailable");
+
+
+      console.log(response.data,"leah jaye")
+      return response.data;
+    } catch (error) {
+      return handleBackendError(error, "Could not load pricing. Please try again.");
     }
-    return defaultPlans;
   }),
 
-  /**
-   * Initiates Dodo Payments hosted checkout session without a trial.
-   */
-  Createcheckout: authedProcedure
-    .input(
-      z.object({
-        price_id: z.string().optional(),
-        plan_code: z.string().optional(),
-        seats: z.number().int().min(1).default(1),
-      }),
-    )
-    .mutation(async ({ input }): Promise<CheckoutResult> => {
-      try {
-        // Derive plan_code from price_id if not explicitly provided
-        let planCode = input.plan_code;
-        if (!planCode && input.price_id) {
-          if (input.price_id.startsWith("business")) planCode = "business";
-          else if (input.price_id.startsWith("pro")) planCode = "pro";
-          else planCode = "starter";
-        }
-        planCode = planCode || "starter";
-
-        const response = await axios.post<{
-          checkout_url: string;
-          session_id: string;
-        }>(
-          `${getApiBase()}/v1/billing/checkout`,
-          {
-            plan_code: planCode,
-            price_id: input.price_id,
-            seats: input.seats,
-          },
-          { headers: await getAuthHeaders() },
-        );
-
-        return {
-          url: response.data.checkout_url,
-          session_id: response.data.session_id,
-        };
-      } catch (error) {
-        return handleBackendError(error, "Could not initiate checkout");
-      }
-    }),
-
-  /**
-   * Alias for createCheckout to match standard casing
-   */
-  createCheckout: authedProcedure
-    .input(
-      z.object({
-        price_id: z.string().optional(),
-        plan_code: z.string().optional(),
-        seats: z.number().int().min(1).default(1),
-      }),
-    )
-    .mutation(async ({ input }): Promise<CheckoutResult> => {
-      let planCode = input.plan_code;
-      if (!planCode && input.price_id) {
-        if (input.price_id.startsWith("business")) planCode = "business";
-        else if (input.price_id.startsWith("pro")) planCode = "pro";
-        else planCode = "starter";
-      }
-      planCode = planCode || "starter";
-
-      try {
-        const response = await axios.post<{
-          checkout_url: string;
-          session_id: string;
-        }>(
-          `${getApiBase()}/v1/billing/checkout`,
-          {
-            plan_code: planCode,
-            price_id: input.price_id,
-            seats: input.seats,
-          },
-          { headers: await getAuthHeaders() },
-        );
-
-        return {
-          url: response.data.checkout_url,
-          session_id: response.data.session_id,
-        };
-      } catch (error) {
-        return handleBackendError(error, "Could not initiate checkout");
-      }
-    }),
+  // Keep both procedure names for existing clients; one validated implementation.
+  Createcheckout: createCheckout,
+  createCheckout,
 
   /**
    * Retrieves the current workspace subscription status.

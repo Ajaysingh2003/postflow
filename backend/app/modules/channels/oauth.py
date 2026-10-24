@@ -18,6 +18,14 @@ from app.modules.channels.models import ConnectedAccount, OAuthState
 logger = logging.getLogger(__name__)
 
 
+class OAuthRefreshError(RuntimeError):
+    """Safe refresh failure with HTTP status for retry classification."""
+
+    def __init__(self, platform: str, status_code: int):
+        self.status_code = status_code
+        super().__init__(f"{platform} token refresh failed with HTTP {status_code}")
+
+
 def _get_fernet() -> MultiFernet:
     """Derive a 32-byte URL-safe base64 encryption key from app_secret."""
     settings = get_settings()
@@ -171,6 +179,12 @@ def is_permanent_auth_error(exc: Exception) -> bool:
     if isinstance(exc, (httpx.TimeoutException, httpx.NetworkError, OSError)):
         return False
 
+    status_code = getattr(exc, "status_code", None)
+    if status_code is None and isinstance(exc, httpx.HTTPStatusError):
+        status_code = exc.response.status_code
+    if status_code is not None:
+        return 400 <= status_code < 500 and status_code not in {408, 429}
+
     err_str = str(exc).lower()
     transient_indicators = (
         "name or service not known",
@@ -206,10 +220,6 @@ def is_permanent_auth_error(exc: Exception) -> bool:
     if any(term in err_str for term in auth_indicators):
         return True
 
-    status_code = getattr(exc, "status_code", None)
-    if status_code in (400, 401, 403):
-        return True
-
     return True
 
 
@@ -223,6 +233,8 @@ async def refresh_account_tokens(
     If refresh fails due to permanent auth error, updates account status to 'needs_reauth'.
     Transient network/server errors keep the account status unchanged.
     """
+    if account.status != "active":
+        raise HTTPException(409, "Reconnect this account to restore access")
     try:
         updated_account = await adapter.refresh_tokens(account)
         updated_account.status = "active"
@@ -259,18 +271,12 @@ async def refresh_expiring_accounts(
 ) -> list[ConnectedAccount]:
     """
     Find accounts whose tokens will expire within lookahead_minutes (default 90 min)
-    or active/needs_reauth accounts with a stored refresh token, and proactively refresh them.
+    and proactively refresh them. Accounts needing reauthorization wait for reconnection.
     Accounts failing refresh due to permanent auth errors are marked 'needs_reauth'.
     """
     cutoff = utcnow() + timedelta(minutes=lookahead_minutes)
     stmt = select(ConnectedAccount).where(
-        (
-            (ConnectedAccount.status == "active")
-            | (
-                (ConnectedAccount.status == "needs_reauth")
-                & ConnectedAccount.encrypted_refresh_token.is_not(None)
-            )
-        ),
+        ConnectedAccount.status == "active",
         ConnectedAccount.token_expires_at.is_not(None),
         ConnectedAccount.token_expires_at <= cutoff,
     )

@@ -180,14 +180,7 @@ export const userRouter = createTRPCRouter({
     },
   ),
 
-  me: getUserProcedure.query(async ({ ctx }): Promise<AuthUser | null> => {
-    if (!ctx.user) {
-      return null
-
-    }
-
-    return ctx.user ? ctx.user  as AuthUser: null;
-  }),
+  me: authedProcedure.query(({ ctx }): AuthUser | null => ctx.user),
 
   
   profile: getUserProcedure.query(({ ctx }) => {

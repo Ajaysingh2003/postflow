@@ -1,14 +1,17 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { FeatureItem, PlanConfig } from "@/modules/types";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { useTRPC } from "@/trpc/client";
-import { useMutation } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { checkoutLoginPath, hasPurchasedSubscription, startPlanCheckout } from "../checkout";
 function PlanCard({
   plan,
   timeLine,
@@ -111,30 +114,59 @@ function PlanCardHeader({
 }) {
   const trpc = useTRPC();
   const router = useRouter();
-  const mutate = useMutation(
-    trpc.billing.Createcheckout.mutationOptions({
-      onSuccess(data) {
-        if (data?.url) {
-          window.location.assign(data.url);
-        }
-      },
-      onError(error) {
-        if (
-          error.data?.code === "UNAUTHORIZED" ||
-          error.message?.includes("Authentication required")
-        ) {
-          toast.error("Please sign in to choose a paid plan.");
-          router.push(
-            "/login?redirect=" + encodeURIComponent(window.location.pathname),
-          );
-          return;
-        }
-        toast.error(
-          error.message || "Failed to initiate checkout. Please try again.",
-        );
-      },
-    }),
-  );
+  const queryClient = useQueryClient();
+  const starting = useRef(false);
+  const [checkingSession, setCheckingSession] = useState(false);
+  const mutate = useMutation(trpc.billing.createCheckout.mutationOptions());
+  const portal = useMutation(trpc.billing.portal.mutationOptions());
+  const profile = useQuery(trpc.user.profile.queryOptions());
+  const billing = useQuery({
+    ...trpc.studio.billingUsage.queryOptions({}),
+    enabled: !!profile.data,
+    retry: false,
+    staleTime: 15_000,
+  });
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const actionLabel = hasPurchasedSubscription(billing.data) ? "Upgrade" : "Get started";
+  async function choosePlan() {
+    if (starting.current) return;
+    starting.current = true;
+    setCheckingSession(true);
+    setCheckoutError(null);
+    const returnTo = window.location.pathname + window.location.search + window.location.hash;
+    try {
+      await startPlanCheckout({
+        input: {
+          plan_code: plan.id as "starter" | "pro" | "business",
+          billing_cycle: timeLine,
+        },
+        getUser: () => queryClient.fetchQuery({
+          ...trpc.user.profile.queryOptions(),
+          staleTime: 0,
+          retry: false,
+        }),
+        checkout: (input) => mutate.mutateAsync(input),
+        getBilling: () => queryClient.fetchQuery({
+          ...trpc.studio.billingUsage.queryOptions({}), staleTime: 0, retry: false,
+        }),
+        openPortal: () => portal.mutateAsync(),
+        push: (path) => router.push(path),
+        open: (url) => window.location.assign(url),
+        returnTo,
+      });
+    } catch (error) {
+      if ((error as { data?: { code?: string } }).data?.code === "UNAUTHORIZED") {
+        router.push(checkoutLoginPath(returnTo));
+      } else {
+        const message = error instanceof Error ? error.message : "Could not open checkout. Please try again.";
+        setCheckoutError(message);
+        toast.error(message);
+      }
+    } finally {
+      starting.current = false;
+      setCheckingSession(false);
+    }
+  }
   return (
     <div
       className={cn(
@@ -160,32 +192,21 @@ function PlanCardHeader({
       </p>
 
       <p className="font-bold space-x-2 items-center md:text-3xl lg:text-4xl text-accent">
-        {timeLine != "monthly" &&
-          plan?.billing_cycles?.[timeLine]?.amount > 0 && (
-            <span
-              className={cn(
-                "text-2xl text-stone-500 line-through",
-                popular && "text-white/80",
-              )}
-            >
-              ${plan?.billing_cycles?.["monthly"]?.amount}
-            </span>
-          )}
         <span className={cn(popular && "text-white")}>
           ${plan?.billing_cycles?.[timeLine]?.amount}
+        </span>
+        <span className={cn("text-sm font-normal text-stone-500", popular && "text-white/80")}>
+          / {timeLine === "monthly" ? "month" : timeLine === "quarterly" ? "3 months" : "year"}
         </span>
       </p>
 
       <div className="">
         <Button
-          disabled={mutate.isPending}
-          onClick={() => {
-            const priceId = plan.billing_cycles?.[timeLine]?.price_id;
-            mutate.mutate({
-              price_id: priceId,
-              plan_code: plan.id,
-            });
-          }}
+          type="button"
+          aria-label={`${actionLabel}: ${plan.name} ${timeLine === "quarterly" ? "every 3 months" : timeLine}`}
+          aria-busy={checkingSession || mutate.isPending || portal.isPending}
+          disabled={checkingSession || mutate.isPending || portal.isPending}
+          onClick={choosePlan}
           variant={"outline"}
           className={`rounded-md   w-full capitalize font-semibold  cursor-pointer border px-3 py-1.5 md:py-2 text-xs md:text-sm transition-all duration-200 ${
             popular
@@ -195,8 +216,9 @@ function PlanCardHeader({
              relative
             `}
         >
-          {mutate.isPending ? "Opening checkout…" : "Choose plan"}
+          {mutate.isPending ? "Opening checkout…" : portal.isPending ? "Opening billing…" : checkingSession ? "Checking your plan…" : actionLabel}
         </Button>
+        {checkoutError && <p role="alert" className={cn("mt-2 text-sm text-red-600", popular && "text-red-300")}>{checkoutError}</p>}
       </div>
     </div>
   );

@@ -104,7 +104,7 @@ export default function FinalCta() {
               </Link>
 
               <Link
-                href="/#pricing"
+                href="/pricing"
                 className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/40 bg-white/20 px-6 font-heading text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30 active:scale-[0.98] sm:h-12 sm:w-auto sm:px-7 sm:text-base"
               >
                 See pricing

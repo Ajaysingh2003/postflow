@@ -34,7 +34,7 @@ def paid(code="pro"):
 
 
 @pytest.mark.parametrize(
-    "code,credits,limit", [("starter", 1000, 3), ("pro", 5000, 5), ("business", 8000, 10)]
+    "code,credits,limit", [("starter", 300, 3), ("pro", 2000, 5), ("business", 5000, 10)]
 )
 def test_paid_plan_credits_profile_limits_and_no_trial(client, auth, code, credits, limit):
     paid(code)

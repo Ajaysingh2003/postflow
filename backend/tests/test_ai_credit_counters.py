@@ -162,7 +162,7 @@ def test_bonus_gifts_and_plan_changes_do_not_reset_current_usage(scope):
         )
         db.commit()
         usage = get_plan_limits_summary(db, ws)
-        assert usage["ai_credits"] == {"used": 20, "limit": 1025, "remaining": 1005}
+        assert usage["ai_credits"] == {"used": 20, "limit": 325, "remaining": 305}
         assert as_utc(balance.cycle_end) == as_utc(old_end)
         sub = db.scalar(select(Subscription))
         sub.status = "expired"

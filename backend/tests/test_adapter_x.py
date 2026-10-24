@@ -195,7 +195,8 @@ async def test_refresh_tokens_failure(mock_account):
 
     with pytest.raises(RuntimeError) as exc:
         await adapter.refresh_tokens(mock_account)
-    assert "Refresh token expired" in str(exc.value)
+    assert "HTTP 400" in str(exc.value)
+    assert "Refresh token expired" not in str(exc.value)
 
 
 @pytest.mark.anyio

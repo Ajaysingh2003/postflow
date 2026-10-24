@@ -119,49 +119,7 @@ function PricingPlan({
               {plan.label}
             </motion.span>
 
-            {/* save badge */}
-            {plan.scope !== "monthly" && (
-              <motion.span
-                animate={
-                  isActive
-                    ? {
-                        y: "50%",
-                        scale: 1,
-                      }
-                    : {
-                        y: "50%",
-                        scale: 0.92,
-                      }
-                }
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 24,
-                }}
-                className="
-                  absolute
-                  bottom-0
-                  left-1/2
-                  z-20
-                  -translate-x-1/2
-                  whitespace-nowrap
-                  rounded-3xl
-                  bg-blue-500
-                  px-2
-                  py-0.5
-                  text-center
-                  text-[10px]
-                  font-bold
-                  uppercase
-                  text-white
-                  shadow-sm
-                "
-              >
-                {plan.scope === "quarterly"
-                  ? "Save 10%"
-                  : "Save 20%"}
-              </motion.span>
-            )}
+
           </Button>
         );
       })}

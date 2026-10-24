@@ -341,7 +341,7 @@ def test_backup_is_private_and_failed_dump_does_not_leave_a_partial_file(tmp_pat
         command, env=environment, check=False, capture_output=True, text=True, timeout=10
     )
     assert result.returncode == 0
-    backups = list(backup_dir.glob("*.dump"))
+    backups = list(backup_dir.glob("draftva-*.dump-*"))
     assert len(backups) == 1
     assert backups[0].read_text() == "fixture-backup"
     assert stat.S_IMODE(backups[0].stat().st_mode) == 0o600
@@ -354,4 +354,4 @@ def test_backup_is_private_and_failed_dump_does_not_leave_a_partial_file(tmp_pat
         timeout=10,
     )
     assert result.returncode == 7
-    assert list(backup_dir.glob("*.dump")) == backups
+    assert list(backup_dir.glob("draftva-*.dump-*")) == backups

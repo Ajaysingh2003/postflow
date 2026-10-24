@@ -21,7 +21,7 @@ from app.modules.channels.base import (
     Target,
 )
 from app.modules.channels.models import ConnectedAccount
-from app.modules.channels.oauth import decrypt_token, encrypt_token
+from app.modules.channels.oauth import OAuthRefreshError, decrypt_token, encrypt_token
 from app.modules.channels.support import AdapterHTTP
 
 logger = logging.getLogger(__name__)
@@ -180,7 +180,8 @@ class XAdapter(XManagement):
             except (ValueError, AttributeError):
                 error = None
             client_auth_failed = isinstance(error, str) and error in {
-                "invalid_client", "unauthorized_client"
+                "invalid_client",
+                "unauthorized_client",
             }
             logger.error(
                 "X token exchange failed (HTTP %s, client authentication rejected: %s)",
@@ -287,19 +288,34 @@ class XAdapter(XManagement):
                 await client.aclose()
 
         if resp.status_code != 200:
-            logger.error("X token refresh failed: %s %s", resp.status_code, resp.text)
-            raise RuntimeError(f"X token refresh failed with HTTP {resp.status_code}: {resp.text}")
+            logger.warning("X token refresh rejected with HTTP %s", resp.status_code)
+            raise OAuthRefreshError("X", resp.status_code)
 
-        token_data = resp.json()
-        new_access = token_data.get("access_token")
-        new_refresh = token_data.get("refresh_token") or raw_refresh
-        expires_in = token_data.get("expires_in", 7200)
+        try:
+            token_data = resp.json()
+            new_access = token_data["access_token"]
+            new_refresh = token_data.get("refresh_token", raw_refresh)
+            expires_in = int(token_data.get("expires_in", 7200))
+            scopes = token_data.get("scope")
+            if (
+                not isinstance(new_access, str)
+                or not new_access.strip()
+                or not isinstance(new_refresh, str)
+                or not new_refresh.strip()
+                or expires_in <= 0
+                or (scopes is not None and not isinstance(scopes, str))
+            ):
+                raise ValueError("Invalid token response")
+            expiry = datetime.now(UTC) + timedelta(seconds=expires_in)
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as exc:
+            # Preserve existing credentials on malformed upstream responses.
+            raise OAuthRefreshError("X", 502) from exc
 
         account.encrypted_access_token = encrypt_token(new_access)
         account.encrypted_refresh_token = encrypt_token(new_refresh)
-        account.token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
-        if "scope" in token_data:
-            account.granted_scopes = token_data["scope"].split()
+        account.token_expires_at = expiry
+        if scopes is not None:
+            account.granted_scopes = scopes.split()
         account.status = "active"
         return account
 

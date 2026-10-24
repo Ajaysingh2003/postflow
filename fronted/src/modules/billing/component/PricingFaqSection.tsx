@@ -28,7 +28,7 @@ const FAQS: FaqItem[] = [
   {
     question: "Can I switch billing cycles or cancel at any time?",
     answer:
-      "Yes, completely self-serve. You can switch between monthly, quarterly, and annual billing at any time from your settings. When upgrading or switching to annual billing to save up to 35%, your existing balance is automatically prorated. You can cancel with zero hassle in 1 click.",
+      "Monthly, every-six-months, and annual billing are available. Existing subscribers can open billing management from Settings or the Upgrade button. Available changes, charges, and cancellation terms are shown by Dodo before you confirm.",
   },
   {
     question: "Are my social media accounts protected from bans or shadowbans?",

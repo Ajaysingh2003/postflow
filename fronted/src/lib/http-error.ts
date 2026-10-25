@@ -24,7 +24,7 @@ export const getApiBase = (): string => {
   let base = (
     process.env.BASE_API ||
     process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:18000"
+    "https://api.draftva.com"
   )
     .trim()
     .replace(/\/+$/, "");

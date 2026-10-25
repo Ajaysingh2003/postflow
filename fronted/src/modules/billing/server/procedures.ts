@@ -49,6 +49,8 @@ export const billingRouter = createTRPCRouter({
    */
   getPlans: baseProcedure.query(async (): Promise<BillingConfigResponse> => {
     try {
+
+      console.log(process.env.BASE_API,'ajaysingh03')
       const response = await axios.get<BillingConfigResponse>(
         `${getApiBase()}/v1/billing/plans`,
         { timeout: 15_000 },

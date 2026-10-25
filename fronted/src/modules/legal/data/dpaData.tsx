@@ -135,7 +135,7 @@ export const DPA_SECTIONS: LegalSection[] = [
           Upon termination of your subscription or written request, Draftva shall delete or return all Customer Personal Data in its possession, unless retention is mandated by applicable statutory law. Deletion from backup archives occurs in the normal course of backup rotation within 30 days.
         </p>
         <div className="rounded-xl border border-neutral-200/80 bg-white p-5 shadow-2xs">
-          <h5 className="font-heading font-semibold text-neutral-900">DPA Inquiries & Execution</h5>
+          <h3 className="font-heading font-semibold text-neutral-900">DPA Inquiries & Execution</h3>
           <p className="mt-1 text-sm text-neutral-600">
             For countersigned copies of this DPA or enterprise security questions:<br />
             Email: <a href="mailto:dpa@draftva.com" className="text-[#0f7a47] font-semibold">dpa@draftva.com</a>

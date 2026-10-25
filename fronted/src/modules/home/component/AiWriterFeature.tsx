@@ -4,11 +4,8 @@ import React, { useState } from "react";
 import {
   Sparkles,
   Wand2,
-  Check,
   RefreshCw,
   MessageSquareText,
-  Send,
-  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +33,9 @@ export default function AiWriterFeature() {
   const [isApplied, setIsApplied] = useState(false);
 
   // Card 3 State: Brand Voice tone switcher
-  const [activeVoice, setActiveVoice] = useState<"founder" | "concise" | "technical">("founder");
+  const [activeVoice, setActiveVoice] = useState<
+    "founder" | "concise" | "technical"
+  >("founder");
 
   return (
     <section className="mx-auto w-full max-w-7xl  py-16   lg:py-24">
@@ -58,13 +57,13 @@ export default function AiWriterFeature() {
 
         <p className="mt-4 text-base leading-relaxed text-[#6d7066] sm:text-lg">
           Stop staring at a blank cursor. Draftva’s AI editor fixes grammar,
-          expands raw notes into viral threads, and matches your personal brand voice.
+          expands raw notes into viral threads, and matches your personal brand
+          voice.
         </p>
       </div>
 
       {/* 3-Column Architectural Grid */}
       <div className="mt-12 grid grid-cols-1 divide-y divide-black/[0.07] overflow-hidden rounded-3xl border border-black/[0.08] bg-white shadow-[0_24px_60px_-20px_rgba(17,18,14,0.07)] lg:mt-16 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-        
         {/* =====================================================================
             CARD 01: FIX TYPOS & SHARPEN HOOKS (Inline Popover from Screenshot 1)
         ===================================================================== */}
@@ -83,8 +82,8 @@ export default function AiWriterFeature() {
               Fix typos & sharpen hooks
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-[#6d7066]">
-              Highlight any sentence to instantly clean up spelling, fix awkward phrasing,
-              and keep your post punchy for X and LinkedIn[cite: 6].
+              Highlight any sentence to instantly clean up spelling, fix awkward
+              phrasing, and keep your post punchy for X and LinkedIn.
             </p>
           </div>
 
@@ -96,7 +95,9 @@ export default function AiWriterFeature() {
                   <Wand2 className="size-3.5 text-[#0f7a47]" />
                   <span>Improve writing</span>
                 </div>
-                <span className="font-subheading text-[10px] text-[#85887e]">44 / 280</span>
+                <span className="font-subheading text-[10px] text-[#85887e]">
+                  44 / 280
+                </span>
               </div>
 
               {/* Text box with diff preview */}
@@ -107,7 +108,9 @@ export default function AiWriterFeature() {
                       {polishedTexts[altVersion]}
                     </span>
                   ) : (
-                    <span className="text-[#6d7066]">career update i am joining palantir techlogy</span>
+                    <span className="text-[#6d7066]">
+                      career update i am joining palantir techlogy
+                    </span>
                   )}
                 </p>
               </div>
@@ -132,7 +135,9 @@ export default function AiWriterFeature() {
                   onClick={handleRetry}
                   className="secondary-btn font-subheading flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium"
                 >
-                  <RefreshCw className={cn("size-3", isRetrying && "animate-spin")} />
+                  <RefreshCw
+                    className={cn("size-3", isRetrying && "animate-spin")}
+                  />
                   Retry
                 </button>
               </div>
@@ -159,8 +164,8 @@ export default function AiWriterFeature() {
               Turn raw notes into full threads
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-[#6d7066]">
-              Ask the AI assistant to expand messy bullet points into multi-tweet
-              threads, professional carousels, or engaging hooks[cite: 7].
+              Ask the AI assistant to expand messy bullet points into
+              multi-tweet threads, professional carousels, or engaging hooks.
             </p>
           </div>
 
@@ -181,7 +186,7 @@ export default function AiWriterFeature() {
                 <p className="text-xs leading-relaxed text-[#11120e]">
                   {isApplied
                     ? "✓ Draft applied to your main editor. Ready to schedule!"
-                    : "Career update: I'm joining Palantir Technologies. Excited to get to work on mission-critical systems[cite: 7]."}
+                    : "Career update: I'm joining Palantir Technologies. Excited to get to work on mission-critical systems."}
                 </p>
               </div>
 
@@ -225,7 +230,8 @@ export default function AiWriterFeature() {
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-[#6d7066]">
               Draftva analyzes your past posts to learn your exact cadence,
-              vocabulary, and formatting rules so it never sounds like generic AI.
+              vocabulary, and formatting rules so it never sounds like generic
+              AI.
             </p>
           </div>
 
@@ -246,7 +252,9 @@ export default function AiWriterFeature() {
                     type="button"
                     onClick={() => setActiveVoice(voice.id)}
                     className={cn(
-                      activeVoice === voice.id ? "primary-btn" : "secondary-btn",
+                      activeVoice === voice.id
+                        ? "primary-btn"
+                        : "secondary-btn",
                       "font-subheading rounded-xl py-1.5 text-center text-xs font-medium transition-all",
                     )}
                   >
@@ -260,15 +268,17 @@ export default function AiWriterFeature() {
                   Active Persona Output
                 </span>
                 <p className="mt-1 text-xs italic leading-normal text-[#11120e]">
-                  {activeVoice === "founder" && `"We spent 6 months rebuilding our backend. Here's what we learned about scaling microservices..."`}
-                  {activeVoice === "concise" && `"Shipped v2.4 today. Faster queries, zero downtime."`}
-                  {activeVoice === "technical" && `"Configured Go Gin microservices with Redis Pub/Sub for sub-10ms trading event streams."`}
+                  {activeVoice === "founder" &&
+                    `"We spent 6 months rebuilding our backend. Here's what we learned about scaling microservices..."`}
+                  {activeVoice === "concise" &&
+                    `"Shipped v2.4 today. Faster queries, zero downtime."`}
+                  {activeVoice === "technical" &&
+                    `"Configured Go Gin microservices with Redis Pub/Sub for sub-10ms trading event streams."`}
                 </p>
               </div>
             </div>
           </div>
         </div>
-
       </div>
     </section>
   );

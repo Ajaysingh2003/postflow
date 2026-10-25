@@ -13,25 +13,25 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
           <div className="rounded-xl border border-black/[0.06] bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">Official OAuth Only</h5>
+            <h3 className="font-heading font-semibold text-neutral-900">Official OAuth Only</h3>
             <p className="mt-1 text-xs text-neutral-600">
               We never ask for or store your social network passwords. Every channel connects strictly via official OAuth 2.0 / PKCE authentication.
             </p>
           </div>
           <div className="rounded-xl border border-black/[0.06] bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">Encrypted At Rest</h5>
+            <h3 className="font-heading font-semibold text-neutral-900">Encrypted At Rest</h3>
             <p className="mt-1 text-xs text-neutral-600">
               Access and refresh tokens are encrypted at rest using AES-256 and only decrypted momentarily during active publication.
             </p>
           </div>
           <div className="rounded-xl border border-black/[0.06] bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">Zero-Training AI Guarantee</h5>
+            <h3 className="font-heading font-semibold text-neutral-900">Zero-Training AI Guarantee</h3>
             <p className="mt-1 text-xs text-neutral-600">
               Your private drafts, notes, and custom voice samples are never used to train public machine learning or foundation models.
             </p>
           </div>
           <div className="rounded-xl border border-black/[0.06] bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">No Data Selling</h5>
+            <h3 className="font-heading font-semibold text-neutral-900">No Data Selling</h3>
             <p className="mt-1 text-xs text-neutral-600">
               We do not sell, rent, monetize, or trade your personal information or content to data brokers or advertising networks.
             </p>
@@ -48,16 +48,16 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       <div className="space-y-4">
         <p>We collect information in three ways: information you provide directly, information collected automatically, and information received via authorized third-party OAuth flows.</p>
         
-        <h4 className="font-heading text-lg font-semibold text-neutral-900 mt-4">1. Information You Provide Directly</h4>
+        <h3 className="font-heading text-lg font-semibold text-neutral-900 mt-4">1. Information You Provide Directly</h3>
         <ul className="list-disc pl-6 space-y-1.5 text-neutral-700 text-sm">
           <li><strong>Account Details:</strong> Full name, email address, password hash, and profile details.</li>
           <li><strong>Workspace Information:</strong> Workspace name, team member invitations, role designations.</li>
           <li><strong>User Content:</strong> Text posts, thread structures, drafts, notes, uploaded images, video assets, alt text, and custom voice profile samples.</li>
-          <li><strong>Billing Information:</strong> Payment card details and billing address (collected and tokenized directly by Stripe; Draftva never stores full credit card numbers).</li>
+          <li><strong>Billing Information:</strong> Payment card details and billing address (collected and tokenized directly by dodopayment; Draftva never stores full credit card numbers).</li>
           <li><strong>Support Communications:</strong> Messages, feedback, inquiries, or bug reports submitted to our team.</li>
         </ul>
 
-        <h4 className="font-heading text-lg font-semibold text-neutral-900 mt-4">2. Information Received From Connected Channels (OAuth)</h4>
+        <h3 className="font-heading text-lg font-semibold text-neutral-900 mt-4">2. Information Received From Connected Channels (OAuth)</h3>
         <p className="text-sm text-neutral-700">
           When you connect a social account (X, LinkedIn, Reddit, Bluesky, Mastodon, Facebook, Instagram, Threads), we receive authorized profile data from that provider:
         </p>
@@ -68,7 +68,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
           <li>Post metrics fetched on your behalf (views, likes, reposts, comments, impressions) to display in your analytics dashboard.</li>
         </ul>
 
-        <h4 className="font-heading text-lg font-semibold text-neutral-900 mt-4">3. Information Collected Automatically</h4>
+        <h3 className="font-heading text-lg font-semibold text-neutral-900 mt-4">3. Information Collected Automatically</h3>
         <ul className="list-disc pl-6 space-y-1.5 text-neutral-700 text-sm">
           <li><strong>Log & Usage Data:</strong> IP address, browser type, device information, operating system, time stamps, referrers, and pages visited.</li>
           <li><strong>Cookies & Session Tokens:</strong> Strictly necessary authentication tokens and functional preferences (see our Cookie Policy).</li>
@@ -142,7 +142,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     content: (
       <div className="space-y-4">
         <div className="rounded-xl border border-neutral-200/80 bg-white p-5 shadow-2xs space-y-3">
-          <h5 className="font-heading font-semibold text-neutral-900 text-base">Enterprise AI Privacy Protections</h5>
+          <h3 className="font-heading font-semibold text-neutral-900 text-base">Enterprise AI Privacy Protections</h3>
           <p className="text-sm text-neutral-700">
             When you use Draftva&apos;s AI writing assistant, your prompt and context are processed by enterprise LLM infrastructure (e.g., Anthropic Claude, OpenAI, Google Vertex AI).
           </p>
@@ -174,7 +174,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
           <div className="p-3.5 rounded-lg border border-neutral-200/80 bg-neutral-50/50">
             <span className="font-semibold text-neutral-900">Trusted Sub-processors:</span>
             <p className="text-neutral-600 text-xs mt-0.5">
-              We work with verified service providers for hosting (AWS / GCP), database management, billing (Stripe), email delivery (Resend), and monitoring. See our <a href="/subprocessors" className="text-[#0f7a47] font-semibold underline underline-offset-2">Sub-processors Directory</a>.
+              We work with verified service providers for hosting (AWS / GCP), database management, billing (dodopayment), email delivery (Resend), and monitoring. See our <a href="/subprocessors" className="text-[#0f7a47] font-semibold underline underline-offset-2">Sub-processors Directory</a>.
             </p>
           </div>
           <div className="p-3.5 rounded-lg border border-neutral-200/80 bg-neutral-50/50">
@@ -292,7 +292,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
           If you have questions, feedback, or requests regarding this Privacy Policy or our data practices, please reach out to our designated Data Protection Officer:
         </p>
         <div className="rounded-xl border border-neutral-200/80 bg-white p-5 shadow-2xs">
-          <h5 className="font-heading font-semibold text-neutral-900">Draftva Privacy Office</h5>
+          <h3 className="font-heading font-semibold text-neutral-900">Draftva Privacy Office</h3>
           <p className="mt-1 text-sm text-neutral-600">
             Draftva Inc.<br />
             Attn: Data Protection Officer<br />

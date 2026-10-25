@@ -5,7 +5,6 @@ import { Check, ShieldCheck } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 
 import CtaSection from "./CtaSection";
-import VideoInfraIllustration from "./VideoInfraIllustration";
 import CompanyProof from "./CompanyProof";
 
 /* -------------------------------------------------------------------------- */
@@ -37,15 +36,7 @@ function BlurWord({
 }: BlurWordProps) {
   return (
     <motion.span
-      initial={
-        reducedMotion
-          ? false
-          : {
-              opacity: 0,
-              y: 18,
-              filter: "blur(12px)",
-            }
-      }
+      initial={false}
       animate={{
         opacity: 1,
         y: 0,
@@ -102,6 +93,7 @@ function BlurText({
 }
 
 interface FadeBlurProps {
+  visibleOnServer?: boolean;
   children: React.ReactNode;
   delay?: number;
   duration?: number;
@@ -112,6 +104,7 @@ interface FadeBlurProps {
 }
 
 function FadeBlur({
+  visibleOnServer = false,
   children,
   delay = 0,
   duration = 0.8,
@@ -123,7 +116,7 @@ function FadeBlur({
   return (
     <motion.div
       initial={
-        reducedMotion
+        visibleOnServer || reducedMotion
           ? false
           : {
               opacity: 0,
@@ -148,7 +141,13 @@ function FadeBlur({
   );
 }
 
-export default function TopHeader({ header ,description }: { header: React.ReactNode ,description:string}) {
+export default function TopHeader({
+  header,
+  description,
+}: {
+  header: React.ReactNode;
+  description: string;
+}) {
   const reducedMotion = useReducedMotion() === true;
 
   return (
@@ -178,8 +177,6 @@ export default function TopHeader({ header ,description }: { header: React.React
 
         {/* Left curved lines */}
 
-        
-
         {/* Bottom fade */}
 
         {/* <div
@@ -199,6 +196,7 @@ export default function TopHeader({ header ,description }: { header: React.React
         <div className="pt-16 sm:pt-20 lg:pt-[118px]">
           <div className="max-w-[930px]">
             <FadeBlur
+              visibleOnServer
               delay={0.68}
               duration={1}
               y={18}
@@ -208,6 +206,7 @@ export default function TopHeader({ header ,description }: { header: React.React
               {header}
             </FadeBlur>
             <FadeBlur
+              visibleOnServer
               delay={0.68}
               duration={1}
               y={18}
@@ -286,8 +285,10 @@ export default function TopHeader({ header ,description }: { header: React.React
 
                 {/* Trust signal */}
 
-                <div className="flex text-[16px]
-                      sm:text-[16px] items-center gap-1.5">
+                <div
+                  className="flex text-[16px]
+                      sm:text-[16px] items-center gap-1.5"
+                >
                   <ShieldCheck className="size-3.5 shrink-0 text-[#7d9c1a]" />
 
                   <span>No credit card required</span>
@@ -397,7 +398,7 @@ export function HeroHeading({
   firstLine,
   lastLine,
 }: {
-  noColorText?:string;
+  noColorText?: string;
   firstLine: string;
   lastLine: string;
 }) {
@@ -419,18 +420,15 @@ export function HeroHeading({
               "
     >
       {/* First line */}
-
       <BlurWord
         delay={0.05}
         duration={0.85}
         reducedMotion={reducedMotion}
         className="mr-3 sm:mr-4"
       >
-        {noColorText}
+        {noColorText}{" "}
       </BlurWord>
-
       {/* AI-powered highlighted text */}
-
       <span className="relative isolate inline-block whitespace-nowrap">
         <BlurWord
           delay={0.13}
@@ -474,12 +472,9 @@ export function HeroHeading({
                     sm:-inset-x-3
                   "
         />
-      </span>
-
+      </span>{" "}
       <br />
-
       {/* Second line */}
-
       <BlurText
         text={lastLine}
         delay={0.2}

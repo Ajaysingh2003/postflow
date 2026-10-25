@@ -1,3 +1,4 @@
+import { PRIVATE_METADATA } from "@/lib/seo/config";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -15,3 +16,5 @@ export default async function AccountLayout({
   if (!user.email_verified) redirect(verificationPath(user.email));
   return children;
 }
+
+export const metadata = PRIVATE_METADATA;

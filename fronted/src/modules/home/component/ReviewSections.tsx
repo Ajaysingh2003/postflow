@@ -1,11 +1,11 @@
+// TODO: Verify testimonial attribution, statistics and consent before replacing placeholder portraits.
 import React from "react";
 import { ReviewCard } from "./ReviewCard";
 
 const REVIEWS = [
   {
     id: "review-1",
-    photo:
-      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces&auto=format&q=80",
+    photo: "/images/placeholders/home-testimonial-portrait.png",
     name: "Jack Qi",
     role: "Co-Founder, Edcafe",
     review: (
@@ -24,8 +24,7 @@ const REVIEWS = [
   },
   {
     id: "review-2",
-    photo:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop&crop=faces&auto=format&q=80",
+    photo: "/images/placeholders/home-testimonial-portrait.png",
     name: "Marcus Vance",
     role: "Founder, HyperCourse",
     review: (
@@ -47,7 +46,10 @@ const REVIEWS = [
 
 export default function ReviewSection() {
   return (
-    <section className="mx-auto w-full max-w-6xl py-4  sm:py-6  lg:py-8">
+    <section
+      id="testimonials"
+      className="mx-auto w-full max-w-6xl py-4  sm:py-6  lg:py-8"
+    >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         {REVIEWS.map(({ id, photo, review, name, role }) => (
           <ReviewCard

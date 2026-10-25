@@ -1,4 +1,5 @@
 "use client";
+// TODO(launch-content): Owner must verify existing endorsements, product and compliance claims; do not reuse them in structured data.
 
 import React from "react";
 import {
@@ -59,9 +60,9 @@ export default function PricingGuarantee() {
               aria-hidden="true"
               className="size-2 rounded-full bg-[#3fda8a]"
             />
-            <span className="font-subheading text-xs font-semibold text-[#11120e]">
+            <h2 className="font-subheading text-xs font-semibold text-[#11120e]">
               Risk-Free Billing & Account Safety
-            </span>
+            </h2>
           </div>
           <span className="font-subheading text-[11px] text-[#85887e]">
             Official platform partner · Zero shadowban risk
@@ -89,9 +90,9 @@ export default function PricingGuarantee() {
                   </div>
 
                   {/* Title */}
-                  <h4 className="font-heading mt-4 text-[15px] font-semibold tracking-tight text-[#11120e]">
+                  <h3 className="font-heading mt-4 text-[15px] font-semibold tracking-tight text-[#11120e]">
                     {item.title}
-                  </h4>
+                  </h3>
 
                   {/* Body (No font utility class per your design rules) */}
                   <p className="mt-1.5 text-xs leading-relaxed text-[#6d7066]">

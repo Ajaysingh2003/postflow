@@ -13,7 +13,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const hand = Caveat({ subsets: ["latin"], weight: ["500"] });
+const hand = Caveat({
+  subsets: ["latin"],
+  weight: ["500"],
+  display: "swap",
+  preload: false,
+});
 
 interface FeatureItem {
   id: string;
@@ -27,7 +32,12 @@ const items: FeatureItem[] = [
   { id: "channels", label: "Channels", image: "channels.png", icon: Share2 },
   { id: "content", label: "Content", image: "content.png", icon: FileText },
   { id: "schedule", label: "Schedule", image: "schedule.png", icon: Calendar },
-  { id: "analytics", label: "Analytics", image: "analytics.png", icon: BarChart3 },
+  {
+    id: "analytics",
+    label: "Analytics",
+    image: "analytics.png",
+    icon: BarChart3,
+  },
 ];
 
 export default function VideoInfraIllustration({
@@ -35,7 +45,9 @@ export default function VideoInfraIllustration({
 }: {
   currentActive?: number;
 }) {
-  const [active, setActive] = useState<FeatureItem>(items[currentActive] ?? items[0]);
+  const [active, setActive] = useState<FeatureItem>(
+    items[currentActive] ?? items[0],
+  );
 
   return (
     <section className="relative mx-auto w-full max-w-7xl px-0 py-4 sm:px-2 sm:py-8">
@@ -44,13 +56,13 @@ export default function VideoInfraIllustration({
         <div className="relative aspect-[16/10] sm:aspect-[18/10] w-full">
           <Image
             key={active.image}
-            src={`/dashboard/${active.image}`}
-            alt={`${active.label} dashboard preview`}
-            fill
+            src={`/images/product/${active.id}-dashboard-preview.png`}
+            alt={`Draftva ${active.label.toLowerCase()} dashboard for social writing and scheduling`}
+            width={1280}
+            height={800}
             priority
             sizes="(max-width: 1280px) 100vw, 1280px"
-            className="object-cover object-left"
-            unoptimized
+            className="absolute inset-0 h-full w-full object-cover object-left"
           />
         </div>
 
@@ -113,7 +125,12 @@ export default function VideoInfraIllustration({
           <path d="M44 36C22 36 8 28 6 6" />
           <path d="M1 12L6 5L12 11" />
         </svg>
-        <span className={cn(hand.className, "pt-2.5 text-lg leading-none text-[#85887e] sm:pt-4 sm:text-xl")}>
+        <span
+          className={cn(
+            hand.className,
+            "pt-2.5 text-lg leading-none text-[#85887e] sm:pt-4 sm:text-xl",
+          )}
+        >
           tap to switch between our core features
         </span>
       </div>

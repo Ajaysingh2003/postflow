@@ -5,13 +5,21 @@ import PricingPlan from "./PricingPlan";
 import PricingCardSection from "./PricingCardSection";
 import { PricingCatalogBoundary } from "./PricingCatalogBoundary";
 
-function PricingSection() {
+function PricingSection({
+  headingLevel = "h2",
+}: {
+  headingLevel?: "h1" | "h2";
+}) {
+  const Heading = headingLevel;
   const [timeLine, setTimeLine] = useState<
     "monthly" | "quarterly" | "annually"
   >("monthly");
 
   return (
-    <section className="relative w-full py-16 sm:py-24 selection:bg-[#B3E61D]/30">
+    <section
+      id="pricing"
+      className="relative w-full py-16 sm:py-24 selection:bg-[#B3E61D]/30"
+    >
       <div className="mx-auto max-w-7xl ">
         {/* ── Typography Header Block ── */}
         <div className="flex flex-col items-center text-center max-w-3xl mx-auto mb-10 sm:mb-14">
@@ -24,7 +32,7 @@ function PricingSection() {
             </span>
           </div>
 
-          <h2 className="mt-4 font-heading text-3xl sm:text-5xl lg:text-[36px] font-bold tracking-[-0.04em] text-[#11120e] leading-[1.08]">
+          <Heading className="mt-4 font-heading text-3xl sm:text-5xl lg:text-[36px] font-bold tracking-[-0.04em] text-[#11120e] leading-[1.08]">
             Transparent pricing for{" "}
             <span className="relative inline-block whitespace-nowrap">
               <span className="relative z-10 bg-[#98f9ae3c] text-[#11120e]">
@@ -35,7 +43,7 @@ function PricingSection() {
                 className="absolute -inset-x-1.5 bottom-1 top-2 -z-0 rounded-[5px] bg-[#e7f6b8]"
               />
             </span>
-          </h2>
+          </Heading>
 
           <p className="mt-4 font-subheading text-sm sm:text-base text-neutral-600 max-w-xl leading-relaxed tracking-normal">
             Plan your content, publish across channels, and shape your voice
@@ -53,6 +61,9 @@ function PricingSection() {
         </div>
 
         {/* ── Pricing Cards Grid ── */}
+        {headingLevel === "h1" && (
+          <h2 className="sr-only">Available Draftva plans</h2>
+        )}
         <div className="w-full h-full px-4 md:px-0">
           <PricingCatalogBoundary>
             <PricingCardSection timeLine={timeLine} />

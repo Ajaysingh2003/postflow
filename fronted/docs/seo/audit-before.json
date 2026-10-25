@@ -1,0 +1,3391 @@
+[
+  {
+    "route": "/forgot-password",
+    "status": 200,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex, nofollow, noarchive, nosnippet",
+    "issues": [
+      "missing canonical",
+      "H1 count !=1",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        2,
+        "Reset your password"
+      ]
+    ],
+    "images": [],
+    "links": [
+      "/login"
+    ],
+    "ids": [
+      "forgot-email",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(auth)/forgot-password/page.tsx"
+  },
+  {
+    "route": "/invitations/accept",
+    "status": 200,
+    "redirect": null,
+    "title": "Accept invitation \u00b7 Draftva",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [
+      "Invitation unavailable"
+    ],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex, nofollow",
+    "issues": [
+      "missing canonical",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Invitation unavailable"
+      ]
+    ],
+    "images": [],
+    "links": [
+      "/",
+      "/dashboard"
+    ],
+    "ids": [
+      "B:0",
+      "_R_",
+      "S:0"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(auth)/invitations/accept/page.tsx"
+  },
+  {
+    "route": "/login",
+    "status": 200,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [
+      "Sign in to Draftva"
+    ],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex, nofollow, noarchive, nosnippet",
+    "issues": [
+      "missing canonical",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Sign in to Draftva"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "aria-hidden": "true",
+        "loading": "lazy",
+        "width": "20",
+        "height": "20",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-5 shrink-0 object-contain",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Fgoogle.png&w=32&q=75 1x, /_next/image?url=%2Fgoogle.png&w=48&q=75 2x",
+        "src": "/_next/image?url=%2Fgoogle.png&w=48&q=75"
+      }
+    ],
+    "links": [
+      "/register?next=%2Fdashboard",
+      "/api/auth/x/start?next=%2Fdashboard&return_to=%2Flogin",
+      "/forgot-password"
+    ],
+    "ids": [
+      "B:0",
+      "_R_",
+      "S:0",
+      "login-email",
+      "login-password"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(auth)/login/page.tsx"
+  },
+  {
+    "route": "/register",
+    "status": 200,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [
+      "Create your Draftva account"
+    ],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex, nofollow, noarchive, nosnippet",
+    "issues": [
+      "missing canonical",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Create your Draftva account"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "aria-hidden": "true",
+        "loading": "lazy",
+        "width": "20",
+        "height": "20",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-5 shrink-0 object-contain",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Fgoogle.png&w=32&q=75 1x, /_next/image?url=%2Fgoogle.png&w=48&q=75 2x",
+        "src": "/_next/image?url=%2Fgoogle.png&w=48&q=75"
+      }
+    ],
+    "links": [
+      "/login?next=%2Fdashboard",
+      "/api/auth/x/start?next=%2Fdashboard&return_to=%2Fregister",
+      "/login?next=%2Fdashboard"
+    ],
+    "ids": [
+      "B:0",
+      "_R_",
+      "S:0",
+      "register-name",
+      "register-email",
+      "register-password"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(auth)/register/page.tsx"
+  },
+  {
+    "route": "/reset-password",
+    "status": 200,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex, nofollow, noarchive, nosnippet",
+    "issues": [
+      "missing canonical",
+      "H1 count !=1",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        2,
+        "Set new password"
+      ]
+    ],
+    "images": [],
+    "links": [
+      "/forgot-password",
+      "/login"
+    ],
+    "ids": [
+      "B:0",
+      "_R_",
+      "S:0"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(auth)/reset-password/page.tsx"
+  },
+  {
+    "route": "/verify-email",
+    "status": 200,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex, nofollow, noarchive, nosnippet",
+    "issues": [
+      "missing canonical",
+      "H1 count !=1",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        2,
+        "Verify your email"
+      ]
+    ],
+    "images": [],
+    "links": [],
+    "ids": [
+      "B:0",
+      "_R_",
+      "S:0",
+      "verification-email",
+      "verification-token"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(auth)/verify-email/page.tsx"
+  },
+  {
+    "route": "/verify-otp",
+    "status": 200,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex, nofollow, noarchive, nosnippet",
+    "issues": [
+      "missing canonical",
+      "H1 count !=1",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        2,
+        "Verify your email"
+      ]
+    ],
+    "images": [],
+    "links": [],
+    "ids": [
+      "B:0",
+      "_R_",
+      "S:0",
+      "verification-email",
+      "verification-token"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(auth)/verify-otp/page.tsx"
+  },
+  {
+    "route": "/product/schedule",
+    "status": 500,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(home)/[product]/[schedule]/page.tsx"
+  },
+  {
+    "route": "/product/ai-writer",
+    "status": 500,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(home)/[product]/ai-writer/page.tsx"
+  },
+  {
+    "route": "/product/analytics",
+    "status": 500,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(home)/[product]/analytics/page.tsx"
+  },
+  {
+    "route": "/product/mcp",
+    "status": 500,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(home)/[product]/mcp/page.tsx"
+  },
+  {
+    "route": "/product/social-integration",
+    "status": 500,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(home)/[product]/social-integration/page.tsx"
+  },
+  {
+    "route": "/about",
+    "status": 200,
+    "redirect": null,
+    "title": "About Draftva | Independent, small, simple",
+    "description": "Meet the person behind Draftva and the ideas shaping a simpler way to write, schedule, and publish across social channels.",
+    "h1": [
+      "Built small, on purpose."
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical"
+    ],
+    "headings": [
+      [
+        1,
+        "Built small, on purpose."
+      ],
+      [
+        2,
+        "Why we built Draftva"
+      ],
+      [
+        3,
+        "Capture the spark"
+      ],
+      [
+        3,
+        "Shape in your voice"
+      ],
+      [
+        3,
+        "Tailor & schedule"
+      ],
+      [
+        2,
+        "What matters here"
+      ],
+      [
+        3,
+        "Your voice comes first."
+      ],
+      [
+        3,
+        "Less switching. More creating."
+      ],
+      [
+        3,
+        "Make the everyday feel simple."
+      ],
+      [
+        2,
+        "Write once. Show up everywhere."
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      },
+      {
+        "alt": "Illustrated portrait of Ajay Singh",
+        "loading": "lazy",
+        "decoding": "async",
+        "data-nimg": "fill",
+        "class": "object-cover transition-transform duration-500 hover:scale-[1.02]",
+        "style": "position:absolute;height:100%;width:100%;left:0;top:0;right:0;bottom:0;color:transparent",
+        "sizes": "260px",
+        "srcset": "/_next/image?url=%2Ffounder.png&w=32&q=75 32w, /_next/image?url=%2Ffounder.png&w=48&q=75 48w, /_next/image?url=%2Ffounder.png&w=64&q=75 64w, /_next/image?url=%2Ffounder.png&w=96&q=75 96w, /_next/image?url=%2Ffounder.png&w=128&q=75 128w, /_next/image?url=%2Ffounder.png&w=256&q=75 256w, /_next/image?url=%2Ffounder.png&w=384&q=75 384w, /_next/image?url=%2Ffounder.png&w=640&q=75 640w, /_next/image?url=%2Ffounder.png&w=750&q=75 750w, /_next/image?url=%2Ffounder.png&w=828&q=75 828w, /_next/image?url=%2Ffounder.png&w=1080&q=75 1080w, /_next/image?url=%2Ffounder.png&w=1200&q=75 1200w, /_next/image?url=%2Ffounder.png&w=1920&q=75 1920w, /_next/image?url=%2Ffounder.png&w=2048&q=75 2048w, /_next/image?url=%2Ffounder.png&w=3840&q=75 3840w",
+        "src": "/_next/image?url=%2Ffounder.png&w=3840&q=75"
+      },
+      {
+        "alt": "banner",
+        "loading": "lazy",
+        "width": "1280",
+        "height": "400",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "object-cover",
+        "style": "color:transparent",
+        "sizes": "(max-width: 1280px) 100vw, 1280px",
+        "srcset": "/_next/image?url=%2Ffooter_banner_2.png&w=640&q=75 640w, /_next/image?url=%2Ffooter_banner_2.png&w=750&q=75 750w, /_next/image?url=%2Ffooter_banner_2.png&w=828&q=75 828w, /_next/image?url=%2Ffooter_banner_2.png&w=1080&q=75 1080w, /_next/image?url=%2Ffooter_banner_2.png&w=1200&q=75 1200w, /_next/image?url=%2Ffooter_banner_2.png&w=1920&q=75 1920w, /_next/image?url=%2Ffooter_banner_2.png&w=2048&q=75 2048w, /_next/image?url=%2Ffooter_banner_2.png&w=3840&q=75 3840w",
+        "src": "/_next/image?url=%2Ffooter_banner_2.png&w=3840&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "/register",
+      "/pricing",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1vjknelb_",
+      "main-content",
+      "about-heading",
+      "story-heading",
+      "principles-heading",
+      "contact",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(home)/about/page.tsx"
+  },
+  {
+    "route": "/",
+    "status": 200,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [
+      "TheAI-poweredengine for content & growth."
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "image dimensions missing",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ],
+      [
+        1,
+        "TheAI-poweredengine for content & growth."
+      ],
+      [
+        2,
+        "Craft every post with AI,publish across every platformand collaborate with your team."
+      ],
+      [
+        3,
+        "An assistant that writes your posts"
+      ],
+      [
+        3,
+        "One raw note. Every channel tailored."
+      ],
+      [
+        3,
+        "Your voice, calibrated in every post."
+      ],
+      [
+        3,
+        "Post when your audience is online"
+      ],
+      [
+        3,
+        "Know what works. Grow faster."
+      ],
+      [
+        3,
+        "Zero-leak video protection"
+      ],
+      [
+        3,
+        "Edit without losing your voice"
+      ],
+      [
+        3,
+        "Keep reviews in one place"
+      ],
+      [
+        3,
+        "One draft, three platforms"
+      ],
+      [
+        2,
+        "Ready to get started?"
+      ],
+      [
+        2,
+        "Your content. Every platform."
+      ],
+      [
+        2,
+        "Your AI can now create, schedule & publish across every platform."
+      ],
+      [
+        2,
+        "Transparent pricing for every scale"
+      ],
+      [
+        3,
+        "Starter"
+      ],
+      [
+        3,
+        "Pro"
+      ],
+      [
+        3,
+        "Business"
+      ],
+      [
+        2,
+        "Write once. Show up everywhere."
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      },
+      {
+        "alt": "Alex Rivera",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover",
+        "style": "color:transparent",
+        "src": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "alt": "Marcus Vance",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover",
+        "style": "color:transparent",
+        "src": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "alt": "Elena Rostova",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover",
+        "style": "color:transparent",
+        "src": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "alt": "David Kim",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover",
+        "style": "color:transparent",
+        "src": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "alt": "Dashboard dashboard preview",
+        "decoding": "async",
+        "data-nimg": "fill",
+        "class": "object-cover object-left",
+        "style": "position:absolute;height:100%;width:100%;left:0;top:0;right:0;bottom:0;color:transparent",
+        "src": "/dashboard/home.png"
+      },
+      {
+        "alt": "Jack Qi",
+        "loading": "lazy",
+        "width": "40",
+        "height": "40",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover grayscale",
+        "style": "color:transparent",
+        "src": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces&auto=format&q=80"
+      },
+      {
+        "alt": "Jack Qi",
+        "loading": "lazy",
+        "width": "40",
+        "height": "40",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover grayscale",
+        "style": "color:transparent",
+        "src": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop&crop=faces&auto=format&q=80"
+      },
+      {
+        "alt": "LinkedIn",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "src": "/channels/linkedin.svg"
+      },
+      {
+        "alt": "X",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=32&q=75 1x, /_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75 2x",
+        "src": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75"
+      },
+      {
+        "alt": "Threads",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "src": "/channels/threads.svg"
+      },
+      {
+        "alt": "LinkedIn",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "src": "/channels/linkedin.svg"
+      },
+      {
+        "alt": "X",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=32&q=75 1x, /_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75 2x",
+        "src": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75"
+      },
+      {
+        "alt": "LinkedIn",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "src": "/channels/linkedin.svg"
+      },
+      {
+        "alt": "X",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=32&q=75 1x, /_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75 2x",
+        "src": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75"
+      },
+      {
+        "alt": "LinkedIn",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "src": "/channels/linkedin.svg"
+      },
+      {
+        "alt": "LinkedIn",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "src": "/channels/linkedin.svg"
+      },
+      {
+        "alt": "Jack Qi",
+        "loading": "lazy",
+        "width": "40",
+        "height": "40",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover grayscale",
+        "style": "color:transparent",
+        "src": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces&auto=format&q=80"
+      },
+      {
+        "alt": "X",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=32&q=75 1x, /_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75 2x",
+        "src": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75"
+      },
+      {
+        "alt": "LinkedIn",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "src": "/channels/linkedin.svg"
+      },
+      {
+        "alt": "LinkedIn",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "src": "/channels/linkedin.svg"
+      },
+      {
+        "alt": "X",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=32&q=75 1x, /_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75 2x",
+        "src": "/_next/image?url=%2Fchannels%2Fx.jpeg&w=64&q=75"
+      },
+      {
+        "alt": "Threads",
+        "loading": "lazy",
+        "width": "32",
+        "height": "32",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover rounded-[inherit]",
+        "style": "color:transparent",
+        "src": "/channels/threads.svg"
+      },
+      {
+        "alt": "point out",
+        "loading": "lazy",
+        "width": "100",
+        "height": "100",
+        "decoding": "async",
+        "data-nimg": "1",
+        "style": "color:transparent",
+        "src": "/point-out.svg"
+      },
+      {
+        "src": "/channels/x.jpeg",
+        "alt": "X",
+        "class": "h-5 w-5 sm:h-5.5 sm:w-5.5 object-contain shrink-0",
+        "loading": "lazy"
+      },
+      {
+        "src": "/channels/instagram.svg",
+        "alt": "Instagram",
+        "class": "h-5 w-5 sm:h-5.5 sm:w-5.5 object-contain shrink-0",
+        "loading": "lazy"
+      },
+      {
+        "src": "/channels/linkedin.svg",
+        "alt": "LinkedIn",
+        "class": "h-5 w-5 sm:h-5.5 sm:w-5.5 object-contain shrink-0",
+        "loading": "lazy"
+      },
+      {
+        "src": "/channels/threads.svg",
+        "alt": "Threads",
+        "class": "h-5 w-5 sm:h-5.5 sm:w-5.5 object-contain shrink-0",
+        "loading": "lazy"
+      },
+      {
+        "src": "/channels/reddit.svg",
+        "alt": "Reddit",
+        "class": "h-5 w-5 sm:h-5.5 sm:w-5.5 object-contain shrink-0",
+        "loading": "lazy"
+      },
+      {
+        "src": "/channels/tiktok.svg",
+        "alt": "TikTok",
+        "class": "h-5 w-5 sm:h-5.5 sm:w-5.5 object-contain shrink-0",
+        "loading": "lazy"
+      },
+      {
+        "src": "/intigration/stey.png",
+        "alt": "Steven Tey",
+        "class": "h-10 w-10 rounded-full border border-stone-200/80 shadow-xs object-cover",
+        "loading": "lazy"
+      },
+      {
+        "alt": "banner",
+        "loading": "lazy",
+        "width": "1280",
+        "height": "400",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "object-cover",
+        "style": "color:transparent",
+        "sizes": "(max-width: 1280px) 100vw, 1280px",
+        "srcset": "/_next/image?url=%2Ffooter_banner_2.png&w=640&q=75 640w, /_next/image?url=%2Ffooter_banner_2.png&w=750&q=75 750w, /_next/image?url=%2Ffooter_banner_2.png&w=828&q=75 828w, /_next/image?url=%2Ffooter_banner_2.png&w=1080&q=75 1080w, /_next/image?url=%2Ffooter_banner_2.png&w=1200&q=75 1200w, /_next/image?url=%2Ffooter_banner_2.png&w=1920&q=75 1920w, /_next/image?url=%2Ffooter_banner_2.png&w=2048&q=75 2048w, /_next/image?url=%2Ffooter_banner_2.png&w=3840&q=75 3840w",
+        "src": "/_next/image?url=%2Ffooter_banner_2.png&w=3840&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#",
+      "#",
+      "/register",
+      "/register",
+      "/register",
+      "/register",
+      "#",
+      "/register",
+      "#docs",
+      "https://www.producthunt.com",
+      "/register",
+      "/register",
+      "/pricing#compare-plans",
+      "/pricing#compare-plans",
+      "/pricing#compare-plans",
+      "/register",
+      "/pricing"
+    ],
+    "ids": [
+      "base-ui-_R_1vjknelb_",
+      "main-content",
+      "B:0",
+      "_R_",
+      "S:0",
+      "P:1",
+      "analytics-area",
+      "contact"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(home)/page.tsx"
+  },
+  {
+    "route": "/pricing",
+    "status": 200,
+    "redirect": null,
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "H1 count !=1",
+      "skipped heading level",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ],
+      [
+        2,
+        "Transparent pricing for every scale"
+      ],
+      [
+        4,
+        "Start free, upgrade when ready"
+      ],
+      [
+        4,
+        "100% official APIs"
+      ],
+      [
+        4,
+        "Cancel anytime in 1 click"
+      ],
+      [
+        4,
+        "Encrypted at rest"
+      ],
+      [
+        3,
+        "Compare plans side by side"
+      ],
+      [
+        3,
+        "Frequently asked questions"
+      ],
+      [
+        2,
+        "Ready to get started?"
+      ],
+      [
+        2,
+        "Write once. Show up everywhere."
+      ],
+      [
+        3,
+        "Starter"
+      ],
+      [
+        3,
+        "Pro"
+      ],
+      [
+        3,
+        "Business"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      },
+      {
+        "alt": "Jack Qi",
+        "loading": "lazy",
+        "width": "40",
+        "height": "40",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover grayscale",
+        "style": "color:transparent",
+        "src": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces&auto=format&q=80"
+      },
+      {
+        "alt": "Jack Qi",
+        "loading": "lazy",
+        "width": "40",
+        "height": "40",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-full object-cover grayscale",
+        "style": "color:transparent",
+        "src": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop&crop=faces&auto=format&q=80"
+      },
+      {
+        "alt": "point out",
+        "loading": "lazy",
+        "width": "100",
+        "height": "100",
+        "decoding": "async",
+        "data-nimg": "1",
+        "style": "color:transparent",
+        "src": "/point-out.svg"
+      },
+      {
+        "alt": "banner",
+        "loading": "lazy",
+        "width": "1280",
+        "height": "400",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "object-cover",
+        "style": "color:transparent",
+        "sizes": "(max-width: 1280px) 100vw, 1280px",
+        "srcset": "/_next/image?url=%2Ffooter_banner_2.png&w=640&q=75 640w, /_next/image?url=%2Ffooter_banner_2.png&w=750&q=75 750w, /_next/image?url=%2Ffooter_banner_2.png&w=828&q=75 828w, /_next/image?url=%2Ffooter_banner_2.png&w=1080&q=75 1080w, /_next/image?url=%2Ffooter_banner_2.png&w=1200&q=75 1200w, /_next/image?url=%2Ffooter_banner_2.png&w=1920&q=75 1920w, /_next/image?url=%2Ffooter_banner_2.png&w=2048&q=75 2048w, /_next/image?url=%2Ffooter_banner_2.png&w=3840&q=75 3840w",
+        "src": "/_next/image?url=%2Ffooter_banner_2.png&w=3840&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#",
+      "/register",
+      "/register",
+      "/pricing",
+      "/pricing#compare-plans",
+      "/pricing#compare-plans",
+      "/pricing#compare-plans"
+    ],
+    "ids": [
+      "base-ui-_R_1vjknelb_",
+      "main-content",
+      "B:0",
+      "_R_",
+      "S:0",
+      "B:1",
+      "compare-plans",
+      "_R_iatpesknelb_-panel-0",
+      "_R_iatpesknelb_-panel-1",
+      "_R_iatpesknelb_-panel-2",
+      "_R_iatpesknelb_-panel-3",
+      "_R_iatpesknelb_-panel-4",
+      "contact",
+      "S:1"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(home)/pricing/page.tsx"
+  },
+  {
+    "route": "/acceptable-use",
+    "status": 200,
+    "redirect": null,
+    "title": "Acceptable Use Policy | Draftva",
+    "description": "Review Draftva's Acceptable Use Policy. Understand our rules against spam, automated vote manipulation, and unauthorized scraping.",
+    "h1": [
+      "Acceptable Use Policy"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "skipped heading level"
+    ],
+    "headings": [
+      [
+        1,
+        "Acceptable Use Policy"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "Strict Anti-Spam"
+      ],
+      [
+        3,
+        "Authentic Engagement"
+      ],
+      [
+        3,
+        "Respect Platform APIs"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "Purpose & Guiding Principles"
+      ],
+      [
+        2,
+        "Prohibited Content"
+      ],
+      [
+        2,
+        "Prohibited Automation & Manipulation"
+      ],
+      [
+        5,
+        "Reddit Vote & Engagement Manipulation"
+      ],
+      [
+        5,
+        "Mass Duplicate Cross-Posting"
+      ],
+      [
+        5,
+        "Scraping & Lead Harvesting"
+      ],
+      [
+        5,
+        "Circumventing Platform Rate Limits"
+      ],
+      [
+        2,
+        "Platform-Specific Rules"
+      ],
+      [
+        2,
+        "AI Writing Assistant Guidelines"
+      ],
+      [
+        2,
+        "Investigation, Enforcement & Appeals"
+      ],
+      [
+        2,
+        "Reporting Violations"
+      ],
+      [
+        5,
+        "Draftva Trust & Safety"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "mailto:appeals@draftva.com",
+      "mailto:trust@draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "purpose",
+      "prohibited-content",
+      "prohibited-activities",
+      "platform-compliance",
+      "ai-guidelines",
+      "enforcement",
+      "reporting",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/acceptable-use/page.tsx"
+  },
+  {
+    "route": "/cookie-policy",
+    "status": 200,
+    "redirect": null,
+    "title": "Cookie Policy | Draftva",
+    "description": "Explore how Draftva uses essential cookies and local storage to keep your session secure and customize your workspace experience.",
+    "h1": [
+      "Cookie Policy"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "skipped heading level",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Cookie Policy"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "Essential For Security"
+      ],
+      [
+        3,
+        "No Third-Party Ad Trackers"
+      ],
+      [
+        3,
+        "Granular Control"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "What Are Cookies & Local Storage?"
+      ],
+      [
+        2,
+        "Categories of Cookies We Use"
+      ],
+      [
+        5,
+        "1. Strictly Necessary Cookies (Always Active)"
+      ],
+      [
+        5,
+        "2. Functional & Preference Cookies"
+      ],
+      [
+        5,
+        "3. Performance & Diagnostic Cookies"
+      ],
+      [
+        2,
+        "Cookie Inventory Table"
+      ],
+      [
+        2,
+        "How to Manage and Disable Cookies"
+      ],
+      [
+        2,
+        "Questions & Policy Updates"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "mailto:privacy@draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "what-are-cookies",
+      "categories",
+      "inventory",
+      "managing-cookies",
+      "contact",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/cookie-policy/page.tsx"
+  },
+  {
+    "route": "/cookies",
+    "status": 200,
+    "redirect": null,
+    "title": "Cookie Policy | Draftva",
+    "description": "Explore how Draftva uses essential cookies and local storage to keep your session secure and customize your workspace experience.",
+    "h1": [
+      "Cookie Policy"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "skipped heading level",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Cookie Policy"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "Essential For Security"
+      ],
+      [
+        3,
+        "No Third-Party Ad Trackers"
+      ],
+      [
+        3,
+        "Granular Control"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "What Are Cookies & Local Storage?"
+      ],
+      [
+        2,
+        "Categories of Cookies We Use"
+      ],
+      [
+        5,
+        "1. Strictly Necessary Cookies (Always Active)"
+      ],
+      [
+        5,
+        "2. Functional & Preference Cookies"
+      ],
+      [
+        5,
+        "3. Performance & Diagnostic Cookies"
+      ],
+      [
+        2,
+        "Cookie Inventory Table"
+      ],
+      [
+        2,
+        "How to Manage and Disable Cookies"
+      ],
+      [
+        2,
+        "Questions & Policy Updates"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "mailto:privacy@draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "what-are-cookies",
+      "categories",
+      "inventory",
+      "managing-cookies",
+      "contact",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/cookies/page.tsx"
+  },
+  {
+    "route": "/dpa",
+    "status": 200,
+    "redirect": null,
+    "title": "Data Processing Addendum (DPA) | Draftva",
+    "description": "Review Draftva's GDPR Article 28 compliant Data Processing Addendum, technical and organizational measures (TOMs), and EU Standard Contractual Clauses.",
+    "h1": [
+      "Data Processing Addendum (DPA)"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "skipped heading level"
+    ],
+    "headings": [
+      [
+        1,
+        "Data Processing Addendum (DPA)"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "Processor Obligations"
+      ],
+      [
+        3,
+        "Rigorous TOMs"
+      ],
+      [
+        3,
+        "Standard Contractual Clauses"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "Scope, Definitions & Applicability"
+      ],
+      [
+        2,
+        "Roles & Customer Instructions"
+      ],
+      [
+        2,
+        "Confidentiality & Security Controls"
+      ],
+      [
+        2,
+        "Sub-processors"
+      ],
+      [
+        2,
+        "Data Subject Rights Assistance"
+      ],
+      [
+        2,
+        "Personal Data Breach Notification"
+      ],
+      [
+        2,
+        "International Data Transfers & SCCs"
+      ],
+      [
+        2,
+        "Deletion and Return of Personal Data"
+      ],
+      [
+        5,
+        "DPA Inquiries & Execution"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "/subprocessors",
+      "mailto:dpa@draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "scope-definitions",
+      "roles-instructions",
+      "confidentiality-personnel",
+      "subprocessors",
+      "data-subject-requests",
+      "security-incident",
+      "international-transfers",
+      "deletion-return",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/dpa/page.tsx"
+  },
+  {
+    "route": "/legal",
+    "status": 200,
+    "redirect": null,
+    "title": "Legal & Compliance Hub | Draftva",
+    "description": "Explore Draftva's legal documentation, including Terms of Service, Privacy Policy, Cookie Policy, Acceptable Use, DPA, and Sub-processors.",
+    "h1": [
+      "Draftva Legal & Compliance Hub"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical"
+    ],
+    "headings": [
+      [
+        1,
+        "Draftva Legal & Compliance Hub"
+      ],
+      [
+        2,
+        "Our Core Legal & Privacy Commitments"
+      ],
+      [
+        3,
+        "Official OAuth Only"
+      ],
+      [
+        3,
+        "You Own Your Content"
+      ],
+      [
+        3,
+        "No Foundation Training"
+      ],
+      [
+        3,
+        "Strict Anti-Spam"
+      ],
+      [
+        2,
+        "Legal Documents & Policies"
+      ],
+      [
+        3,
+        "Terms of Service"
+      ],
+      [
+        3,
+        "Privacy Policy"
+      ],
+      [
+        3,
+        "Cookie Policy"
+      ],
+      [
+        3,
+        "Acceptable Use Policy"
+      ],
+      [
+        3,
+        "Data Processing Addendum (DPA)"
+      ],
+      [
+        3,
+        "Sub-processors Directory"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "/terms",
+      "/privacy",
+      "/cookies",
+      "/acceptable-use",
+      "/dpa",
+      "/subprocessors",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/legal/page.tsx"
+  },
+  {
+    "route": "/privacy",
+    "status": 200,
+    "redirect": null,
+    "title": "Privacy Policy | Draftva",
+    "description": "Learn how Draftva collects, stores, protects, and handles personal data and encrypted OAuth credentials in compliance with GDPR and CCPA.",
+    "h1": [
+      "Privacy Policy"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "skipped heading level",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Privacy Policy"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "Encrypted Tokens"
+      ],
+      [
+        3,
+        "We Never Sell Data"
+      ],
+      [
+        3,
+        "GDPR & CCPA Compliant"
+      ],
+      [
+        3,
+        "Enterprise AI Security"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "Overview & Privacy Principles"
+      ],
+      [
+        5,
+        "Official OAuth Only"
+      ],
+      [
+        5,
+        "Encrypted At Rest"
+      ],
+      [
+        5,
+        "Zero-Training AI Guarantee"
+      ],
+      [
+        5,
+        "No Data Selling"
+      ],
+      [
+        2,
+        "Information We Collect"
+      ],
+      [
+        4,
+        "1. Information You Provide Directly"
+      ],
+      [
+        4,
+        "2. Information Received From Connected Channels (OAuth)"
+      ],
+      [
+        4,
+        "3. Information Collected Automatically"
+      ],
+      [
+        2,
+        "OAuth Credentials & Token Security"
+      ],
+      [
+        2,
+        "How We Use Your Information"
+      ],
+      [
+        2,
+        "AI Processing & Model Provider Disclosures"
+      ],
+      [
+        5,
+        "Enterprise AI Privacy Protections"
+      ],
+      [
+        2,
+        "How We Share Your Information"
+      ],
+      [
+        2,
+        "Data Retention & Account Deletion"
+      ],
+      [
+        2,
+        "Your Rights Under GDPR (EEA & UK)"
+      ],
+      [
+        2,
+        "California Privacy Rights (CCPA / CPRA)"
+      ],
+      [
+        2,
+        "Security Measures (TOMs)"
+      ],
+      [
+        2,
+        "Data Protection Officer & Contact"
+      ],
+      [
+        5,
+        "Draftva Privacy Office"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "/subprocessors",
+      "mailto:privacy@draftva.com",
+      "mailto:privacy@draftva.com",
+      "mailto:security@draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "overview",
+      "information-collected",
+      "token-security",
+      "how-we-use-data",
+      "ai-data-handling",
+      "data-sharing",
+      "data-retention",
+      "gdpr-rights",
+      "ccpa-rights",
+      "security-measures",
+      "contact",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/privacy/page.tsx"
+  },
+  {
+    "route": "/privacy-policy",
+    "status": 200,
+    "redirect": null,
+    "title": "Privacy Policy | Draftva",
+    "description": "Learn how Draftva collects, stores, protects, and handles personal data and encrypted OAuth credentials in compliance with GDPR and CCPA.",
+    "h1": [
+      "Privacy Policy"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "skipped heading level",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Privacy Policy"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "Encrypted Tokens"
+      ],
+      [
+        3,
+        "We Never Sell Data"
+      ],
+      [
+        3,
+        "GDPR & CCPA Compliant"
+      ],
+      [
+        3,
+        "Enterprise AI Security"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "Overview & Privacy Principles"
+      ],
+      [
+        5,
+        "Official OAuth Only"
+      ],
+      [
+        5,
+        "Encrypted At Rest"
+      ],
+      [
+        5,
+        "Zero-Training AI Guarantee"
+      ],
+      [
+        5,
+        "No Data Selling"
+      ],
+      [
+        2,
+        "Information We Collect"
+      ],
+      [
+        4,
+        "1. Information You Provide Directly"
+      ],
+      [
+        4,
+        "2. Information Received From Connected Channels (OAuth)"
+      ],
+      [
+        4,
+        "3. Information Collected Automatically"
+      ],
+      [
+        2,
+        "OAuth Credentials & Token Security"
+      ],
+      [
+        2,
+        "How We Use Your Information"
+      ],
+      [
+        2,
+        "AI Processing & Model Provider Disclosures"
+      ],
+      [
+        5,
+        "Enterprise AI Privacy Protections"
+      ],
+      [
+        2,
+        "How We Share Your Information"
+      ],
+      [
+        2,
+        "Data Retention & Account Deletion"
+      ],
+      [
+        2,
+        "Your Rights Under GDPR (EEA & UK)"
+      ],
+      [
+        2,
+        "California Privacy Rights (CCPA / CPRA)"
+      ],
+      [
+        2,
+        "Security Measures (TOMs)"
+      ],
+      [
+        2,
+        "Data Protection Officer & Contact"
+      ],
+      [
+        5,
+        "Draftva Privacy Office"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "/subprocessors",
+      "mailto:privacy@draftva.com",
+      "mailto:privacy@draftva.com",
+      "mailto:security@draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "overview",
+      "information-collected",
+      "token-security",
+      "how-we-use-data",
+      "ai-data-handling",
+      "data-sharing",
+      "data-retention",
+      "gdpr-rights",
+      "ccpa-rights",
+      "security-measures",
+      "contact",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/privacy-policy/page.tsx"
+  },
+  {
+    "route": "/sub-processors",
+    "status": 200,
+    "redirect": null,
+    "title": "Sub-processors Directory | Draftva",
+    "description": "View the complete list of cloud hosting, database, artificial intelligence, and payment sub-processors utilized by Draftva.",
+    "h1": [
+      "Sub-processors Directory"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Sub-processors Directory"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "Vetted Infrastructure"
+      ],
+      [
+        3,
+        "AI Zero-Retention APIs"
+      ],
+      [
+        3,
+        "Proactive Notification"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "Sub-processor Due Diligence & Standards"
+      ],
+      [
+        2,
+        "Core Infrastructure & Hosting"
+      ],
+      [
+        2,
+        "AI Writing Assistant & LLM Providers"
+      ],
+      [
+        2,
+        "Payments & Operational Services"
+      ],
+      [
+        2,
+        "Notifications of Changes & Objections"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "mailto:privacy@draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "overview",
+      "infrastructure-hosting",
+      "ai-providers",
+      "payments-operations",
+      "notification-updates",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/sub-processors/page.tsx"
+  },
+  {
+    "route": "/subprocessors",
+    "status": 200,
+    "redirect": null,
+    "title": "Sub-processors Directory | Draftva",
+    "description": "View the complete list of cloud hosting, database, artificial intelligence, and payment sub-processors utilized by Draftva.",
+    "h1": [
+      "Sub-processors Directory"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Sub-processors Directory"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "Vetted Infrastructure"
+      ],
+      [
+        3,
+        "AI Zero-Retention APIs"
+      ],
+      [
+        3,
+        "Proactive Notification"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "Sub-processor Due Diligence & Standards"
+      ],
+      [
+        2,
+        "Core Infrastructure & Hosting"
+      ],
+      [
+        2,
+        "AI Writing Assistant & LLM Providers"
+      ],
+      [
+        2,
+        "Payments & Operational Services"
+      ],
+      [
+        2,
+        "Notifications of Changes & Objections"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "mailto:privacy@draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "overview",
+      "infrastructure-hosting",
+      "ai-providers",
+      "payments-operations",
+      "notification-updates",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/subprocessors/page.tsx"
+  },
+  {
+    "route": "/terms",
+    "status": 200,
+    "redirect": null,
+    "title": "Terms of Service | Draftva",
+    "description": "Read the Terms of Service for Draftva. Learn about your rights, subscription terms, content ownership, and official API integration rules.",
+    "h1": [
+      "Terms of Service"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "skipped heading level",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Terms of Service"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "You Own Your Content"
+      ],
+      [
+        3,
+        "Official APIs Only"
+      ],
+      [
+        3,
+        "AI Writing Assistant"
+      ],
+      [
+        3,
+        "Transparent Subscriptions"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "Acceptance of Terms & Eligibility"
+      ],
+      [
+        2,
+        "Description of the Service"
+      ],
+      [
+        2,
+        "Accounts, Workspaces & Security"
+      ],
+      [
+        4,
+        "Workspace Roles & Collaboration"
+      ],
+      [
+        4,
+        "Account Credentials & Security"
+      ],
+      [
+        2,
+        "Free Plan, Subscriptions & Billing"
+      ],
+      [
+        5,
+        "Free Plan"
+      ],
+      [
+        5,
+        "Automatic Renewal & Payments"
+      ],
+      [
+        5,
+        "Cancellation & Upgrades"
+      ],
+      [
+        2,
+        "Intellectual Property & Content Ownership"
+      ],
+      [
+        2,
+        "Third-Party Social Platforms & Official APIs"
+      ],
+      [
+        2,
+        "AI Assistant Features & Content Disclaimers"
+      ],
+      [
+        2,
+        "Acceptable Conduct & Prohibited Uses"
+      ],
+      [
+        2,
+        "Service Availability & Warranties"
+      ],
+      [
+        2,
+        "Limitation of Liability"
+      ],
+      [
+        2,
+        "Termination & Suspension"
+      ],
+      [
+        2,
+        "Dispute Resolution & Governing Law"
+      ],
+      [
+        2,
+        "Changes to Terms & Contact"
+      ],
+      [
+        5,
+        "Legal Contact"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "mailto:security@draftva.com",
+      "/acceptable-use",
+      "mailto:legal@draftva.com",
+      "mailto:legal@draftva.com",
+      "https://draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "agreement",
+      "services-scope",
+      "accounts-workspaces",
+      "subscriptions-billing",
+      "content-ip",
+      "social-platforms",
+      "ai-assistant",
+      "acceptable-conduct",
+      "disclaimers",
+      "liability",
+      "termination",
+      "governing-law",
+      "contact-info",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/terms/page.tsx"
+  },
+  {
+    "route": "/terms-of-service",
+    "status": 200,
+    "redirect": null,
+    "title": "Terms of Service | Draftva",
+    "description": "Read the Terms of Service for Draftva. Learn about your rights, subscription terms, content ownership, and official API integration rules.",
+    "h1": [
+      "Terms of Service"
+    ],
+    "canonical": "",
+    "indexable": true,
+    "robots": "",
+    "issues": [
+      "missing canonical",
+      "skipped heading level",
+      "duplicate title",
+      "duplicate description"
+    ],
+    "headings": [
+      [
+        1,
+        "Terms of Service"
+      ],
+      [
+        2,
+        "Key Takeaways (At A Glance)"
+      ],
+      [
+        3,
+        "You Own Your Content"
+      ],
+      [
+        3,
+        "Official APIs Only"
+      ],
+      [
+        3,
+        "AI Writing Assistant"
+      ],
+      [
+        3,
+        "Transparent Subscriptions"
+      ],
+      [
+        3,
+        "On This Page"
+      ],
+      [
+        2,
+        "Acceptance of Terms & Eligibility"
+      ],
+      [
+        2,
+        "Description of the Service"
+      ],
+      [
+        2,
+        "Accounts, Workspaces & Security"
+      ],
+      [
+        4,
+        "Workspace Roles & Collaboration"
+      ],
+      [
+        4,
+        "Account Credentials & Security"
+      ],
+      [
+        2,
+        "Free Plan, Subscriptions & Billing"
+      ],
+      [
+        5,
+        "Free Plan"
+      ],
+      [
+        5,
+        "Automatic Renewal & Payments"
+      ],
+      [
+        5,
+        "Cancellation & Upgrades"
+      ],
+      [
+        2,
+        "Intellectual Property & Content Ownership"
+      ],
+      [
+        2,
+        "Third-Party Social Platforms & Official APIs"
+      ],
+      [
+        2,
+        "AI Assistant Features & Content Disclaimers"
+      ],
+      [
+        2,
+        "Acceptable Conduct & Prohibited Uses"
+      ],
+      [
+        2,
+        "Service Availability & Warranties"
+      ],
+      [
+        2,
+        "Limitation of Liability"
+      ],
+      [
+        2,
+        "Termination & Suspension"
+      ],
+      [
+        2,
+        "Dispute Resolution & Governing Law"
+      ],
+      [
+        2,
+        "Changes to Terms & Contact"
+      ],
+      [
+        5,
+        "Legal Contact"
+      ],
+      [
+        3,
+        "Publish with confidence across 8 major networks"
+      ],
+      [
+        3,
+        "Product"
+      ],
+      [
+        3,
+        "Company"
+      ],
+      [
+        3,
+        "Resources"
+      ],
+      [
+        3,
+        "Social Links"
+      ]
+    ],
+    "images": [
+      {
+        "alt": "",
+        "width": "64",
+        "height": "64",
+        "decoding": "async",
+        "data-nimg": "1",
+        "class": "size-8 rounded-lg object-cover",
+        "style": "color:transparent",
+        "srcset": "/_next/image?url=%2Flogo.jpg&w=64&q=75 1x, /_next/image?url=%2Flogo.jpg&w=128&q=75 2x",
+        "src": "/_next/image?url=%2Flogo.jpg&w=128&q=75"
+      }
+    ],
+    "links": [
+      "#main-content",
+      "/",
+      "/pricing",
+      "/about",
+      "mailto:support@draftva.com",
+      "mailto:security@draftva.com",
+      "/acceptable-use",
+      "mailto:legal@draftva.com",
+      "mailto:legal@draftva.com",
+      "https://draftva.com",
+      "/register",
+      "mailto:legal@draftva.com",
+      "#features",
+      "pricing",
+      "#testimonials",
+      "/",
+      "/faqs",
+      "/about",
+      "/privacy",
+      "/terms",
+      "/blog",
+      "/changelog",
+      "/brand",
+      "/help",
+      "#",
+      "#",
+      "#",
+      "#"
+    ],
+    "ids": [
+      "base-ui-_R_1viknelb_",
+      "agreement",
+      "services-scope",
+      "accounts-workspaces",
+      "subscriptions-billing",
+      "content-ip",
+      "social-platforms",
+      "ai-assistant",
+      "acceptable-conduct",
+      "disclaimers",
+      "liability",
+      "termination",
+      "governing-law",
+      "contact-info",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(legal)/terms-of-service/page.tsx"
+  },
+  {
+    "route": "/onboarding",
+    "status": 200,
+    "redirect": null,
+    "title": "Welcome to Draftva",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "noindex, nofollow",
+    "issues": [
+      "missing canonical",
+      "H1 count !=1",
+      "duplicate description"
+    ],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "B:0",
+      "_R_",
+      "__next-page-redirect"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(onboarding)/onboarding/page.tsx"
+  },
+  {
+    "route": "/dashboard/agents/authorize",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/agents/authorize/page.tsx"
+  },
+  {
+    "route": "/dashboard/agents",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/agents/page.tsx"
+  },
+  {
+    "route": "/dashboard/analytics",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/analytics/page.tsx"
+  },
+  {
+    "route": "/dashboard/channels",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/channels/page.tsx"
+  },
+  {
+    "route": "/dashboard/content/compose",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/content/compose/page.tsx"
+  },
+  {
+    "route": "/dashboard/content/generator",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/content/generator/page.tsx"
+  },
+  {
+    "route": "/dashboard/content",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/content/page.tsx"
+  },
+  {
+    "route": "/dashboard",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/page.tsx"
+  },
+  {
+    "route": "/dashboard/posts",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/posts/page.tsx"
+  },
+  {
+    "route": "/dashboard/schedule",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/schedule/page.tsx"
+  },
+  {
+    "route": "/dashboard/settings",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/dashboard/settings/[[...section]]/page.tsx"
+  },
+  {
+    "route": "/settings/billing",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/settings/billing/page.tsx"
+  },
+  {
+    "route": "/settings",
+    "status": 307,
+    "redirect": "/login",
+    "title": "Draftva | Multi-channel social scheduling & writing platform",
+    "description": "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+    "h1": [],
+    "canonical": "",
+    "indexable": false,
+    "robots": "",
+    "issues": [],
+    "headings": [],
+    "images": [],
+    "links": [],
+    "ids": [
+      "__next_error__",
+      "_R_"
+    ],
+    "structured_data": [],
+    "x_robots": null,
+    "source": "src/app/(protected)/settings/page.tsx"
+  }
+]

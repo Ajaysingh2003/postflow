@@ -1,10 +1,7 @@
-import type { Metadata } from "next";
+import { PRIVATE_METADATA } from "@/lib/seo/config";
 import type { ReactNode } from "react";
 import { CardWrapper } from "@/components/base/AuthCardWrapper";
 
-export const metadata: Metadata = {
-  robots: { index: false, follow: false, noarchive: true, nosnippet: true },
-};
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="grid bg-[#faf9f5z]">
@@ -16,3 +13,5 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+export const metadata = PRIVATE_METADATA;

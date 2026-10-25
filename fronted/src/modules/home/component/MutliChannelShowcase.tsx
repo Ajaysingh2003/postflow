@@ -88,19 +88,44 @@ const PLATFORM_LABEL: Record<PlatformId, string> = {
 // Two weeks of mock data so the arrows actually do something.
 const WEEKS: CalendarPost[][] = [
   [
-    { day: 0, time: 9, platform: "linkedin", title: "Consistency beats viral reach" },
+    {
+      day: 0,
+      time: 9,
+      platform: "linkedin",
+      title: "Consistency beats viral reach",
+    },
     { day: 1, time: 10.25, platform: "x", title: "3 lessons from shipping v2" },
-    { day: 2, time: 9.5, platform: "linkedin", title: "The backend stack breakdown" },
+    {
+      day: 2,
+      time: 9.5,
+      platform: "linkedin",
+      title: "The backend stack breakdown",
+    },
     { day: 2, time: 12.5, platform: "x", title: "Async founder stack" },
-    { day: 3, time: 11, platform: "x", title: "Posting daily: metrics unpacked" },
-    { day: 4, time: 10, platform: "linkedin", title: "Weekly founder reading list" },
+    {
+      day: 3,
+      time: 11,
+      platform: "x",
+      title: "Posting daily: metrics unpacked",
+    },
+    {
+      day: 4,
+      time: 10,
+      platform: "linkedin",
+      title: "Weekly founder reading list",
+    },
     { day: 4, time: 13, platform: "threads", title: "Weekly growth recap" },
   ],
   [
     { day: 0, time: 11, platform: "linkedin", title: "Q4 pipeline teardown" },
     { day: 1, time: 9, platform: "x", title: "Zero-click content" },
     { day: 2, time: 13, platform: "x", title: "Auto-Plug Engine is live" },
-    { day: 3, time: 10.5, platform: "threads", title: "The cold start problem" },
+    {
+      day: 3,
+      time: 10.5,
+      platform: "threads",
+      title: "The cold start problem",
+    },
     { day: 4, time: 9.5, platform: "x", title: "Open API beta is live" },
   ],
 ];
@@ -140,7 +165,6 @@ function formatHour(h: number) {
 function dateFor(week: number, day: number) {
   return new Date(FIRST_MONDAY + (week * 7 + day) * 86_400_000);
 }
-
 
 function SectionBadge({
   icon: Icon,
@@ -183,7 +207,9 @@ function Copy({
             <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#3fda8a]/20 text-[#0f7a47]">
               <Check className="size-3 stroke-[2.5]" />
             </span>
-            <span className="text-sm leading-relaxed text-[#11120e]">{point}</span>
+            <span className="text-sm leading-relaxed text-[#11120e]">
+              {point}
+            </span>
           </li>
         ))}
       </ul>
@@ -239,8 +265,7 @@ export default function MultiChannelScheduleShowcase() {
   const [workspace, setWorkspace] = useState<"founder" | "brand">("brand");
 
   const visiblePosts = useMemo(
-    () =>
-      WEEKS[week].filter((p) => filter === "all" || p.platform === filter),
+    () => WEEKS[week].filter((p) => filter === "all" || p.platform === filter),
     [week, filter],
   );
 
@@ -254,7 +279,8 @@ export default function MultiChannelScheduleShowcase() {
     return `${fmt(dateFor(week, 0), false)} – ${fmt(dateFor(week, 6), true)} 2026`;
   }, [week]);
 
-  const isPast = (day: number) => week < TODAY_WEEK || (week === TODAY_WEEK && day < TODAY_DAY);
+  const isPast = (day: number) =>
+    week < TODAY_WEEK || (week === TODAY_WEEK && day < TODAY_DAY);
   const isToday = (day: number) => week === TODAY_WEEK && day === TODAY_DAY;
 
   return (
@@ -265,7 +291,9 @@ export default function MultiChannelScheduleShowcase() {
       <section className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-16">
         <div className="lg:col-span-5">
           <Copy
-            badge={<SectionBadge icon={Clock}>Cross-Platform Timing</SectionBadge>}
+            badge={
+              <SectionBadge icon={Clock}>Cross-Platform Timing</SectionBadge>
+            }
             title="Post when each platform’s audience is actually watching."
             body="Your X followers scroll at breakfast, LinkedIn peaks mid-morning, and Threads heats up at night. Draftva analyzes activity across every connected network and staggers your post for each algorithm’s prime window."
             points={[
@@ -359,7 +387,9 @@ export default function MultiChannelScheduleShowcase() {
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.06] pt-4">
                   <span className="font-subheading text-xs text-[#6d7066]">
                     Recommended format:{" "}
-                    <strong className="text-[#11120e]">{currentMetric.format}</strong>
+                    <strong className="text-[#11120e]">
+                      {currentMetric.format}
+                    </strong>
                   </span>
                   <span className="font-subheading inline-flex items-center gap-1 text-xs font-medium text-[#0f7a47]">
                     <Repeat className="size-3.5" />
@@ -404,7 +434,8 @@ export default function MultiChannelScheduleShowcase() {
                       </span>
                     </div>
                     <p className="mt-0.5 truncate text-xs text-[#6d7066]">
-                      The engineering mistake that cost us 3 weeks of velocity...
+                      The engineering mistake that cost us 3 weeks of
+                      velocity...
                     </p>
                   </div>
                 </div>
@@ -490,7 +521,9 @@ export default function MultiChannelScheduleShowcase() {
 
         <div className="order-1 lg:order-2 lg:col-span-5">
           <Copy
-            badge={<SectionBadge icon={Repeat}>Evergreen Queue Engine</SectionBadge>}
+            badge={
+              <SectionBadge icon={Repeat}>Evergreen Queue Engine</SectionBadge>
+            }
             title="Never miss a day, even when launches get crazy."
             body="When your queue runs low, Draftva nudges you and automatically recycles your highest-performing X threads into LinkedIn posts or Threads updates. Your reach keeps compounding while you stay heads-down."
             points={[
@@ -508,7 +541,11 @@ export default function MultiChannelScheduleShowcase() {
       <section className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-16">
         <div className="lg:col-span-5">
           <Copy
-            badge={<SectionBadge icon={CalendarIcon}>Unified Command Calendar</SectionBadge>}
+            badge={
+              <SectionBadge icon={CalendarIcon}>
+                Unified Command Calendar
+              </SectionBadge>
+            }
             title="Plan a full month across every network in one afternoon."
             body="See your entire multi-channel content calendar at a glance, filter drafts by network, and batch-fill weeks ahead. Draftva turns chaotic daily posting into a calm, repeatable operating system."
             points={[
@@ -545,7 +582,9 @@ export default function MultiChannelScheduleShowcase() {
                     type="button"
                     aria-label="Next week"
                     disabled={week === WEEKS.length - 1}
-                    onClick={() => setWeek((w) => Math.min(WEEKS.length - 1, w + 1))}
+                    onClick={() =>
+                      setWeek((w) => Math.min(WEEKS.length - 1, w + 1))
+                    }
                     className="rounded-md p-1.5 transition-colors hover:bg-black/5 hover:text-[#11120e] disabled:opacity-30 disabled:hover:bg-transparent"
                   >
                     <ChevronRight className="size-4" />
@@ -564,7 +603,7 @@ export default function MultiChannelScheduleShowcase() {
                 {CALENDAR_FILTERS.map((f) => (
                   <button
                     key={f.id}
-                    style={{minHeight:"28px"}}
+                    style={{ minHeight: "28px" }}
                     type="button"
                     aria-pressed={filter === f.id}
                     onClick={() => setFilter(f.id)}
@@ -648,7 +687,9 @@ export default function MultiChannelScheduleShowcase() {
               {/* Day header */}
               <div
                 className="grid border-b border-black/[0.06] bg-white"
-                style={{ gridTemplateColumns: "52px repeat(7, minmax(0, 1fr))" }}
+                style={{
+                  gridTemplateColumns: "52px repeat(7, minmax(0, 1fr))",
+                }}
               >
                 <span />
                 {DAY_NAMES.map((name, day) => (
@@ -662,7 +703,9 @@ export default function MultiChannelScheduleShowcase() {
                     <span
                       className={cn(
                         "flex size-6 items-center justify-center rounded-full text-xs font-semibold tabular-nums",
-                        isToday(day) ? "bg-[#11120e] text-white" : "text-[#11120e]",
+                        isToday(day)
+                          ? "bg-[#11120e] text-white"
+                          : "text-[#11120e]",
                       )}
                     >
                       {dateFor(week, day).getUTCDate()}
@@ -674,15 +717,23 @@ export default function MultiChannelScheduleShowcase() {
               {/* Body */}
               <div
                 className="grid"
-                style={{ gridTemplateColumns: "52px repeat(7, minmax(0, 1fr))" }}
+                style={{
+                  gridTemplateColumns: "52px repeat(7, minmax(0, 1fr))",
+                }}
               >
                 {/* Hour gutter */}
-                <div className="relative" style={{ height: HOURS.length * ROW_H }}>
+                <div
+                  className="relative"
+                  style={{ height: HOURS.length * ROW_H }}
+                >
                   {HOURS.map((h, i) => (
                     <span
                       key={h}
                       className="font-subheading absolute right-2 -translate-y-1/2 text-[10px] tabular-nums text-[#85887e]"
-                      style={{ top: i * ROW_H, display: i === 0 ? "none" : undefined }}
+                      style={{
+                        top: i * ROW_H,
+                        display: i === 0 ? "none" : undefined,
+                      }}
                     >
                       {formatHour(h)}
                     </span>
@@ -724,7 +775,10 @@ export default function MultiChannelScheduleShowcase() {
                           }}
                         >
                           <div className="flex items-center justify-between gap-1">
-                            <PlatformBadge platform={post.platform} className="size-3.5" />
+                            <PlatformBadge
+                              platform={post.platform}
+                              className="size-3.5"
+                            />
                             <span className="font-subheading truncate text-[9px] tabular-nums text-[#85887e]">
                               {formatTime(post.time).replace(" ", "")}
                             </span>
@@ -810,7 +864,9 @@ export default function MultiChannelScheduleShowcase() {
                     <Icon className="size-4 shrink-0" />
                     <div className="min-w-0">
                       <div className="text-xs font-semibold">{title}</div>
-                      <div className="truncate text-[10px] opacity-75">{sub}</div>
+                      <div className="truncate text-[10px] opacity-75">
+                        {sub}
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -823,11 +879,11 @@ export default function MultiChannelScheduleShowcase() {
                       {workspace === "brand" ? "DV" : "AX"}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-heading text-sm font-semibold text-[#11120e]">
+                      <h3 className="font-heading text-sm font-semibold text-[#11120e]">
                         {workspace === "brand"
                           ? "Draftva Inc. · 42,800 followers"
                           : "Alex Rivera · 19,400 followers"}
-                      </h4>
+                      </h3>
                       <span className="font-subheading block text-xs leading-relaxed text-[#6d7066]">
                         {workspace === "brand"
                           ? "Posts to X, LinkedIn Page & Threads at once"
@@ -868,7 +924,9 @@ export default function MultiChannelScheduleShowcase() {
 
         <div className="order-1 lg:order-2 lg:col-span-7">
           <Copy
-            badge={<SectionBadge icon={Globe}>Brand & Founder Profiles</SectionBadge>}
+            badge={
+              <SectionBadge icon={Globe}>Brand & Founder Profiles</SectionBadge>
+            }
             title="Schedule for your brand handles and founder profiles side by side."
             body="Grow your company’s official presence across X, LinkedIn, and Threads right alongside your personal founder accounts. Switch workspaces in one click, or coordinate launches where your personal account quotes your brand page automatically."
             points={[

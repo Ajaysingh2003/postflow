@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PRIVATE_METADATA } from "@/lib/seo/config";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -9,8 +10,8 @@ import OnboardingView from "@/modules/home/view/OnboardingView";
 import OnboardingSkeleton from "@/modules/home/component/OnboardingSkeleton";
 
 export const metadata: Metadata = {
-  title: "Welcome to Draftva",
-  robots: { index: false, follow: false },
+  ...PRIVATE_METADATA,
+  title: { absolute: "Welcome to Draftva" },
 };
 
 async function PreloadedOnboarding({

@@ -1,4 +1,4 @@
-import { ShieldCheck, Stars, WandSparklesIcon } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import React from "react";
 import { BentoHeader } from "./FeatureSection";
 
@@ -10,6 +10,7 @@ function FeatureCardTilt() {
         badge="DRM & Security"
         title="Zero-leak video protection"
         description="Enforce ephemeral playback tokens, dynamic forensic watermarking, and AES-128 HLS encryption right down to the chunk level."
+        // TODO: Replace legacy video-product claims with verified Draftva content before adding a link.
         linkText="Explore security controls ↗"
       />
     </div>

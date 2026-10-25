@@ -1,5 +1,3 @@
-"use client";
-
 import React from "react";
 import PricingSection from "@/modules/billing/component/PricingSection";
 import PricingGuarantee from "@/modules/billing/component/PricingGuarantee";
@@ -13,7 +11,7 @@ function PricingView() {
   return (
     <div className="mx-auto max-w-[1280px] px-5 sm:px-7 lg:px-8">
       {/* 1. Main Pricing Section with Tiers and Monthly/Quarterly/Annual switch */}
-      <PricingSection />
+      <PricingSection headingLevel="h1" />
 
       {/* 2. Trust and Security Guarantees */}
       <PricingGuarantee />

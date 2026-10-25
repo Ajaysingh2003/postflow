@@ -1,0 +1,5 @@
+{
+  "heroStreamedBeforeBilling": true,
+  "mockBillingDelaySeconds": 4,
+  "heroHtmlSeconds": 0.109
+}

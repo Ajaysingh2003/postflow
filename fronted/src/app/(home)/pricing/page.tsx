@@ -1,3 +1,5 @@
+import { PageSeo } from "@/lib/seo/PageSeo";
+import { seoMetadata } from "@/lib/seo/config";
 import React, { Suspense } from "react";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { getQueryClient, trpc } from "@/trpc/server";
@@ -12,6 +14,12 @@ async function PreloadedPricing() {
   await queryClient.prefetchQuery(trpc.billing.getPlans.queryOptions());
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
+      <PageSeo
+        path="/pricing"
+        plans={queryClient.getQueryData(
+          trpc.billing.getPlans.queryOptions().queryKey,
+        )}
+      />
       <PricingView />
     </HydrationBoundary>
   );
@@ -37,3 +45,5 @@ export default function Page() {
     </Suspense>
   );
 }
+
+export const metadata = seoMetadata("/pricing");

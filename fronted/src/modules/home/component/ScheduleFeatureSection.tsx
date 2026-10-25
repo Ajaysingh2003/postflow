@@ -1,18 +1,53 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Check, Clock, Sparkles, ArrowUpRight, Layers } from "lucide-react";
+import {
+  Plus,
+  Check,
+  Clock,
+  Sparkles,
+  ArrowUpRight,
+  Layers,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const INITIAL_QUEUE = [
-  { id: 1, title: "Why most content calendars fail", day: "Mon", time: "09:00 AM" },
-  { id: 2, title: "Product velocity update — v2.4", day: "Tue", time: "12:30 PM" },
+  {
+    id: 1,
+    title: "Why most content calendars fail",
+    day: "Mon",
+    time: "09:00 AM",
+  },
+  {
+    id: 2,
+    title: "Product velocity update — v2.4",
+    day: "Tue",
+    time: "12:30 PM",
+  },
 ];
 
 const WINDOWS = [
-  { id: "tue", day: "Tue", time: "08:45 AM", score: "94% match", bars: [35, 55, 95, 65, 40] },
-  { id: "wed", day: "Wed", time: "12:15 PM", score: "99% match", bars: [45, 75, 60, 100, 50] },
-  { id: "thu", day: "Thu", time: "05:10 PM", score: "89% match", bars: [30, 45, 70, 90, 60] },
+  {
+    id: "tue",
+    day: "Tue",
+    time: "08:45 AM",
+    score: "94% match",
+    bars: [35, 55, 95, 65, 40],
+  },
+  {
+    id: "wed",
+    day: "Wed",
+    time: "12:15 PM",
+    score: "99% match",
+    bars: [45, 75, 60, 100, 50],
+  },
+  {
+    id: "thu",
+    day: "Thu",
+    time: "05:10 PM",
+    score: "89% match",
+    bars: [30, 45, 70, 90, 60],
+  },
 ];
 
 export default function ScheduleFeatureSection() {
@@ -28,7 +63,12 @@ export default function ScheduleFeatureSection() {
     if (queue.length < 3) {
       setQueue([
         ...queue,
-        { id: 3, title: "Founder notes: Q4 roadmap", day: "Thu", time: "04:15 PM" },
+        {
+          id: 3,
+          title: "Founder notes: Q4 roadmap",
+          day: "Thu",
+          time: "04:15 PM",
+        },
       ]);
       setAdded(true);
     } else {
@@ -56,14 +96,13 @@ export default function ScheduleFeatureSection() {
         </h2>
 
         <p className="mt-4 text-base leading-relaxed text-[#6d7066] sm:text-lg">
-          Consistency is the whole game, and the hardest part to keep up[cite: 1].
-          Scheduling your posts in advance with Draftva makes it automatic[cite: 1].
+          Consistency is the whole game, and the hardest part to keep up.
+          Scheduling your posts in advance with Draftva makes it automatic.
         </p>
       </div>
 
       {/* Unified Architectural 3-Column Grid */}
       <div className="mt-12 grid grid-cols-1 divide-y divide-black/[0.07] overflow-hidden rounded-3xl border border-black/[0.08] bg-white shadow-[0_24px_60px_-20px_rgba(17,18,14,0.07)] lg:mt-16 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-        
         {/* =========================================================
             01: FILL YOUR WEEK IN MINUTES
         ========================================================= */}
@@ -83,7 +122,7 @@ export default function ScheduleFeatureSection() {
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-[#6d7066]">
               Draft a batch of posts, review them for publishing, and drop them
-              into your queue[cite: 1]. No copy-pasting into social tabs ever again[cite: 1].
+              into your queue. No copy-pasting into social tabs ever again.
             </p>
           </div>
 
@@ -159,7 +198,7 @@ export default function ScheduleFeatureSection() {
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-[#6d7066]">
               Draftva analyzes audience activity patterns to pinpoint the exact
-              window when your followers are actually online and engaging[cite: 1].
+              window when your followers are actually online and engaging.
             </p>
           </div>
 
@@ -183,7 +222,10 @@ export default function ScheduleFeatureSection() {
                 {activeWindow.bars.map((height, idx) => {
                   const isPeak = height >= 90;
                   return (
-                    <div key={idx} className="flex flex-1 flex-col items-center gap-1 h-full justify-end">
+                    <div
+                      key={idx}
+                      className="flex flex-1 flex-col items-center gap-1 h-full justify-end"
+                    >
                       <div
                         style={{ height: `${height}%` }}
                         className={cn(
@@ -240,8 +282,8 @@ export default function ScheduleFeatureSection() {
               It posts for you
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-[#6d7066]">
-              Your queue publishes on time, every time[cite: 1]. You stay top-of-feed
-              all week without ever needing to open the app[cite: 1].
+              Your queue publishes on time, every time. You stay top-of-feed all
+              week without ever needing to open the app.
             </p>
           </div>
 
@@ -265,7 +307,8 @@ export default function ScheduleFeatureSection() {
                   </div>
 
                   <p className="mt-1 text-xs leading-relaxed text-[#6d7066]">
-                    Next post goes out Wednesday — your queue is full for 7 days[cite: 1].
+                    Next post goes out Wednesday — your queue is full for 7
+                    days.
                   </p>
                 </div>
               </div>
@@ -287,7 +330,6 @@ export default function ScheduleFeatureSection() {
             </div>
           </div>
         </div>
-
       </div>
     </section>
   );

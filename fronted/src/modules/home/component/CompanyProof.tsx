@@ -1,3 +1,4 @@
+// TODO: Verify testimonial attribution, statistics and consent before replacing placeholder portraits.
 "use client";
 
 import React from "react";
@@ -21,28 +22,28 @@ const creators: Creator[] = [
     handle: "@alexrivera",
     metric: "48K followers",
     platform: "x",
-    image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+    image: "/images/placeholders/home-testimonial-portrait.png",
   },
   {
     name: "Marcus Vance",
     handle: "marcus-vance",
     metric: "Top Voice • 82K",
     platform: "linkedin",
-    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+    image: "/images/placeholders/home-testimonial-portrait.png",
   },
   {
     name: "Elena Rostova",
     handle: "@elena.threads",
     metric: "24K audience",
     platform: "threads",
-    image: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
+    image: "/images/placeholders/home-testimonial-portrait.png",
   },
   {
     name: "David Kim",
     handle: "@davidkbuilds",
     metric: "110K readers",
     platform: "x",
-    image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
+    image: "/images/placeholders/home-testimonial-portrait.png",
   },
 ];
 
@@ -65,9 +66,8 @@ export default function CreatorProof() {
               className="relative size-8 overflow-hidden rounded-full ring-2 ring-background"
             >
               <Image
-              unoptimized
                 src={c.image}
-                alt={c.name}
+                alt="Placeholder creator portrait"
                 width={32}
                 height={32}
                 className="size-full object-cover"
@@ -87,14 +87,18 @@ export default function CreatorProof() {
           </span>
         </div>
 
-        <span className="hidden text-zinc-300 dark:text-zinc-700 sm:inline">•</span>
+        <span className="hidden text-zinc-300 dark:text-zinc-700 sm:inline">
+          •
+        </span>
 
         <p className="text-xs text-zinc-600 dark:text-zinc-400">
-          Trusted by <strong className="font-semibold text-zinc-900 dark:text-zinc-100">2,400+ creators</strong> publishing daily
+          Trusted by{" "}
+          <strong className="font-semibold text-zinc-900 dark:text-zinc-100">
+            2,400+ creators
+          </strong>{" "}
+          publishing daily
         </p>
       </div>
-
-      
     </motion.div>
   );
 }

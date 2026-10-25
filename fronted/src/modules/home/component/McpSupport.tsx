@@ -85,7 +85,13 @@ const BULLETS = [
   "Pull analytics and attach images or videos without leaving the conversation",
 ];
 
-const INTEGRATIONS = ["Claude", "ChatGPT", "Cursor", "Gemini", "Any MCP client"];
+const INTEGRATIONS = [
+  "Claude",
+  "ChatGPT",
+  "Cursor",
+  "Gemini",
+  "Any MCP client",
+];
 
 export function McpSupport() {
   const [active, setActive] = useState<ClientId>("claude");
@@ -186,7 +192,7 @@ export function McpSupport() {
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
               <Link
-                href="/register"
+                href="/product/mcp"
                 className="group inline-flex items-center gap-1.5 text-[15px] font-semibold"
                 style={{ color: BRAND_DEEP }}
               >

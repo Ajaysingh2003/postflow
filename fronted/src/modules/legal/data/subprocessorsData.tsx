@@ -130,7 +130,7 @@ export const SUBPROCESSORS_SECTIONS: LegalSection[] = [
             </thead>
             <tbody className="divide-y divide-neutral-100 text-neutral-700">
               <tr>
-                <td className="p-3.5 font-semibold text-neutral-900">Stripe Inc.</td>
+                <td className="p-3.5 font-semibold text-neutral-900">dodopayment Inc.</td>
                 <td className="p-3.5">United States</td>
                 <td className="p-3.5">Payment gateway, subscription recurring billing, invoice generation</td>
                 <td className="p-3.5">Payment tokens, name, email, billing address</td>

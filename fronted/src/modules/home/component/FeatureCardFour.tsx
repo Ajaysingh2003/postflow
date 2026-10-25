@@ -2,14 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
-import {
-  Check,
-  CornerDownRight,
-  Lightbulb,
-  Mail,
-  Repeat2,
-  Sparkles,
-} from "lucide-react";
+import { Check, CornerDownRight, Lightbulb, Repeat2 } from "lucide-react";
 import { BentoCard, BentoHeader, CardBottomFade } from "./FeatureSection";
 import { PlatformBadge } from "./PlatformBadge";
 
@@ -32,12 +25,35 @@ interface CardConfig {
 }
 
 const CARDS: CardConfig[] = [
-  { id: "linkedin", name: "LinkedIn", tag: "Post", x: 9, rot: -10, top: 52, z: 10 },
+  {
+    id: "linkedin",
+    name: "LinkedIn",
+    tag: "Post",
+    x: 9,
+    rot: -10,
+    top: 52,
+    z: 10,
+  },
   { id: "x", name: "X", tag: "Thread", x: 28, rot: -5, top: 30, z: 20 },
-  { id: "threads", name: "Threads", tag: "Take", x: 72, rot: 5, top: 30, z: 20 },
-  { id: "newsletter", name: "Newsletter", tag: "Email", x: 91, rot: 10, top: 52, z: 10 },
+  {
+    id: "threads",
+    name: "Threads",
+    tag: "Take",
+    x: 72,
+    rot: 5,
+    top: 30,
+    z: 20,
+  },
+  {
+    id: "newsletter",
+    name: "Newsletter",
+    tag: "Email",
+    x: 91,
+    rot: 10,
+    top: 52,
+    z: 10,
+  },
 ];
-
 
 /* ------------------------------ Format Previews ---------------------------- */
 
@@ -47,7 +63,8 @@ function PreviewContent({ id }: { id: Format }) {
       return (
         <div className="space-y-1.5 text-left">
           <p className="line-clamp-2 text-[10.5px] font-semibold leading-snug text-zinc-900">
-            One viral post earns quick attention. A weekly habit builds enterprise trust.
+            One viral post earns quick attention. A weekly habit builds
+            enterprise trust.
           </p>
           <p className="line-clamp-2 text-[9.5px] leading-relaxed text-zinc-500">
             3 frameworks top founders use to sustain high-signal distribution.
@@ -68,9 +85,12 @@ function PreviewContent({ id }: { id: Format }) {
             className="absolute bottom-1 left-0 top-1 w-px bg-zinc-200"
           />
           <div className="space-y-1">
-            <span className="font-mono text-[9px] font-semibold text-zinc-400">1/4</span>
+            <span className="font-mono text-[9px] font-semibold text-zinc-400">
+              1/4
+            </span>
             <p className="line-clamp-2 text-[10px] font-medium leading-snug text-zinc-800">
-              Going viral has a 24-hour half-life. Compounding reach lasts years.
+              Going viral has a 24-hour half-life. Compounding reach lasts
+              years.
             </p>
           </div>
           <p className="line-clamp-1 text-[9.5px] text-zinc-500">
@@ -86,7 +106,8 @@ function PreviewContent({ id }: { id: Format }) {
             Hot take
           </div>
           <p className="line-clamp-3 text-[10px] font-medium leading-snug text-zinc-800">
-            Showing up every single Monday beats every growth hack ever invented. Who agrees?
+            Showing up every single Monday beats every growth hack ever
+            invented. Who agrees?
           </p>
         </div>
       );
@@ -117,14 +138,12 @@ export function FeatureCardFour() {
   const reduced = !!useReducedMotion();
   const show = seen || reduced;
 
-  const [out, setOut] = useState(false);
+  const [animatedOut, setOut] = useState(false);
+  const out = reduced || animatedOut;
   const [pulse, setPulse] = useState(0);
 
   useEffect(() => {
-    if (reduced) {
-      setOut(true);
-      return;
-    }
+    if (reduced) return;
     if (!live) return;
 
     let timeout: ReturnType<typeof setTimeout>;
@@ -140,14 +159,17 @@ export function FeatureCardFour() {
   }, [live, reduced]);
 
   return (
-    <BentoCard className="relative flex !h-[490px] flex-col overflow-hidden border-zinc-200/80 bg-white sm:!h-[500px]">
+    <BentoCard
+      id="feature-repurposing"
+      className="relative flex !h-[490px] flex-col overflow-hidden border-zinc-200/80 bg-white sm:!h-[500px]"
+    >
       <BentoHeader
         icon={Repeat2}
         badge="Omnichannel Engine"
         title="One raw note. Every channel tailored."
         description="Write your thought once. Draftva automatically restructures hooks, cadence, and line-breaks for every social platform."
         linkText="See repurposing workflow ↗"
-        href="/register"
+        href="/product/ai-writer"
       />
 
       <div
@@ -229,7 +251,11 @@ export function FeatureCardFour() {
                           y: -10,
                           rotate: 0,
                           scale: 1.05,
-                          transition: { type: "spring", stiffness: 320, damping: 22 },
+                          transition: {
+                            type: "spring",
+                            stiffness: 320,
+                            damping: 22,
+                          },
                         }
                   }
                 >
@@ -353,7 +379,9 @@ export function FeatureCardFour() {
                 <div className="relative mt-3.5 flex items-center justify-between border-t border-white/15 pt-2 text-[10px]">
                   <span
                     className="flex items-center gap-1.5 font-medium transition-colors"
-                    style={{ color: out ? "#3fda8a" : "rgba(221, 214, 254, 0.65)" }}
+                    style={{
+                      color: out ? "#3fda8a" : "rgba(221, 214, 254, 0.65)",
+                    }}
                   >
                     <span
                       className={`size-1.5 rounded-full ${
@@ -364,7 +392,6 @@ export function FeatureCardFour() {
                     />
                     {out ? "4 tailored formats" : "Synthesizing…"}
                   </span>
-
                 </div>
               </div>
             </div>

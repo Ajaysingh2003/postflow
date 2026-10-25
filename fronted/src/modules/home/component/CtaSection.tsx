@@ -2,14 +2,12 @@ import { Button } from "@/components/ui/button";
 import React from "react";
 import Link from "next/link";
 import { useTRPC } from "@/trpc/client";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 
 function CtaSection() {
   const trpc = useTRPC();
-  const { data: userData } = useSuspenseQuery(trpc.user.me.queryOptions());
+  const { data: userData } = useQuery(trpc.user.profile.queryOptions());
 
-  const router = useRouter();
   return (
     <div>
       {!userData ? (
@@ -32,20 +30,18 @@ function CtaSection() {
       ) : (
         <div className="side_2 p-1   justify-centezr mt-5 flex items-center flex-col md:flex-row gap-5">
           <Button
-            onClick={() => router.push(`dashboard/schedule`)}
+            asChild
             className=" h-9 capitalize secondary-btn w-full md:w-45 cursor-pointer border-[0.5px] border-[#0000009b] rounded-lg"
             variant={"ghost"}
-
           >
-            Schedule
+            <Link href="/dashboard/schedule">Schedule</Link>
           </Button>
           <Button
-          onClick={()=>router.push(`/dashboard`)}
+            asChild
             variant={"default"}
             className="capitalize h-9 px-8 w-full md:w-45 rounded-md primary-btn font-bold  cursor-pointer text-white "
-
           >
-            Start for free
+            <Link href="/dashboard">Start for free</Link>
           </Button>
         </div>
       )}

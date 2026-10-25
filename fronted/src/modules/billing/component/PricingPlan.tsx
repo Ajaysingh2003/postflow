@@ -10,6 +10,7 @@ type PricingTimelineType = {
   timeLine: PlanType;
   setTimeLine: React.Dispatch<React.SetStateAction<PlanType>>;
   labels?: Partial<Record<PlanType, string>>;
+  discounts?: Partial<Record<PlanType, string>>;
 };
 
 const plans: {
@@ -30,8 +31,14 @@ const plans: {
   },
 ];
 
-function PricingPlan({ timeLine, setTimeLine, labels }: PricingTimelineType) {
+function PricingPlan({
+  timeLine,
+  setTimeLine,
+  labels,
+  discounts,
+}: PricingTimelineType) {
   const activeId = useId();
+
   return (
     <div
       role="group"
@@ -39,10 +46,17 @@ function PricingPlan({ timeLine, setTimeLine, labels }: PricingTimelineType) {
       style={{
         background: "#B9B9B913",
       }}
-      className="flex max-w-full flex-wrap justify-center gap-1 rounded-md p-1"
+      className="flex max-w-full flex-wrap justify-center gap-1 rounded-md p-1 pb-2.5"
     >
       {plans.map((plan) => {
         const isActive = plan.scope === timeLine;
+        const defaultDiscount =
+          plan.scope === "quarterly"
+            ? "Save 10%"
+            : plan.scope === "annually"
+            ? "Save 20%"
+            : undefined;
+        const discountText = discounts?.[plan.scope] ?? defaultDiscount;
 
         return (
           <Button
@@ -120,6 +134,48 @@ function PricingPlan({ timeLine, setTimeLine, labels }: PricingTimelineType) {
             >
               {labels?.[plan.scope] ?? plan.label}
             </motion.span>
+
+            {/* save badge */}
+            {discountText && (
+              <motion.span
+                animate={
+                  isActive
+                    ? {
+                        y: "50%",
+                        scale: 1,
+                      }
+                    : {
+                        y: "50%",
+                        scale: 0.92,
+                      }
+                }
+                transition={{
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 24,
+                }}
+                className="
+                  absolute
+                  bottom-0
+                  left-1/2
+                  z-20
+                  -translate-x-1/2
+                  whitespace-nowrap
+                  rounded-3xl
+                  bg-blue-500
+                  px-2
+                  py-0.5
+                  text-center
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  text-white
+                  shadow-sm
+                "
+              >
+                {discountText}
+              </motion.span>
+            )}
           </Button>
         );
       })}

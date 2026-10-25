@@ -99,9 +99,9 @@ export const TERMS_SECTIONS: LegalSection[] = [
           provide accurate, current, and complete information during
           registration and keep your account profile updated.
         </p>
-        <h4 className="font-heading text-lg font-semibold text-neutral-900 mt-4">
+        <h3 className="font-heading text-lg font-semibold text-neutral-900 mt-4">
           Workspace Roles & Collaboration
-        </h4>
+        </h3>
         <p>
           Accounts operate within Workspaces. Workspace owners and
           administrators may invite team members, assign role permissions
@@ -109,9 +109,9 @@ export const TERMS_SECTIONS: LegalSection[] = [
           Workspace Owner remains responsible for all actions taken under their
           workspace.
         </p>
-        <h4 className="font-heading text-lg font-semibold text-neutral-900 mt-4">
+        <h3 className="font-heading text-lg font-semibold text-neutral-900 mt-4">
           Account Credentials & Security
-        </h4>
+        </h3>
         <p>
           You are responsible for maintaining the confidentiality of your login
           credentials and for all activities that occur under your account. You
@@ -139,9 +139,9 @@ export const TERMS_SECTIONS: LegalSection[] = [
         </p>
         <div className="space-y-3">
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">
+            <h3 className="font-heading font-semibold text-neutral-900">
               Free Plan
-            </h5>
+            </h3>
             <p className="mt-1 text-sm text-neutral-600">
               The Free plan has no trial deadline and does not automatically
               convert into a paid subscription. Paid plans begin at checkout
@@ -149,9 +149,9 @@ export const TERMS_SECTIONS: LegalSection[] = [
             </p>
           </div>
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">
+            <h3 className="font-heading font-semibold text-neutral-900">
               Automatic Renewal & Payments
-            </h5>
+            </h3>
             <p className="mt-1 text-sm text-neutral-600">
               Paid subscriptions renew automatically at the end of each billing
               cycle (monthly or annually) until you cancel. Payments are
@@ -160,9 +160,9 @@ export const TERMS_SECTIONS: LegalSection[] = [
             </p>
           </div>
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">
+            <h3 className="font-heading font-semibold text-neutral-900">
               Cancellation & Upgrades
-            </h5>
+            </h3>
             <p className="mt-1 text-sm text-neutral-600">
               You may cancel your subscription at any time in Settings &gt;
               Billing. Upon cancellation, your access continues until the end of
@@ -468,9 +468,9 @@ export const TERMS_SECTIONS: LegalSection[] = [
           notifying you via email or in-app notification.
         </p>
         <div className="rounded-xl border border-neutral-200/80 bg-white p-5 shadow-2xs">
-          <h5 className="font-heading font-semibold text-neutral-900">
+          <h3 className="font-heading font-semibold text-neutral-900">
             Legal Contact
-          </h5>
+          </h3>
           <p className="mt-1 text-sm text-neutral-600">
             Draftva Inc.
             <br />

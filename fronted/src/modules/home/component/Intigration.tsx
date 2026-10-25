@@ -1,5 +1,7 @@
 "use client";
+// TODO(launch-content): Owner must verify existing endorsements, product and compliance claims; do not reuse them in structured data.
 
+import Image from "next/image";
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
@@ -170,7 +172,7 @@ function IntegrationCard({
           "group relative flex items-center justify-center h-12 bg-white rounded-xl",
           "border border-stone-200/80 cursor-pointer !px-2.5",
           "shadow-[0_4px_16px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)]",
-          config.width
+          config.width,
         )}
         animate={{
           rotate: isHovered ? 0 : config.rotate,
@@ -179,7 +181,9 @@ function IntegrationCard({
           boxShadow: isHovered
             ? "0 22px 35px -8px rgba(0, 0, 0, 0.12), 0 8px 14px -4px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.08)"
             : "0 4px 16px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03)",
-          borderColor: isHovered ? "rgba(0, 0, 0, 0.16)" : "rgba(229, 231, 235, 0.8)",
+          borderColor: isHovered
+            ? "rgba(0, 0, 0, 0.16)"
+            : "rgba(229, 231, 235, 0.8)",
         }}
         whileTap={{ scale: 0.95 }}
         transition={{
@@ -194,8 +198,10 @@ function IntegrationCard({
 
         {item.type === "badge" ? (
           <div className="flex items-center justify-center gap-1.5 sm:gap-2">
-            <img
+            <Image
               src={item.image}
+              width={22}
+              height={22}
               alt={item.alt}
               className="h-5 w-5 sm:h-5.5 sm:w-5.5 object-contain shrink-0"
               loading="lazy"
@@ -208,8 +214,10 @@ function IntegrationCard({
             </span>
           </div>
         ) : (
-          <img
+          <Image
             src={item.image}
+            width={110}
+            height={24}
             alt={item.alt}
             className={item.imgClass || "h-6 w-auto object-contain"}
             loading="lazy"
@@ -234,16 +242,23 @@ export default function Intigration({
   showTestimonial = true,
 }: IntigrationProps) {
   return (
-    <section className={cn("w-full py-6 sm:py-8 md:py-12 relative overflow-visible", className)}>
+    <section
+      id="integrations"
+      className={cn(
+        "w-full py-6 sm:py-8 md:py-12 relative overflow-visible",
+        className,
+      )}
+    >
       {/* Heading & Subheading */}
       <div className="relative flex flex-col items-center justify-center text-center gap-2 sm:gap-3 max-w-2xl mx-auto px-4">
         <h2 className="font-heading text-3xl sm:text-4xl lg:text-[42px] font-semibold tracking-tight text-neutral-900 leading-tight">
           Your content. Every platform.
         </h2>
         <p className="text-base sm:text-lg text-[#6B7280] font-normal leading-relaxed">
-          Create once, tailor for each platform, and share your ideas wherever your audience is.{" "}
+          Create once, tailor for each platform, and share your ideas wherever
+          your audience is.{" "}
           <a
-            href="#docs"
+            href="/product/social-integration"
             className="inline-flex items-center text-neutral-900 hover:text-neutral-600 underline underline-offset-4 font-medium transition-colors"
           >
             docs
@@ -278,7 +293,7 @@ export default function Intigration({
           <div className="text-sm sm:text-base text-neutral-600 font-normal">
             “
             <span className="bg-[#dbeafe] text-neutral-900 rounded-[4px] px-1.5 py-0.5 font-medium">
-              I'm a huge fan of Rowley!
+              I&apos;m a huge fan of Rowley!
             </span>{" "}
             Team did a great job.”{" "}
             <span className="text-stone-300 mx-1">—</span>{" "}
@@ -294,9 +309,11 @@ export default function Intigration({
 
           <div className="mt-3.5 flex items-center gap-2.5">
             <div className="relative">
-              <img
-                src="/intigration/stey.png"
-                alt="Steven Tey"
+              <Image
+                src="/images/placeholders/home-testimonial-portrait.png"
+                width={40}
+                height={40}
+                alt="Placeholder testimonial portrait"
                 className="h-10 w-10 rounded-full border border-stone-200/80 shadow-xs object-cover"
                 loading="lazy"
               />

@@ -50,25 +50,25 @@ export const ACCEPTABLE_USE_SECTIONS: LegalSection[] = [
         <p>Draftva connects strictly to official social platform APIs. The following automated activities are strictly forbidden:</p>
         <div className="space-y-3">
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900 text-sm">Reddit Vote & Engagement Manipulation</h5>
+            <h3 className="font-heading font-semibold text-neutral-900 text-sm">Reddit Vote & Engagement Manipulation</h3>
             <p className="mt-1 text-xs text-neutral-600">
               You must not use Draftva for auto-voting, auto-commenting, coordinated upvoting, or spamming subreddits with duplicate link drops. Cross-posting to subreddits must be an explicit, community-relevant choice respecting individual subreddit rules and flair requirements.
             </p>
           </div>
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900 text-sm">Mass Duplicate Cross-Posting</h5>
+            <h3 className="font-heading font-semibold text-neutral-900 text-sm">Mass Duplicate Cross-Posting</h3>
             <p className="mt-1 text-xs text-neutral-600">
               Blasting identical, spammy, or commercial affiliate links simultaneously across dozens of unrelated channels or subreddits without tailoring to community norms is strictly prohibited.
             </p>
           </div>
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900 text-sm">Scraping & Lead Harvesting</h5>
+            <h3 className="font-heading font-semibold text-neutral-900 text-sm">Scraping & Lead Harvesting</h3>
             <p className="mt-1 text-xs text-neutral-600">
               Draftva is not a prospect scraper. You may not use Draftva or connected tools to extract private user profiles, scrape email addresses, or conduct automated bulk cold outreach without explicit consent.
             </p>
           </div>
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900 text-sm">Circumventing Platform Rate Limits</h5>
+            <h3 className="font-heading font-semibold text-neutral-900 text-sm">Circumventing Platform Rate Limits</h3>
             <p className="mt-1 text-xs text-neutral-600">
               You may not deliberately exploit or flood Draftva&apos;s queue to evade official social network rate limits or API quotas.
             </p>
@@ -138,7 +138,7 @@ export const ACCEPTABLE_USE_SECTIONS: LegalSection[] = [
           If you encounter any content, account, or activity that you suspect violates this Acceptable Use Policy, please report it immediately to our Trust & Safety team:
         </p>
         <div className="rounded-xl border border-neutral-200/80 bg-white p-5 shadow-2xs">
-          <h5 className="font-heading font-semibold text-neutral-900">Draftva Trust & Safety</h5>
+          <h3 className="font-heading font-semibold text-neutral-900">Draftva Trust & Safety</h3>
           <p className="mt-1 text-sm text-neutral-600">
             Email: <a href="mailto:trust@draftva.com" className="text-[#0f7a47] font-semibold">trust@draftva.com</a><br />
             Include relevant post links, screenshots, workspace IDs, or headers where applicable.

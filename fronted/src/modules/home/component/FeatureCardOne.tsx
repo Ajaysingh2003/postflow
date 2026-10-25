@@ -138,7 +138,6 @@ function draftDiff(before: string, after: string) {
   };
 }
 
-
 const SMALL_BTN = "!min-h-6 !gap-1 !rounded-md !px-2 !text-[11px]";
 
 /* -------------------------------------------------------------------------- */
@@ -505,9 +504,7 @@ export function FeatureCardOne() {
   const typing = bodyChars < textLength;
   const ready =
     reduceMotion ||
-    (scenario.kind === "post" || scenario.kind === "rewrite"
-      ? !typing
-      : true);
+    (scenario.kind === "post" || scenario.kind === "rewrite" ? !typing : true);
 
   return (
     <BentoCard className="relative flex !h-[460px] sm:!h-[540px] min-h-0 min-w-0 flex-col overflow-hidden !bg-[#fffefe] ">
@@ -531,13 +528,13 @@ export function FeatureCardOne() {
         </p>
       </div> */}
 
-
-        <BentoHeader
+      <BentoHeader
         icon={Sparkles}
         badge="AI assistant"
         title="An assistant that writes your posts"
         description="Ask for a post, refine a draft, or ask how your content is doing. You review every change before it reaches your draft."
         linkText="Try the assistant ↗"
+        href="/product/ai-writer"
       />
       {/* Demo viewport */}
       <div className="relative mt-4 min-h-0 flex-1 overflow-hidden px-4 sm:px-6">
@@ -591,56 +588,53 @@ export function FeatureCardOne() {
                   {scenario.response.slice(0, introChars)}
                 </p>
                 <div className=" max-w-[300px] md:!max-w-[400px] mx-auto">
+                  {showContent && (
+                    <div className="pt-1">
+                      {scenario.kind === "post" && (
+                        <DraftCard
+                          title={scenario.title}
+                          platform={scenario.platform}
+                          content={scenario.content}
+                          shown={bodyChars}
+                          typing={typing}
+                          ready={ready}
+                        />
+                      )}
 
-                {showContent && (
-                  <div className="pt-1">
-                    {scenario.kind === "post" && (
-                      <DraftCard
-                        title={scenario.title}
-                        platform={scenario.platform}
-                        content={scenario.content}
-                        shown={bodyChars}
-                        typing={typing}
-                        ready={ready}
-                      />
-                    )}
+                      {scenario.kind === "rewrite" && (
+                        <DraftCard
+                          title={scenario.title}
+                          platform={scenario.platform}
+                          content={scenario.after}
+                          original={scenario.before}
+                          shown={bodyChars}
+                          typing={typing}
+                          ready={ready}
+                        />
+                      )}
 
-                    {scenario.kind === "rewrite" && (
-                      <DraftCard
-                        title={scenario.title}
-                        platform={scenario.platform}
-                        content={scenario.after}
-                        original={scenario.before}
-                        shown={bodyChars}
-                        typing={typing}
-                        ready={ready}
-                      />
-                    )}
+                      {scenario.kind === "insights" && (
+                        <InsightsCard revealed={items} />
+                      )}
 
-                    {scenario.kind === "insights" && (
-                      <InsightsCard
-                        revealed={items}
-                      />
-                    )}
-
-                    {scenario.kind === "ideas" && (
-                      <ul className="list-disc space-y-0.5 pl-5 text-[12px] leading-[1.5] text-[#111418] marker:text-[#111418]">
-                        {scenario.ideas.map((idea, i) => (
-                          <li
-                            key={idea}
-                            className={`transition-all duration-300 ${
-                              i < items
-                                ? "translate-y-0 opacity-100"
-                                : "translate-y-1 opacity-0"
-                            }`}
-                          >
-                            {idea}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
+                      {scenario.kind === "ideas" && (
+                        <ul className="list-disc space-y-0.5 pl-5 text-[12px] leading-[1.5] text-[#111418] marker:text-[#111418]">
+                          {scenario.ideas.map((idea, i) => (
+                            <li
+                              key={idea}
+                              className={`transition-all duration-300 ${
+                                i < items
+                                  ? "translate-y-0 opacity-100"
+                                  : "translate-y-1 opacity-0"
+                              }`}
+                            >
+                              {idea}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

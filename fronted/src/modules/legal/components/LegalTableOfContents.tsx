@@ -27,7 +27,7 @@ export function LegalTableOfContents({ sections }: LegalTableOfContentsProps) {
       {
         rootMargin: "-80px 0px -70% 0px",
         threshold: 0.1,
-      }
+      },
     );
 
     sections.forEach((section) => {
@@ -72,7 +72,7 @@ export function LegalTableOfContents({ sections }: LegalTableOfContentsProps) {
           <ChevronRight
             className={cn(
               "size-4 text-neutral-400 transition-transform duration-200",
-              isMobileOpen && "rotate-90"
+              isMobileOpen && "rotate-90",
             )}
           />
         </button>
@@ -88,7 +88,7 @@ export function LegalTableOfContents({ sections }: LegalTableOfContentsProps) {
                   "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors",
                   activeId === section.id
                     ? "bg-[#3fda8a]/15 text-[#0f7a47] font-semibold"
-                    : "text-neutral-600 hover:bg-neutral-50"
+                    : "text-neutral-600 hover:bg-neutral-50",
                 )}
               >
                 <span className="truncate">
@@ -109,37 +109,42 @@ export function LegalTableOfContents({ sections }: LegalTableOfContentsProps) {
       {/* ------------------------------------------------------------------ */}
       <aside className="hidden lg:block sticky top-28 self-start w-full space-y-6">
         <div className="rounded-2xl border border-black/[0.08] bg-white p-5 shadow-2xs">
-          <h3 className="font-heading text-xs font-bold uppercase tracking-wider text-neutral-500 pb-3 border-b border-black/[0.05]">
+          <h2 className="font-heading text-xs font-bold uppercase tracking-wider text-neutral-500 pb-3 border-b border-black/[0.05]">
             On This Page
-          </h3>
+          </h2>
 
           <nav className="mt-4 space-y-1 max-h-[calc(100vh-280px)] overflow-y-auto no-scrollbar pr-1">
             {sections.map((section) => {
               const isActive = activeId === section.id;
               return (
-                <button
+                <a
                   key={section.id}
-                  type="button"
-                  onClick={() => scrollTo(section.id)}
+                  href={`#${section.id}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    scrollTo(section.id);
+                  }}
                   className={cn(
                     "group flex w-full items-start gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] leading-snug transition-all duration-150",
                     isActive
                       ? "bg-[#3fda8a]/15 text-neutral-950 font-semibold"
-                      : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                      : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50",
                   )}
                 >
                   {section.number && (
                     <span
                       className={cn(
                         "font-mono text-[11px] font-semibold mt-0.5 shrink-0",
-                        isActive ? "text-[#0f7a47]" : "text-neutral-400 group-hover:text-neutral-600"
+                        isActive
+                          ? "text-[#0f7a47]"
+                          : "text-neutral-400 group-hover:text-neutral-600",
                       )}
                     >
                       {section.number}
                     </span>
                   )}
                   <span className="flex-1 line-clamp-2">{section.title}</span>
-                </button>
+                </a>
               );
             })}
           </nav>
@@ -152,7 +157,8 @@ export function LegalTableOfContents({ sections }: LegalTableOfContentsProps) {
             <span>Need clarification?</span>
           </div>
           <p className="text-xs text-neutral-500 leading-relaxed">
-            Our legal and privacy compliance team is here to answer any questions or process formal requests.
+            Our legal and privacy compliance team is here to answer any
+            questions or process formal requests.
           </p>
           <a
             href="mailto:support@draftva.com"

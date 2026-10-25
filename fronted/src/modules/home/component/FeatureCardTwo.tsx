@@ -32,9 +32,8 @@ const TODAY = 0; // Mon 12
 const HOURS = ["9 AM", "10 AM", "11 AM", "12 PM"];
 
 const ROW = 56; // px per hour
-const GUTTER = 40; 
+const GUTTER = 40;
 const NOW_MINUTES = 37;
-
 
 const POSTS: {
   day: number;
@@ -43,14 +42,42 @@ const POSTS: {
   platform: Platform;
   title: string;
 }[] = [
-  { day: 1, row: 0, time: "9:00", platform: "linkedin", title: "Consistency beats viral" },
-  { day: 2, row: 1, time: "10:00", platform: "x", title: "3 lessons from shipping" },
-  { day: 3, row: 0, time: "9:00", platform: "linkedin", title: "A mistake that helped" },
-  { day: 4, row: 2, time: "11:00", platform: "x", title: "Posting daily: a take" },
-  { day: 5, row: 1, time: "10:00", platform: "linkedin", title: "Weekend reading list" },
+  {
+    day: 1,
+    row: 0,
+    time: "9:00",
+    platform: "linkedin",
+    title: "Consistency beats viral",
+  },
+  {
+    day: 2,
+    row: 1,
+    time: "10:00",
+    platform: "x",
+    title: "3 lessons from shipping",
+  },
+  {
+    day: 3,
+    row: 0,
+    time: "9:00",
+    platform: "linkedin",
+    title: "A mistake that helped",
+  },
+  {
+    day: 4,
+    row: 2,
+    time: "11:00",
+    platform: "x",
+    title: "Posting daily: a take",
+  },
+  {
+    day: 5,
+    row: 1,
+    time: "10:00",
+    platform: "linkedin",
+    title: "Weekend reading list",
+  },
 ];
-
-
 
 export function FeatureCardTwo() {
   return (
@@ -61,7 +88,7 @@ export function FeatureCardTwo() {
         title="Post when your audience is online"
         description="Draftva finds the times your followers are most active and fills your queue, so every post goes out at its best time."
         linkText="See the scheduler ↗"
-        href="/register"
+        href="/product/schedule"
       />
 
       <div className="relative mt-auto h-[260px] overflow-hidden sm:h-[280px]">
@@ -72,13 +99,13 @@ export function FeatureCardTwo() {
   );
 }
 
-
 function WeekCalendar() {
   const reduce = useReducedMotion();
   const frameRef = useRef<HTMLDivElement>(null);
 
   const [inView, setInView] = useState(false);
-  const [placed, setPlaced] = useState(0);
+  const [animatedPlaced, setPlaced] = useState(0);
+  const placed = reduce ? POSTS.length : animatedPlaced;
 
   /* Only run the loop while the card is on screen. */
   useEffect(() => {
@@ -96,10 +123,7 @@ function WeekCalendar() {
 
   /* Place posts one by one, hold, then start over. */
   useEffect(() => {
-    if (reduce) {
-      setPlaced(POSTS.length);
-      return;
-    }
+    if (reduce) return;
     if (!inView) return;
 
     let timeout: ReturnType<typeof setTimeout>;
@@ -113,7 +137,7 @@ function WeekCalendar() {
       );
     };
 
-    step(0);
+    timeout = setTimeout(() => step(0), 0);
     return () => clearTimeout(timeout);
   }, [inView, reduce]);
 
@@ -164,7 +188,9 @@ function WeekCalendar() {
           {/* Day header */}
           <div
             className={`grid ${cols} border-b-[0.5px] border-black/10`}
-            style={{ gridTemplateColumns: `${GUTTER}px repeat(7, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `${GUTTER}px repeat(7, minmax(0, 1fr))`,
+            }}
           >
             <span />
             {DAYS.map((day, i) => (

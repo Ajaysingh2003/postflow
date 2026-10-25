@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "bun run seo:manifest && next dev",
+    "build": "bun run seo:manifest && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seo:manifest": "bun scripts/generate-seo-manifest.mjs",
+    "seo:audit": "python3 scripts/audit-seo.py",
+    "seo:images": "bun scripts/generate-seo-images.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -1,5 +1,5 @@
 "use client";
-import { ChannelLogos, NavPreview } from "./NavPreviews";
+import { ChannelLogos } from "./NavPreviews";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -50,8 +50,8 @@ const ROUTES = {
   signup: "/login",
   dashboard: "/dashboard",
   pricing: "/pricing",
-  platform: "/#platform",
-  howItWorks: "/#how-it-works",
+  platform: "/#integrations",
+  howItWorks: "/#features",
 } as const;
 
 type NavEntry = {
@@ -95,7 +95,7 @@ const channels: NavEntry = {
   id: "channels",
   title: "Social Integrations",
   description: "Connect all your channels in one workspace.",
-  href: "/product/social-intigration", // typo kept: matches your current route folder
+  href: "/product/social-integration", // typo kept: matches your current route folder
   icon: Share2,
 };
 const analytics: NavEntry = {
@@ -166,7 +166,7 @@ function BrandLogo() {
       className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3fda8a]"
     >
       <Image
-        src="/logo.jpg"
+        src="/images/brand/draftva-logo.jpg"
         width={64}
         height={64}
         alt=""
@@ -472,7 +472,7 @@ export default function Navbar() {
         Skip to content
       </a>
 
-      <nav className="mx-auto flex h-16 w-full max-w-[1240px] items-center justify-between px-5 sm:px-8">
+      <nav className="mx-auto flex h-16 w-full max-w-[1240px] items-center justify-between px-5 sm:pr-8">
         <div className="flex items-center gap-8">
           <BrandLogo />
 

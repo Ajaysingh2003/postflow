@@ -1,13 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
-import {
-  ArrowRight,
-  Feather,
-  Layers,
-  Sparkles,
-  Mail,
-  CheckCircle2,
-} from "lucide-react";
+import { Feather, Layers, Sparkles, CheckCircle2 } from "lucide-react";
 import FinalCta from "../component/FinalCta";
 
 /* -------------------------------------------------------------------------- */
@@ -34,7 +26,7 @@ const team: {
     name: "Ajay Singh",
     role: "Founder & Product Architect",
     bio: "Building calm, focused software for creators and founders who care about their craft.",
-    image: "/founder.png",
+    image: "/images/about/about-founder-ajay-singh.png",
     alt: "Illustrated portrait of Ajay Singh",
     // TODO: add your profile URLs. Icons only render for links you fill in.
     links: {
@@ -212,7 +204,7 @@ export default function AboutView() {
           <aside aria-label="Team" className="lg:sticky lg:top-28">
             {team.map((member) => {
               const activeLinks = (Object.keys(NETWORKS) as Network[]).filter(
-                (net) => Boolean(member.links[net])
+                (net) => Boolean(member.links[net]),
               );
 
               return (
@@ -224,9 +216,11 @@ export default function AboutView() {
                     <Image
                       src={member.image}
                       alt={member.alt}
-                      fill
+                      priority
+                      width={512}
+                      height={512}
                       sizes="260px"
-                      className="object-cover transition-transform duration-500 hover:scale-[1.02]"
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]"
                     />
                   </div>
 
@@ -319,9 +313,10 @@ export default function AboutView() {
                       <Image
                         src={photo.src}
                         alt={photo.alt}
-                        fill
+                        width={512}
+                        height={512}
                         sizes="(min-width: 640px) 340px, 100vw"
-                        className="object-cover"
+                        className="absolute inset-0 h-full w-full object-cover"
                       />
                     </div>
                   ))}
@@ -434,7 +429,7 @@ export default function AboutView() {
         {/* ------------------------------------------------------------------ */}
         {/* Closing Call-To-Action Card                                        */}
         {/* ------------------------------------------------------------------ */}
-        <FinalCta/>
+        <FinalCta />
       </article>
     </div>
   );

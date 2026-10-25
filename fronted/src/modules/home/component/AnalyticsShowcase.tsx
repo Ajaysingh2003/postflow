@@ -62,7 +62,9 @@ function Copy({
             <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#3fda8a]/20 text-[#0f7a47]">
               <Check className="size-3 stroke-[2.5]" />
             </span>
-            <span className="text-sm leading-relaxed text-[#11120e]">{point}</span>
+            <span className="text-sm leading-relaxed text-[#11120e]">
+              {point}
+            </span>
           </li>
         ))}
       </ul>
@@ -277,8 +279,6 @@ export default function AnalyticsShowcase() {
 
   // Section 2: Active Leaderboard Post Inspection
   const [selectedPost, setSelectedPost] = useState<string>("p1");
-  const inspectedPost =
-    LEADERBOARD_POSTS.find((p) => p.id === selectedPost) ?? LEADERBOARD_POSTS[0];
 
   // Section 3: Active Timing Channel & Locked State
   const [timingPlatform, setTimingPlatform] = useState<PlatformId>("linkedin");
@@ -298,7 +298,11 @@ export default function AnalyticsShowcase() {
       <section className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-16">
         <div className="lg:col-span-5">
           <Copy
-            badge={<SectionBadge icon={BarChart3}>Cross-Platform Benchmarks</SectionBadge>}
+            badge={
+              <SectionBadge icon={BarChart3}>
+                Cross-Platform Benchmarks
+              </SectionBadge>
+            }
             title="See which platform actually builds your pipeline."
             body="A million vanity views on one network might bring zero qualified leads, while a 2,000-view carousel on LinkedIn drives three customer contracts. Draftva unifies your social metrics into a clean, normalized command center with real conversion insight."
             points={[
@@ -407,7 +411,9 @@ export default function AnalyticsShowcase() {
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.06] pt-4">
                   <span className="font-subheading text-xs text-[#6d7066]">
                     Top Converting Format:{" "}
-                    <strong className="text-[#11120e]">{benchmark.topFormat}</strong>
+                    <strong className="text-[#11120e]">
+                      {benchmark.topFormat}
+                    </strong>
                   </span>
                   <span className="font-subheading inline-flex items-center gap-1 text-xs font-medium text-[#0f7a47]">
                     <Repeat className="size-3.5" />
@@ -451,7 +457,10 @@ export default function AnalyticsShowcase() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-start gap-3">
-                        <PlatformBadge platform={post.platform} className="mt-0.5 size-5" />
+                        <PlatformBadge
+                          platform={post.platform}
+                          className="mt-0.5 size-5"
+                        />
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span className="font-heading text-sm font-semibold text-[#11120e]">
@@ -507,7 +516,11 @@ export default function AnalyticsShowcase() {
 
         <div className="order-1 lg:order-2 lg:col-span-5">
           <Copy
-            badge={<SectionBadge icon={TrendingUp}>Content Performance Matrix</SectionBadge>}
+            badge={
+              <SectionBadge icon={TrendingUp}>
+                Content Performance Matrix
+              </SectionBadge>
+            }
             title="Unpack why your winners won and turn them into templates."
             body="When a post takes off, Draftva dissects the anatomy of that hit. See whether the hook drove initial retention, which slide readers spent the most time on, and turn high-performing structures into repeatable templates for next week."
             points={[
@@ -525,7 +538,11 @@ export default function AnalyticsShowcase() {
       <section className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-16">
         <div className="lg:col-span-5">
           <Copy
-            badge={<SectionBadge icon={Clock}>Audience Timing Intelligence</SectionBadge>}
+            badge={
+              <SectionBadge icon={Clock}>
+                Audience Timing Intelligence
+              </SectionBadge>
+            }
             title="Stop posting into empty feeds. Align with your golden hours."
             body="Social algorithms heavily penalize posts that sit stagnant in their first 30 minutes. Draftva matches your actual historical engagement velocity with real-time audience activity to pinpoint the highest-converting moments to publish on each network."
             points={[
@@ -565,7 +582,9 @@ export default function AnalyticsShowcase() {
                       setSlotLocked(false);
                     }}
                     className={cn(
-                      timingPlatform === tab.id ? "primary-btn" : "secondary-btn",
+                      timingPlatform === tab.id
+                        ? "primary-btn"
+                        : "secondary-btn",
                       "font-subheading rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
                     )}
                   >
@@ -581,9 +600,9 @@ export default function AnalyticsShowcase() {
                     <span className="font-subheading text-xs text-[#85887e]">
                       Optimal window · {timing.bestDay}
                     </span>
-                    <h4 className="font-heading mt-1 text-xl font-bold text-[#11120e]">
+                    <h3 className="font-heading mt-1 text-xl font-bold text-[#11120e]">
                       {timing.bestHour}
-                    </h4>
+                    </h3>
                   </div>
                   <span className="font-subheading rounded-full border border-[#3fda8a]/40 bg-[#3fda8a]/20 px-3 py-1 text-xs font-semibold text-[#0f7a47]">
                     {timing.lift}
@@ -621,7 +640,9 @@ export default function AnalyticsShowcase() {
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.06] pt-4">
                   <span className="font-subheading text-xs text-[#6d7066]">
                     Audience status:{" "}
-                    <strong className="text-[#11120e]">{timing.audienceMatch}</strong>
+                    <strong className="text-[#11120e]">
+                      {timing.audienceMatch}
+                    </strong>
                   </span>
                   <button
                     type="button"
@@ -701,13 +722,13 @@ export default function AnalyticsShowcase() {
                           : "ALL"}
                     </div>
                     <div>
-                      <h4 className="font-heading text-sm font-semibold text-[#11120e]">
+                      <h3 className="font-heading text-sm font-semibold text-[#11120e]">
                         {workspace === "founder"
                           ? "Alex Rivera (Founder)"
                           : workspace === "brand"
                             ? "Draftva Official Page"
                             : "Draftva Combined Ecosystem"}
-                      </h4>
+                      </h3>
                       <span className="font-subheading block text-xs text-[#6d7066]">
                         {workspace === "founder"
                           ? "22,400 followers · Personal accounts"
@@ -770,7 +791,9 @@ export default function AnalyticsShowcase() {
 
         <div className="order-1 lg:order-2 lg:col-span-7">
           <Copy
-            badge={<SectionBadge icon={Users}>Brand & Founder Synergy</SectionBadge>}
+            badge={
+              <SectionBadge icon={Users}>Brand & Founder Synergy</SectionBadge>
+            }
             title="Track executive personal brands and company handles side by side."
             body="Modern growth happens at the intersection of founder credibility and brand authority. Draftva lets you measure both in one workspace, understand the halo effect of personal posts on company pipeline, and report clear ROI to stakeholders."
             points={[

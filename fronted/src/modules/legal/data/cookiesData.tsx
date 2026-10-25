@@ -26,19 +26,19 @@ export const COOKIES_SECTIONS: LegalSection[] = [
         <p>We classify the cookies used on Draftva into the following distinct functional categories:</p>
         <div className="space-y-3">
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">1. Strictly Necessary Cookies (Always Active)</h5>
+            <h3 className="font-heading font-semibold text-neutral-900">1. Strictly Necessary Cookies (Always Active)</h3>
             <p className="mt-1 text-sm text-neutral-600">
               Essential for the core operation of Draftva. They enable you to log into your account, maintain active session state, navigate securely between workspace pages, and defend against Cross-Site Request Forgery (CSRF). The website cannot function without these cookies.
             </p>
           </div>
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">2. Functional & Preference Cookies</h5>
+            <h3 className="font-heading font-semibold text-neutral-900">2. Functional & Preference Cookies</h3>
             <p className="mt-1 text-sm text-neutral-600">
               Allow Draftva to remember your custom preferences, such as selected workspace, active channel filter, text editor font size, and regional timezone settings for scheduling accuracy.
             </p>
           </div>
           <div className="rounded-xl border border-neutral-200/80 bg-white p-4 shadow-2xs">
-            <h5 className="font-heading font-semibold text-neutral-900">3. Performance & Diagnostic Cookies</h5>
+            <h3 className="font-heading font-semibold text-neutral-900">3. Performance & Diagnostic Cookies</h3>
             <p className="mt-1 text-sm text-neutral-600">
               Help us understand how users interact with the platform, detect JavaScript errors, diagnose latency in the publishing queue, and improve application loading speeds. All data collected is aggregated and anonymized.
             </p>
@@ -88,8 +88,8 @@ export const COOKIES_SECTIONS: LegalSection[] = [
                 <td className="p-3.5"><span className="inline-block rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">Functional</span></td>
               </tr>
               <tr>
-                <td className="p-3.5 font-mono text-xs font-semibold text-neutral-900">__stripe_mid / __stripe_sid</td>
-                <td className="p-3.5">Stripe</td>
+                <td className="p-3.5 font-mono text-xs font-semibold text-neutral-900">__dodopayment_mid / __dodopayment_sid</td>
+                <td className="p-3.5">dodopayment</td>
                 <td className="p-3.5">Fraud prevention and payment verification during checkout</td>
                 <td className="p-3.5">1 year / 30 min</td>
                 <td className="p-3.5"><span className="inline-block rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Necessary</span></td>

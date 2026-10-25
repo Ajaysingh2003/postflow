@@ -10,7 +10,12 @@ const BRAND = "#3fda8a";
 // Pure brand green is too light for thin lines and small text on white
 const DEEP = "#1f9d5c";
 const ease = [0.16, 1, 0.3, 1] as const;
-const spring = { type: "spring", stiffness: 520, damping: 42, mass: 0.6 } as const;
+const spring = {
+  type: "spring",
+  stiffness: 520,
+  damping: 42,
+  mass: 0.6,
+} as const;
 
 // Plot height. The y-axis labels use the same value so they always line up.
 const CHART_H = "h-[78px]";
@@ -19,8 +24,9 @@ const CHART_H = "h-[78px]";
 
 /* Daily impressions, Sep 14 to Oct 11 (28 days) */
 const DATA = [
-  3200, 3400, 3100, 3800, 4100, 3600, 3300, 4200, 4500, 4300, 4800, 5200, 4700, 4400,
-  5600, 6100, 5800, 5400, 6300, 7200, 6800, 6100, 8100, 8600, 8100, 7400, 9300, 9900,
+  3200, 3400, 3100, 3800, 4100, 3600, 3300, 4200, 4500, 4300, 4800, 5200, 4700,
+  4400, 5600, 6100, 5800, 5400, 6300, 7200, 6800, 6100, 8100, 8600, 8100, 7400,
+  9300, 9900,
 ];
 const MAX = 10_000;
 const TOTAL = DATA.reduce((sum, v) => sum + v, 0);
@@ -62,12 +68,17 @@ const PLATFORMS: { label: string; value: number; color: string }[] = [
   { label: "X", value: 31, color: "#11120e" },
   { label: "Threads", value: 15, color: "rgba(17,18,14,0.25)" },
 ];
-const PLATFORM_SUMMARY = PLATFORMS.map((p) => `${p.label} ${p.value}%`).join(" · ");
+const PLATFORM_SUMMARY = PLATFORMS.map((p) => `${p.label} ${p.value}%`).join(
+  " · ",
+);
 
 /* ------------------------------ chart geometry ----------------------------- */
 
 const n = DATA.length;
-const points = DATA.map((v, i): [number, number] => [(i / (n - 1)) * 100, 100 - (v / MAX) * 100]);
+const points = DATA.map((v, i): [number, number] => [
+  (i / (n - 1)) * 100,
+  100 - (v / MAX) * 100,
+]);
 const AVG_Y = 100 - (AVG / MAX) * 100;
 
 // Catmull-Rom to cubic Bézier, so the curve passes through every sample
@@ -86,14 +97,29 @@ function smooth(p: [number, number][]) {
 const LINE = smooth(points);
 const AREA = `${LINE} L100 100 L0 100 Z`;
 
-const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
-const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
-const dateAt = (i: number) => dateFmt.format(new Date(Date.UTC(2026, 8, 14 + i)));
-
+const compact = new Intl.NumberFormat("en", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+const dateFmt = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+const dateAt = (i: number) =>
+  dateFmt.format(new Date(Date.UTC(2026, 8, 14 + i)));
 
 /* ------------------------------- small pieces ------------------------------ */
 
-function Counter({ to, run, format }: { to: number; run: boolean; format: (v: number) => string }) {
+function Counter({
+  to,
+  run,
+  format,
+}: {
+  to: number;
+  run: boolean;
+  format: (v: number) => string;
+}) {
   const ref = useRef<HTMLSpanElement>(null);
   const reduced = useReducedMotion();
 
@@ -148,7 +174,7 @@ export function FeatureCardThree() {
         title="Know what works. Grow faster."
         description="Track engagement, understand your audience, and discover which content performs best."
         linkText="Explore analytics ↗"
-        href="/register"
+        href="/product/analytics"
       />
 
       {/* Fills the space under the header. Anything that ever overflows is clipped. */}
@@ -229,12 +255,26 @@ export function FeatureCardThree() {
                       aria-hidden
                       className="absolute inset-0 size-full overflow-visible text-foreground"
                       initial={init({ clipPath: "inset(-6px 100% -6px -6px)" })}
-                      animate={show ? { clipPath: "inset(-6px 0% -6px -6px)" } : undefined}
+                      animate={
+                        show
+                          ? { clipPath: "inset(-6px 0% -6px -6px)" }
+                          : undefined
+                      }
                       transition={{ duration: 1.3, ease, delay: 0.25 }}
                     >
                       <defs>
-                        <linearGradient id="analytics-area" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0" stopColor={BRAND} stopOpacity="0.38" />
+                        <linearGradient
+                          id="analytics-area"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="0"
+                            stopColor={BRAND}
+                            stopOpacity="0.38"
+                          />
                           <stop offset="1" stopColor={BRAND} stopOpacity="0" />
                         </linearGradient>
                       </defs>
@@ -303,14 +343,19 @@ export function FeatureCardThree() {
                       >
                         <div
                           className={`rounded-lg border border-white/[0.08] bg-[#11120e] px-2.5 py-1.5 shadow-lg transition-transform duration-150 ${
-                            below ? "translate-y-3" : "-translate-y-[calc(100%+12px)]"
+                            below
+                              ? "translate-y-3"
+                              : "-translate-y-[calc(100%+12px)]"
                           }`}
                         >
                           <p className="font-subheading text-[10px] leading-[14px] text-white/50">
                             {dateAt(active)}
                             <span className="hidden sm:inline">
                               {" · "}
-                              {Math.round(value * ENGAGEMENT_RATE).toLocaleString("en-US")} engagements
+                              {Math.round(
+                                value * ENGAGEMENT_RATE,
+                              ).toLocaleString("en-US")}{" "}
+                              engagements
                             </span>
                           </p>
                           <p className="font-heading text-xs font-bold leading-4 tabular-nums text-white">
@@ -369,7 +414,11 @@ export function FeatureCardThree() {
                       initial={init({ scaleX: 0 })}
                       animate={show ? { scaleX: 1 } : undefined}
                       transition={{ duration: 0.9, ease, delay: 0.6 + i * 0.1 }}
-                      style={{ originX: 0, width: `${p.value}%`, backgroundColor: p.color }}
+                      style={{
+                        originX: 0,
+                        width: `${p.value}%`,
+                        backgroundColor: p.color,
+                      }}
                     />
                   ))}
                 </div>

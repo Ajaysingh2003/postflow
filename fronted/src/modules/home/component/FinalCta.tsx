@@ -144,8 +144,8 @@ export default function FinalCta() {
           >
             <div className="relative h-full z-10 zh-[220px]. w-full sbm:h-[300px]">
               <Image
-                src="/footer_banner_2.png"
-                alt="banner"
+                src="/images/product/social-scheduler-banner.png"
+                alt=""
                 height={400}
                 width={1280}
                 sizes="(max-width: 1280px) 100vw, 1280px"

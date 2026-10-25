@@ -1,13 +1,15 @@
+import { PageSeo } from "@/lib/seo/PageSeo";
+import { seoMetadata } from "@/lib/seo/config";
 import React from "react";
-import type { Metadata } from "next";
 import CookiesView from "@/modules/legal/view/CookiesView";
 
-export const metadata: Metadata = {
-  title: "Cookie Policy | Draftva",
-  description:
-    "Explore how Draftva uses essential cookies and local storage to keep your session secure and customize your workspace experience.",
-};
-
 export default function CookiesPage() {
-  return <CookiesView />;
+  return (
+    <>
+      <PageSeo path="/cookies" />
+      <CookiesView />
+    </>
+  );
 }
+
+export const metadata = seoMetadata("/cookies");

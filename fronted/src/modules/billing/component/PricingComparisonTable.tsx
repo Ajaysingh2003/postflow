@@ -282,7 +282,10 @@ export default function PricingComparisonTable() {
     });
 
   return (
-    <section id="compare-plans" className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-12 sm:px-6 sm:py-20">
+    <section
+      id="compare-plans"
+      className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-12 sm:px-6 sm:py-20"
+    >
       {/* Header */}
       <div className="mx-auto max-w-2xl text-center">
         <div className="inline-flex items-center gap-2 rounded-full border border-[#3fda8a]/40 bg-[#3fda8a]/10 px-3 py-1">
@@ -292,9 +295,9 @@ export default function PricingComparisonTable() {
           </span>
         </div>
 
-        <h3 className="font-heading mt-4 text-balance text-3xl font-bold tracking-tight text-[#11120e] sm:text-5xl">
+        <h2 className="font-heading mt-4 text-balance text-3xl font-bold tracking-tight text-[#11120e] sm:text-5xl">
           Compare plans side by side
-        </h3>
+        </h2>
 
         <p className="mt-3 font-subheading text-sm text-[#6d7066] sm:text-base">
           Everything included in each tier, in one place. No hidden fees or

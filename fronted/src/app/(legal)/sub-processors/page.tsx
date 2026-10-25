@@ -1,13 +1,5 @@
-import React from "react";
-import type { Metadata } from "next";
-import SubprocessorsView from "@/modules/legal/view/SubprocessorsView";
+import { permanentRedirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Sub-processors Directory | Draftva",
-  description:
-    "View the complete list of cloud hosting, database, artificial intelligence, and payment sub-processors utilized by Draftva.",
-};
-
-export default function SubProcessorsPage() {
-  return <SubprocessorsView />;
+export default function Page() {
+  permanentRedirect("/subprocessors");
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { seoMetadata, SITE_URL } from "@/lib/seo/config";
 import { Newsreader, Fraunces, Manrope } from "next/font/google";
 import "./globals.css";
 import { TRPCReactProvider } from "@/trpc/client";
@@ -7,20 +8,34 @@ import { Toaster } from "@/components/ui/sonner";
 const fontHeading = Newsreader({
   variable: "--font-heading",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const fontSubhead = Fraunces({
+  preload: false,
   variable: "--font-subheading",
   subsets: ["latin"],
+  display: "swap",
 });
 const fontContent = Manrope({
   variable: "--font-content",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Draftva | Multi-channel social scheduling & writing platform",
-  description: "Create, schedule, and publish posts across X, LinkedIn, Reddit, Bluesky, Threads, and Meta with an intelligent writing assistant.",
+  ...seoMetadata("/"),
+  metadataBase: new URL(SITE_URL),
+  // Canonicals belong to explicit page metadata, not unknown/404 routes.
+  alternates: { canonical: null },
+  title: {
+    default: "AI Social Post Writer & Scheduler | Draftva",
+    template: "%s | Draftva",
+  },
+  icons: {
+    icon: "/images/brand/draftva-icon.png",
+    apple: "/images/brand/draftva-apple-icon.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -29,13 +44,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${fontHeading.variable} ${fontSubhead.variable} ${fontContent.variable} h-full antialiased`}
     >
-      <TRPCReactProvider>
-
       <body className="min-h-full flex flex-col">
-        <Toaster/>
-        {children}
+        <TRPCReactProvider>
+          <Toaster />
+          {children}
+        </TRPCReactProvider>
       </body>
-      </TRPCReactProvider>
     </html>
   );
 }

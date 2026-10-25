@@ -1,3 +1,5 @@
+import { AnswerSection } from "../component/AnswerSection";
+import { ANSWER_PAGES } from "@/lib/seo/answers";
 import dynamic from "next/dynamic";
 import React from "react";
 import { HeroHeading } from "../component/TopHeader";
@@ -17,9 +19,7 @@ function HomeView({ pricingSection }: { pricingSection?: React.ReactNode }) {
     <div className="w-full  bg-[#faf9f5]  h-full  min-h-screen  zlg:pt-5 relative">
       <div className="max-w-[1280px] px-5 sm:px-7 lg:px-8   mx-auto">
         <HeroSection
-          description="From your first idea to your next viral post. Create, schedule,
-        and grow across LinkedIn, X, and Threads — all from one
-        intelligent workspace."
+          description={ANSWER_PAGES["/"].summary}
           header={
             <HeroHeading
               noColorText="The"
@@ -43,6 +43,7 @@ function HomeView({ pricingSection }: { pricingSection?: React.ReactNode }) {
         <ScrollReveal distance={20}>
           {pricingSection ?? <PricingSection />}
         </ScrollReveal>
+        <AnswerSection path="/" />
         <FinalCta />
       </div>
     </div>

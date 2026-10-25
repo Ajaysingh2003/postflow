@@ -98,3 +98,7 @@ Production build and TypeScript pass. The targeted SEO/checkout tests pass. The 
 - Run Schema.org Validator for JSON-LD syntax/types and Google's Rich Results Test for currently supported features after deployment. Valid schema does not guarantee a rich result; no fake review is added to satisfy eligibility. Google discontinued FAQ rich results in 2026; FAQPage is retained as requested without a search-result promise. See [Google's documentation update](https://developers.google.com/search/updates#june-2026), [software application guidance](https://developers.google.com/search/docs/appearance/structured-data/software-app) and [sitemap guidance](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap).
 
 No Search Console submission, DNS changes, paid checkout or production deployment was performed by this task.
+
+## Answer and generative search follow-up
+
+See [the AEO/GEO implementation and maintenance guide](answer-engines.md) for public answer coverage, entity IDs, optional llms.txt discovery, verification and remaining owner tasks.

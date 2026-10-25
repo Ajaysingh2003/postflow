@@ -128,12 +128,14 @@ test("structured data uses actual catalog prices and omits unverified ratings", 
   expect(pageStructuredData("/")["@graph"].map((x) => x["@type"])).toEqual([
     "Organization",
     "WebSite",
+    "WebPage",
     "SoftwareApplication",
+    "FAQPage",
   ]);
   expect(
-    pageStructuredData("/privacy")["@graph"][0].itemListElement.map(
-      (x) => x.position,
-    ),
+    pageStructuredData("/privacy")
+      ["@graph"].find((node) => node["@type"] === "BreadcrumbList")
+      .itemListElement.map((x) => x.position),
   ).toEqual([1, 2, 3]);
 });
 test("generated sitemap contains every canonical marketing page and no private URLs", () => {

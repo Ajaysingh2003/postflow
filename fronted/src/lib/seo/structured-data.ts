@@ -5,8 +5,15 @@ import {
   SITE_URL,
   type MarketingPath,
 } from "./config";
+import { answerPage } from "./answers";
 import type { BillingConfigResponse } from "@/modules/types";
 import { PRICING_FAQS } from "@/modules/billing/pricing-faqs";
+
+export const ENTITY_IDS = {
+  organization: `${SITE_URL}/#organization`,
+  website: `${SITE_URL}/#website`,
+  software: `${SITE_URL}/#software`,
+} as const;
 
 export function serializeJsonLd(value: unknown): string {
   return JSON.stringify(value)
@@ -42,12 +49,15 @@ export function applicationSchema(plans?: BillingConfigResponse) {
   });
   return {
     "@type": "SoftwareApplication",
-    "@id": `${SITE_URL}/#software`,
+    "@id": ENTITY_IDS.software,
     name: SITE_NAME,
     url: SITE_URL,
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    description: SEO_PAGES["/"].description,
+    description: answerPage("/")!.summary,
+    publisher: { "@id": ENTITY_IDS.organization },
+    mainEntityOfPage: { "@id": `${absoluteUrl("/")}#webpage` },
+    inLanguage: "en",
     ...(offers.length ? { offers } : {}),
     // TODO: Add authentic ratings only after obtaining verifiable reviews and permission.
   };
@@ -65,49 +75,80 @@ export function breadcrumbItems(path: MarketingPath) {
     { name: SEO_PAGES[path].label, path },
   ];
 }
+
+/** Questions and answers are the exact same strings rendered on the page. */
+export function pageQuestions(path: MarketingPath) {
+  if (path === "/pricing")
+    return PRICING_FAQS.flatMap((faq, index) =>
+      faq.includeInSchema ? [{ ...faq, id: `pricing-faq-${index}` }] : [],
+    );
+  return answerPage(path)?.questions ?? [];
+}
+
 export function pageStructuredData(
   path: MarketingPath,
   plans?: BillingConfigResponse,
 ) {
-  const graph: Record<string, unknown>[] = [];
-  if (path === "/") {
-    graph.push({
+  const url = absoluteUrl(path);
+  const pageId = `${url}#webpage`;
+  const productPage =
+    path === "/" || path === "/pricing" || path.startsWith("/product/");
+  const questions = pageQuestions(path);
+  const faqId = `${url}#${path === "/pricing" ? "faqs" : "questions"}`;
+  const graph: Record<string, unknown>[] = [
+    {
       "@type": "Organization",
-      "@id": `${SITE_URL}/#organization`,
+      "@id": ENTITY_IDS.organization,
       name: SITE_NAME,
       url: SITE_URL,
       logo: {
         "@type": "ImageObject",
         url: absoluteUrl("/images/brand/draftva-logo.jpg"),
       },
-    });
-    graph.push({
+      // TODO: Add sameAs only after the owner supplies verified public brand URLs.
+    },
+    {
       "@type": "WebSite",
-      "@id": `${SITE_URL}/#website`,
+      "@id": ENTITY_IDS.website,
       name: SITE_NAME,
       url: SITE_URL,
-      publisher: { "@id": `${SITE_URL}/#organization` },
+      publisher: { "@id": ENTITY_IDS.organization },
       inLanguage: "en",
-    });
-    graph.push(applicationSchema(plans));
-  }
-  if (path === "/pricing") {
-    if (plans) graph.push(applicationSchema(plans));
+    },
+    {
+      "@type": path === "/about" ? "AboutPage" : "WebPage",
+      "@id": pageId,
+      url,
+      name: SEO_PAGES[path].title,
+      description: answerPage(path)?.summary ?? SEO_PAGES[path].description,
+      isPartOf: { "@id": ENTITY_IDS.website },
+      publisher: { "@id": ENTITY_IDS.organization },
+      about: {
+        "@id": productPage ? ENTITY_IDS.software : ENTITY_IDS.organization,
+      },
+      inLanguage: "en",
+      ...(path !== "/" ? { breadcrumb: { "@id": `${url}#breadcrumbs` } } : {}),
+      ...(questions.length ? { hasPart: { "@id": faqId } } : {}),
+    },
+  ];
+  if (productPage) graph.push(applicationSchema(plans));
+  if (questions.length)
     graph.push({
       "@type": "FAQPage",
-      "@id": `${absoluteUrl(path)}#faqs`,
-      mainEntity: PRICING_FAQS.filter((faq) => faq.includeInSchema).map(
-        (faq) => ({
-          "@type": "Question",
-          name: faq.question,
-          acceptedAnswer: { "@type": "Answer", text: faq.answer },
-        }),
-      ),
+      "@id": faqId,
+      isPartOf: { "@id": pageId },
+      inLanguage: "en",
+      mainEntity: questions.map((faq) => ({
+        "@type": "Question",
+        "@id": `${url}#${faq.id}`,
+        name: faq.question,
+        acceptedAnswer: { "@type": "Answer", text: faq.answer },
+      })),
     });
-  }
   if (path !== "/")
     graph.push({
       "@type": "BreadcrumbList",
+      "@id": `${url}#breadcrumbs`,
       itemListElement: breadcrumbItems(path).map((item, index) => ({
         "@type": "ListItem",
         position: index + 1,

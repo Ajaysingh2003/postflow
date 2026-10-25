@@ -1,0 +1,85 @@
+{
+  "base_url": "http://localhost:3002",
+  "rendering": "server HTML without JavaScript",
+  "canonical_pages": 15,
+  "answer_pages": 8,
+  "questions": 27,
+  "pages": [
+    {
+      "path": "/",
+      "questions": 3,
+      "errors": []
+    },
+    {
+      "path": "/about",
+      "questions": 3,
+      "errors": []
+    },
+    {
+      "path": "/acceptable-use",
+      "questions": 0,
+      "errors": []
+    },
+    {
+      "path": "/cookies",
+      "questions": 0,
+      "errors": []
+    },
+    {
+      "path": "/dpa",
+      "questions": 0,
+      "errors": []
+    },
+    {
+      "path": "/legal",
+      "questions": 0,
+      "errors": []
+    },
+    {
+      "path": "/pricing",
+      "questions": 6,
+      "errors": []
+    },
+    {
+      "path": "/privacy",
+      "questions": 0,
+      "errors": []
+    },
+    {
+      "path": "/product/ai-writer",
+      "questions": 3,
+      "errors": []
+    },
+    {
+      "path": "/product/analytics",
+      "questions": 3,
+      "errors": []
+    },
+    {
+      "path": "/product/mcp",
+      "questions": 3,
+      "errors": []
+    },
+    {
+      "path": "/product/schedule",
+      "questions": 3,
+      "errors": []
+    },
+    {
+      "path": "/product/social-integration",
+      "questions": 3,
+      "errors": []
+    },
+    {
+      "path": "/subprocessors",
+      "questions": 0,
+      "errors": []
+    },
+    {
+      "path": "/terms",
+      "questions": 0,
+      "errors": []
+    }
+  ],
+  "errors": []
+}

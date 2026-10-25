@@ -1,3 +1,5 @@
+import { AnswerSection } from "../component/AnswerSection";
+import { ANSWER_PAGES } from "@/lib/seo/answers";
 import Image from "next/image";
 import { Feather, Layers, Sparkles, CheckCircle2 } from "lucide-react";
 import FinalCta from "../component/FinalCta";
@@ -188,8 +190,7 @@ export default function AboutView() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-[560px] text-lg leading-relaxed text-neutral-600 text-pretty sm:text-[19px] sm:leading-8">
-            A quieter place to turn your ideas into posts. Built for people
-            growing something of their own, one thoughtful post at a time.
+            {ANSWER_PAGES["/about"].summary}
           </p>
         </header>
 
@@ -429,6 +430,7 @@ export default function AboutView() {
         {/* ------------------------------------------------------------------ */}
         {/* Closing Call-To-Action Card                                        */}
         {/* ------------------------------------------------------------------ */}
+        <AnswerSection path="/about" />
         <FinalCta />
       </article>
     </div>

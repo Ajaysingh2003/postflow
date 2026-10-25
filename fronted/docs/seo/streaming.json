@@ -1,5 +1,6 @@
 {
   "heroStreamedBeforeBilling": true,
+  "entityAndAnswerSchemaStreamedBeforeBilling": true,
   "mockBillingDelaySeconds": 4,
-  "heroHtmlSeconds": 0.109
+  "heroHtmlSeconds": 0.074
 }

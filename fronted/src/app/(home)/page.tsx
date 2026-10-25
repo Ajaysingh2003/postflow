@@ -1,4 +1,5 @@
 import { PageSeo } from "@/lib/seo/PageSeo";
+import { applicationSchema, serializeJsonLd } from "@/lib/seo/structured-data";
 import { seoMetadata } from "@/lib/seo/config";
 import React, { Suspense } from "react";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
@@ -14,11 +15,18 @@ async function PreloadedPricing() {
   await queryClient.prefetchQuery(trpc.billing.getPlans.queryOptions());
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <PageSeo
-        path="/"
-        plans={queryClient.getQueryData(
-          trpc.billing.getPlans.queryOptions().queryKey,
-        )}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd({
+            "@context": "https://schema.org",
+            ...applicationSchema(
+              queryClient.getQueryData(
+                trpc.billing.getPlans.queryOptions().queryKey,
+              ),
+            ),
+          }),
+        }}
       />
       <PricingSection />
     </HydrationBoundary>
@@ -27,19 +35,22 @@ async function PreloadedPricing() {
 
 export default function Page() {
   return (
-    <HomeView
-      pricingSection={
-        <Suspense
-          fallback={
-            <div className="py-16 sm:py-24">
-              <PricingSkeleton />
-            </div>
-          }
-        >
-          <PreloadedPricing />
-        </Suspense>
-      }
-    />
+    <>
+      <PageSeo path="/" />
+      <HomeView
+        pricingSection={
+          <Suspense
+            fallback={
+              <div className="py-16 sm:py-24">
+                <PricingSkeleton />
+              </div>
+            }
+          >
+            <PreloadedPricing />
+          </Suspense>
+        }
+      />
+    </>
   );
 }
 

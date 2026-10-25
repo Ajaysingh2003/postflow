@@ -3,8 +3,6 @@ import type { Metadata } from "next";
 export const SITE_URL = "https://draftva.com";
 export const SITE_NAME = "Draftva";
 
-
-
 export const SEO_PAGES = {
   "/": {
     title: "AI Post Writer & Scheduler for X & LinkedIn | Draftva",
@@ -175,7 +173,13 @@ export function seoMetadata(path: MarketingPath): Metadata {
     robots: {
       index: true,
       follow: true,
-      googleBot: { index: true, follow: true, "max-image-preview": "large" },
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
     },
     openGraph: {
       title: page.title,

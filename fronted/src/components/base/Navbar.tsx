@@ -1,8 +1,10 @@
 "use client";
+
 import { ChannelLogos } from "./NavPreviews";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -67,7 +69,7 @@ const composer: NavEntry = {
   id: "composer",
   title: "Social Composer",
   description: "Write once, then tailor the post for each platform.",
-  href: "/product/ai-writer", // TODO: give composer its own page
+  href: "/product/ai-writer",
   icon: PencilLine,
 };
 const ai: NavEntry = {
@@ -95,7 +97,7 @@ const channels: NavEntry = {
   id: "channels",
   title: "Social Integrations",
   description: "Connect all your channels in one workspace.",
-  href: "/product/social-integration", // typo kept: matches your current route folder
+  href: "/product/social-integration",
   icon: Share2,
 };
 const analytics: NavEntry = {
@@ -128,7 +130,7 @@ const SOLUTIONS: NavEntry[] = [
     id: "creators",
     title: "For Creators",
     description: "Grow an audience without living in five tabs.",
-    href: ROUTES.howItWorks, // TODO: dedicated pages
+    href: ROUTES.howItWorks,
     icon: PencilLine,
   },
   {
@@ -206,7 +208,6 @@ function Preview({ items, activeId }: { items: NavEntry[]; activeId: string }) {
             ) : null,
           )}
 
-        {/* placeholder until this item has a screenshot */}
         {!active.image && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
             <span className="flex size-12 items-center justify-center rounded-xl border border-black/[0.08] bg-white text-neutral-800 shadow-sm">
@@ -233,12 +234,10 @@ function NavItem({
   item,
   active,
   onHover,
-  onNavigate,
 }: {
   item: NavEntry;
   active: boolean;
   onHover: () => void;
-  onNavigate: () => void;
 }) {
   const Icon = item.icon;
   return (
@@ -246,7 +245,6 @@ function NavItem({
       render={<Link href={item.href} />}
       onMouseEnter={onHover}
       onFocus={onHover}
-      onClick={onNavigate}
       className={cn(
         "group flex items-start gap-3 rounded-lg p-2.5 transition-colors hover:bg-black/[0.04] focus-visible:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3fda8a]",
         active && "bg-black/[0.04]",
@@ -278,6 +276,7 @@ const triggerClass = cn(
   "h-9 rounded-lg bg-transparent px-3 text-[14px] font-medium text-neutral-700 shadow-none transition-colors",
   "hover:bg-black/[0.05] hover:text-neutral-900",
   "data-[state=open]:bg-black/[0.05] data-[state=open]:text-neutral-900",
+  "data-[popup-open]:bg-black/[0.05] data-[popup-open]:text-neutral-900",
 );
 
 /* -------------------------------------------------------------------------- */
@@ -292,13 +291,11 @@ function AuthActions({
   onNavigate?: () => void;
 }) {
   const trpc = useTRPC();
-  // retry:false so signed-out visitors see "Sign in" immediately, not after 3 retries
   const { data: user, isPending } = useQuery(
     trpc.user.profile.queryOptions(undefined, { retry: false }),
   );
 
   if (isPending) {
-    // reserve the space so the navbar doesn't jump
     return (
       <div className={cn("h-9", full ? "w-full" : "w-[200px]")} aria-hidden />
     );
@@ -439,8 +436,8 @@ function MobileGroup({
 /* -------------------------------------------------------------------------- */
 
 export default function Navbar() {
+  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
-  const [menu, setMenu] = useState("");
   const [activeProduct, setActiveProduct] = useState(PRODUCT_ITEMS[0].id);
   const [activeSolution, setActiveSolution] = useState(SOLUTIONS[0].id);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -453,7 +450,6 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const closeMenu = () => setMenu("");
   const closeMobile = () => setMobileOpen(false);
 
   return (
@@ -479,21 +475,19 @@ export default function Navbar() {
           {/* Desktop menu */}
           <div className="hidden lg:block">
             <NavigationMenu
-              value={menu}
-              onValueChange={(value) => {
-                const v = (value as string | null) ?? "";
-                setMenu(v);
-                if (v === "Product") setActiveProduct(PRODUCT_ITEMS[0].id);
-                if (v === "Solutions") setActiveSolution(SOLUTIONS[0].id);
-              }}
+              key={pathname}
+              className="[&_[data-slot=navigation-menu-popup]]:!bg-transparent [&_[data-slot=navigation-menu-popup]]:!shadow-none [&_[data-slot=navigation-menu-popup]]:!border-none [&_[data-slot=navigation-menu-popup]]:!ring-0"
             >
               <NavigationMenuList className="gap-1">
                 {/* Product */}
-                <NavigationMenuItem value="Product">
+                <NavigationMenuItem
+                  value="Product"
+                  onMouseEnter={() => setActiveProduct(PRODUCT_ITEMS[0].id)}
+                >
                   <NavigationMenuTrigger className={triggerClass}>
                     Product
                   </NavigationMenuTrigger>
-                  <NavigationMenuContent>
+                  <NavigationMenuContent className="!bg-transparent !p-0">
                     <div className="w-[860px] overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[0_20px_50px_-20px_rgba(20,22,16,0.25)]">
                       <div className="grid grid-cols-[1fr_300px]">
                         <div className="grid grid-cols-2 gap-x-2 p-4">
@@ -510,7 +504,6 @@ export default function Navbar() {
                                       item={item}
                                       active={activeProduct === item.id}
                                       onHover={() => setActiveProduct(item.id)}
-                                      onNavigate={closeMenu}
                                     />
                                   ))}
                                 </div>
@@ -534,9 +527,8 @@ export default function Navbar() {
                           </span>
                           <ChannelLogos size={20} />
                         </div>
-                        <Link
-                          href={ROUTES.platform}
-                          onClick={closeMenu}
+                        <NavigationMenuLink
+                          render={<Link href={ROUTES.platform} />}
                           className="group inline-flex items-center gap-1.5 text-[13px] font-medium text-neutral-800 hover:text-[#12784a]"
                         >
                           See how it all fits together
@@ -544,18 +536,21 @@ export default function Navbar() {
                             size={14}
                             className="transition-transform group-hover:translate-x-0.5"
                           />
-                        </Link>
+                        </NavigationMenuLink>
                       </div>
                     </div>
                   </NavigationMenuContent>
                 </NavigationMenuItem>
 
                 {/* Solutions */}
-                <NavigationMenuItem value="Solutions">
+                <NavigationMenuItem
+                  value="Solutions"
+                  onMouseEnter={() => setActiveSolution(SOLUTIONS[0].id)}
+                >
                   <NavigationMenuTrigger className={triggerClass}>
                     Solutions
                   </NavigationMenuTrigger>
-                  <NavigationMenuContent>
+                  <NavigationMenuContent className="!bg-transparent !p-0">
                     <div className="grid w-[700px] grid-cols-[1fr_300px] overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[0_20px_50px_-20px_rgba(20,22,16,0.25)]">
                       <div className="p-4">
                         <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
@@ -565,9 +560,8 @@ export default function Navbar() {
                           <NavItem
                             key={item.id}
                             item={item}
-                            active={activeProduct === item.id}
-                            onHover={() => setActiveProduct(item.id)}
-                            onNavigate={closeMenu}
+                            active={activeSolution === item.id}
+                            onHover={() => setActiveSolution(item.id)}
                           />
                         ))}
                       </div>
@@ -578,11 +572,10 @@ export default function Navbar() {
                   </NavigationMenuContent>
                 </NavigationMenuItem>
 
-                {/* Direct link */}
+                {/* Direct links */}
                 <NavigationMenuItem>
                   <NavigationMenuLink
                     render={<Link href={ROUTES.pricing} />}
-                    onClick={closeMenu}
                     className="inline-flex h-9 items-center rounded-lg px-3 text-[14px] font-medium text-neutral-700 transition-colors hover:bg-black/[0.05] hover:text-neutral-900"
                   >
                     Pricing
@@ -590,8 +583,7 @@ export default function Navbar() {
                 </NavigationMenuItem>
                 <NavigationMenuItem>
                   <NavigationMenuLink
-                    render={<Link href={"/about"} />}
-                    onClick={closeMenu}
+                    render={<Link href="/about" />}
                     className="inline-flex h-9 items-center rounded-lg px-3 text-[14px] font-medium text-neutral-700 transition-colors hover:bg-black/[0.05] hover:text-neutral-900"
                   >
                     About
@@ -654,6 +646,14 @@ export default function Navbar() {
                   className="flex h-12 items-center justify-between border-b border-black/[0.07] px-2 text-[15px] font-semibold text-neutral-900"
                 >
                   Pricing
+                  <ChevronRight size={15} className="text-neutral-400" />
+                </Link>
+                <Link
+                  href="/about"
+                  onClick={closeMobile}
+                  className="flex h-12 items-center justify-between border-b border-black/[0.07] px-2 text-[15px] font-semibold text-neutral-900"
+                >
+                  About
                   <ChevronRight size={15} className="text-neutral-400" />
                 </Link>
               </div>

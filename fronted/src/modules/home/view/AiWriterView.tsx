@@ -1,3 +1,5 @@
+import { AnswerSection } from "../component/AnswerSection";
+import { ANSWER_PAGES } from "@/lib/seo/answers";
 import React from "react";
 import { HeroHeading } from "../component/TopHeader";
 import HeroSection from "../component/HeroSection";
@@ -11,7 +13,7 @@ function AiWriterView() {
   return (
     <div className="max-w-[1280px] px-5 sm:px-7 lg:px-8   mx-auto">
       <HeroSection
-        description="From your first thought to your next standout post. Write, refine, and create engaging content with AI for LinkedIn, X, and Threads — all from one intelligent workspace."
+        description={ANSWER_PAGES["/product/ai-writer"].summary}
         currentActive={2}
         header={
           <HeroHeading
@@ -26,6 +28,7 @@ function AiWriterView() {
       <AiWriterFeature />
       <PricingOverviewHome />
       <WriterShowcase />
+      <AnswerSection path="/product/ai-writer" />
       <FinalCta />
     </div>
   );

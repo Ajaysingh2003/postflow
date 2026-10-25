@@ -69,9 +69,13 @@ with tempfile.TemporaryFile() as log:
             elapsed = time.monotonic() - started
             assert response.status == 200
             assert b"AI-powered" in content
+            assert b'"@type":"Organization"' in content
+            assert b'"@type":"WebPage"' in content
+            assert b'"@type":"FAQPage"' in content
             assert elapsed < 2
         result = {
             "heroStreamedBeforeBilling": True,
+            "entityAndAnswerSchemaStreamedBeforeBilling": True,
             "mockBillingDelaySeconds": 4,
             "heroHtmlSeconds": round(elapsed, 3),
         }

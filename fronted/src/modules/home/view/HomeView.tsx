@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import React from "react";
 import { HeroHeading } from "../component/TopHeader";
 import HeroSection from "../component/HeroSection";
+import { ScrollReveal } from "../component/ScrollReveal";
 const FeatureSection = dynamic(() => import("../component/FeatureSection"));
 
 import PricingSection from "@/modules/billing/component/PricingSection";
@@ -28,12 +29,20 @@ function HomeView({ pricingSection }: { pricingSection?: React.ReactNode }) {
           }
         />
 
-        <ReviewSection />
+        <ReviewSection reveal />
         <FeatureSection />
-        <PricingOverviewHome />
-        <Intigration />
-        <McpSupport />
-        {pricingSection ?? <PricingSection />}
+        <ScrollReveal distance={28}>
+          <PricingOverviewHome />
+        </ScrollReveal>
+        <ScrollReveal distance={20}>
+          <Intigration />
+        </ScrollReveal>
+        <ScrollReveal distance={32}>
+          <McpSupport />
+        </ScrollReveal>
+        <ScrollReveal distance={20}>
+          {pricingSection ?? <PricingSection />}
+        </ScrollReveal>
         <FinalCta />
       </div>
     </div>

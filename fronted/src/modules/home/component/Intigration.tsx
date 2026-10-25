@@ -293,7 +293,7 @@ export default function Intigration({
           <div className="text-sm sm:text-base text-neutral-600 font-normal">
             “
             <span className="bg-[#dbeafe] text-neutral-900 rounded-[4px] px-1.5 py-0.5 font-medium">
-              I&apos;m a huge fan of Rowley!
+              I&apos;m a huge fan of Draftva!
             </span>{" "}
             Team did a great job.”{" "}
             <span className="text-stone-300 mx-1">—</span>{" "}

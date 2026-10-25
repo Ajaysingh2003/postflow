@@ -17,6 +17,7 @@ import {
   FeatureCardReview,
 } from "./FeatureCardFive";
 import { DraftvaHeadline } from "./FeatureHeading";
+import { ScrollReveal } from "./ScrollReveal";
 
 /* -------------------------------------------------------------------------- */
 /* Main Feature Section                                                       */
@@ -60,25 +61,45 @@ export default function FeatureSection() {
         {/* Bento Grid */}
         <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
-            <FeatureCardOne />
-            <FeatureCardFour />
-            <FeatureCardSixth />
+            <ScrollReveal delay={0}>
+              <FeatureCardOne />
+            </ScrollReveal>
+            <ScrollReveal delay={0}>
+              <FeatureCardFour />
+            </ScrollReveal>
+            <ScrollReveal delay={0}>
+              <FeatureCardSixth />
+            </ScrollReveal>
           </div>
 
           <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
-            <FeatureCardTwo />
-            <FeatureCardThree />
-            <FeatureCardTilt />
-            <FeatureCardNormal />
+            <ScrollReveal delay={0.1}>
+              <FeatureCardTwo />
+            </ScrollReveal>
+            <ScrollReveal delay={0.08}>
+              <FeatureCardThree />
+            </ScrollReveal>
+            <ScrollReveal delay={0.06}>
+              <FeatureCardTilt />
+            </ScrollReveal>
+            <ScrollReveal delay={0}>
+              <FeatureCardNormal />
+            </ScrollReveal>
           </div>
 
           <div className="lg:col-span-2 space-y-4">
             {/* <FeatureCardFive /> */}
 
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-              <FeatureCardEditor />
-              <FeatureCardReview />
-              <FeatureCardChannels />
+              <ScrollReveal delay={0}>
+                <FeatureCardEditor />
+              </ScrollReveal>
+              <ScrollReveal delay={0.07}>
+                <FeatureCardReview />
+              </ScrollReveal>
+              <ScrollReveal delay={0.14}>
+                <FeatureCardChannels />
+              </ScrollReveal>
             </div>
           </div>
         </div>

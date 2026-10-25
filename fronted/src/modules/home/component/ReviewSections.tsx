@@ -1,6 +1,7 @@
 // TODO: Verify testimonial attribution, statistics and consent before replacing placeholder portraits.
 import React from "react";
 import { ReviewCard } from "./ReviewCard";
+import { ScrollReveal } from "./ScrollReveal";
 
 const REVIEWS = [
   {
@@ -44,22 +45,35 @@ const REVIEWS = [
   },
 ];
 
-export default function ReviewSection() {
+export default function ReviewSection({
+  reveal = false,
+}: {
+  reveal?: boolean;
+}) {
   return (
     <section
       id="testimonials"
       className="mx-auto w-full max-w-6xl py-4  sm:py-6  lg:py-8"
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
-        {REVIEWS.map(({ id, photo, review, name, role }) => (
-          <ReviewCard
-            key={id}
-            photo={photo}
-            review={review}
-            name={name}
-            role={role}
-          />
-        ))}
+        {REVIEWS.map(({ id, photo, review, name, role }, index) => {
+          const card = (
+            <ReviewCard
+              key={id}
+              photo={photo}
+              review={review}
+              name={name}
+              role={role}
+            />
+          );
+          return reveal ? (
+            <ScrollReveal key={id} delay={index * 0.1} distance={18}>
+              {card}
+            </ScrollReveal>
+          ) : (
+            card
+          );
+        })}
       </div>
     </section>
   );

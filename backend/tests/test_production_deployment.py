@@ -54,7 +54,6 @@ def production_settings(**overrides):
         "r2_secret_access_key": "fixture-secret",
         "r2_bucket_name": "fixture-bucket",
         "r2_public_url": "https://media.draftva.com",
-        "clamav_host": "clamav",
     }
     return Settings(_env_file=None, **{**values, **overrides})
 
@@ -279,6 +278,10 @@ def test_real_compose_merge_exposes_only_nginx_and_uses_production_env(tmp_path)
     config = json.loads(result.stdout)
     assert config["name"] == "draftva-prod"
     services = config["services"]
+    assert set(services) == {"api", "migrate", "worker", "scheduler", "postgres", "redis", "nginx"}
+    assert set(config["volumes"]) == {
+        "postgres_data", "redis_data", "tls_certificates", "acme_challenges"
+    }
     for name, service in services.items():
         if name != "nginx":
             assert not service.get("ports"), name

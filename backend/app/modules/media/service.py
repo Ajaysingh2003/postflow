@@ -1,7 +1,5 @@
 import io
 import os
-import socket
-import struct
 import zipfile
 from functools import lru_cache
 from urllib.parse import urlsplit
@@ -162,28 +160,6 @@ def client(settings: Settings):
             "File storage credentials are invalid. Ask your workspace administrator to check the R2 Access Key ID",
         )
     return r2_client(endpoint, settings.r2_access_key_id, settings.r2_secret_access_key)
-
-
-def scan_clamav(settings: Settings, data: bytes) -> None:
-    if not settings.clamav_host:
-        raise HTTPException(status_code=503, detail="Malware scanner is not configured")
-    try:
-        with socket.create_connection(
-            (settings.clamav_host, settings.clamav_port),
-            timeout=60 if len(data) > settings.media_max_bytes else 15,
-        ) as sock:
-            sock.sendall(b"zINSTREAM\0")
-            for offset in range(0, len(data), 1024 * 1024):
-                chunk = data[offset : offset + 1024 * 1024]
-                sock.sendall(struct.pack(">I", len(chunk)) + chunk)
-            sock.sendall(struct.pack(">I", 0))
-            result = sock.recv(4096).decode("utf-8", errors="replace")
-    except OSError as exc:
-        raise HTTPException(status_code=503, detail="Malware scanner is unavailable") from exc
-    if "FOUND" in result:
-        raise HTTPException(status_code=422, detail="Upload was rejected by malware scanning")
-    if "OK" not in result:
-        raise HTTPException(status_code=502, detail="Malware scan did not complete")
 
 
 def dimensions(data: bytes, content_type: str) -> tuple[int | None, int | None]:

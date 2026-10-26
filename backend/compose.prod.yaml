@@ -97,15 +97,6 @@ services:
         reservations:
           memory: 64M
 
-  clamav:
-    logging: *production_logging
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 512M
-
   nginx:
     image: nginx:1.28-alpine
     restart: unless-stopped

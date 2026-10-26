@@ -62,7 +62,7 @@ export function formatSize(size: number) {
 export async function uploadAsset(
   file: File,
   purpose: "assistant" | "post",
-  onStage?: (stage: "uploading" | "scanning") => void,
+  onStage?: (stage: "uploading" | "verifying") => void,
   signal?: AbortSignal,
 ): Promise<SourceAsset> {
   if (purpose === "assistant") validateSource(file);
@@ -71,6 +71,7 @@ export async function uploadAsset(
     ...(signal ? [signal] : []),
     AbortSignal.timeout(180_000),
   ]);
+  let requestStage: "starting" | "storage" | "verification" = "starting";
   async function metadata(path: string, body: object) {
     const response = await fetch(path, {
       method: "POST",
@@ -100,6 +101,7 @@ export async function uploadAsset(
     if (!ticket.asset_id || !ticket.upload_url || ticket.method !== "PUT")
       throw new Error("Could not start this upload. Please retry.");
     // Only metadata reaches Next.js. File bytes go straight to private R2 quarantine.
+    requestStage = "storage";
     const uploaded = await fetch(ticket.upload_url, {
       method: "PUT",
       headers: ticket.headers,
@@ -111,7 +113,8 @@ export async function uploadAsset(
     });
     if (!uploaded.ok)
       throw new Error("Could not upload to file storage. Please retry or contact support.");
-    onStage?.("scanning");
+    requestStage = "verification";
+    onStage?.("verifying");
     const data = await metadata(
       `/api/media/uploads/${encodeURIComponent(ticket.asset_id)}/complete`,
       {},
@@ -127,8 +130,14 @@ export async function uploadAsset(
   } catch (error) {
     if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
     if (requestSignal.aborted) throw new Error("Upload timed out. Please retry.");
-    if (error instanceof TypeError)
-      throw new Error("File storage could not be reached. Check your connection and retry.");
+    if (error instanceof TypeError) {
+      const messages = {
+        starting: "The upload service could not be reached. Check your connection and retry.",
+        storage: "File storage could not be reached. Check your connection and retry.",
+        verification: "The file was uploaded, but verification could not be reached. Please retry.",
+      };
+      throw new Error(messages[requestStage]);
+    }
     throw error;
   }
 }

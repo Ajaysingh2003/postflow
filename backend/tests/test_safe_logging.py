@@ -20,6 +20,10 @@ from app.core.logging import configure_safe_logging, redact_credentials
         ("Authorization: Bearer test_bearer_secret", ["test_bearer_secret"]),
         ("Authorization: Basic test_basic_secret", ["test_basic_secret"]),
         ("client_secret=test_client_secret&grant_type=refresh_token", ["test_client_secret"]),
+        (
+            "https://api.example/callback?code=test_oauth_code&state=test_oauth_state",
+            ["test_oauth_code", "test_oauth_state"],
+        ),
     ],
 )
 def test_credentials_are_removed_without_hiding_request_context(message, secrets):
@@ -27,6 +31,11 @@ def test_credentials_are_removed_without_hiding_request_context(message, secrets
     for secret in secrets:
         assert secret not in safe
     assert "[REDACTED]" in safe
+
+
+def test_oauth_query_redaction_preserves_numeric_provider_diagnostics():
+    message = "Threads OAuth rejected http_status=400 code=190 subcode=42"
+    assert redact_credentials(message) == message
 
 
 @pytest.mark.anyio

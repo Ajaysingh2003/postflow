@@ -15,6 +15,7 @@ from app.core.dependencies import (
     membership_for,
     require_roles,
 )
+from app.core.logging import redact_credentials
 from app.core.security import token_hash, utcnow
 from app.db.session import get_db
 from app.modules.channels.base import Capabilities
@@ -328,7 +329,19 @@ async def handle_callback_get(
         return account_resp
     except Exception as exc:
         if is_browser:
-            err_detail = getattr(exc, "detail", str(exc))
+            # HTTP client exceptions include full URLs with tokens/app secrets.
+            # Known HTTP errors carry our actionable messages; unknown errors never
+            # belong in a browser redirect (and therefore browser history/analytics).
+            err_detail = (
+                redact_credentials(str(exc.detail))
+                if isinstance(exc, HTTPException)
+                else "Connection wasn't completed. Please start a new connection."
+            )
+            logger.warning(
+                "Channel OAuth callback failed platform=%s exception_type=%s",
+                platform,
+                type(exc).__name__,
+            )
             if return_to.startswith("/onboarding"):
                 err_detail = "Connection wasn't completed. You can try again or connect later."
             encoded_err = urllib.parse.quote(str(err_detail))

@@ -7,16 +7,19 @@ async function withStorage(check, overrides = {}) {
   globalThis.fetch = async (url, options) => {
     calls.push({ url, options });
     if (options.signal?.aborted) throw options.signal.reason;
-    if (url === "/api/media/uploads")
+    if (url === "/api/media/uploads") {
+      if (overrides.start) return overrides.start(options);
       return Response.json(overrides.ticket ?? {
         asset_id: "asset", method: "PUT", upload_url: "https://r2.example.invalid/signed",
         headers: { "Content-Type": "image/png", "x-amz-meta-purpose": "post" },
       }, { status: overrides.ticketStatus ?? 201 });
+    }
     if (url === "https://r2.example.invalid/signed") {
       if (overrides.put) return overrides.put(options);
       return new Response(null, { status: overrides.putStatus ?? 200 });
     }
     expect(url).toBe("/api/media/uploads/asset/complete");
+    if (overrides.complete) return overrides.complete(options);
     return Response.json(overrides.ready ?? {
       id: "asset", status: "ready", original_filename: "photo.png", content_type: "image/png", actual_size: 5,
     }, { status: overrides.readyStatus ?? 200 });
@@ -34,7 +37,7 @@ describe("shared editor direct uploads", () => {
     expect(() => validatePostAsset(file, ["image/jpeg"])).toThrow("supported by this channel");
     expect(() => validatePostAsset(new File([], "empty.png"), ["image/png"])).toThrow("empty");
   });
-  test("only metadata reaches Next.js, raw file bytes go to R2, then scanning must complete", async () => {
+  test("only metadata reaches Next.js, raw file bytes go to R2, then verification must complete", async () => {
     await withStorage(async (calls) => {
       const stages = [];
       const file = photo();
@@ -45,7 +48,7 @@ describe("shared editor direct uploads", () => {
       expect(calls[1].options.credentials).toBe("omit");
       expect(calls[1].options.headers).toEqual({ "Content-Type": "image/png", "x-amz-meta-purpose": "post" });
       expect(calls[2].options.body).toBe("{}");
-      expect(stages).toEqual(["uploading", "scanning"]);
+      expect(stages).toEqual(["uploading", "verifying"]);
     });
   });
   test("files above Vercel's limit never enter a function request body", async () => {
@@ -69,10 +72,10 @@ describe("shared editor direct uploads", () => {
   test("unverified or rejected completion never yields an attachment", async () => {
     await withStorage(async () => {
       await expect(uploadAsset(photo(), "post")).rejects.toThrow("verified");
-    }, { ready: { status: "scanning" } });
+    }, { ready: { status: "uploading" } });
     await withStorage(async () => {
-      await expect(uploadAsset(photo(), "post")).rejects.toThrow("Malware scanner is unavailable");
-    }, { readyStatus: 503, ready: { detail: "Malware scanner is unavailable" } });
+      await expect(uploadAsset(photo(), "post")).rejects.toThrow("Storage temporarily unavailable");
+    }, { readyStatus: 503, ready: { detail: "Storage temporarily unavailable" } });
   });
   test("quota denial stops before uploading, and failed PUT never starts completion", async () => {
     await withStorage(async (calls) => {
@@ -95,5 +98,22 @@ describe("shared editor direct uploads", () => {
       await expect(uploadAsset(photo(), "post")).rejects.toThrow("could not be reached");
       expect(calls).toHaveLength(2);
     }, { put: () => { throw new TypeError("Failed to fetch"); } });
+  });
+  test.each([
+    ["start", "The upload service could not be reached", 1],
+    ["put", "File storage could not be reached", 2],
+    ["complete", "verification could not be reached", 3],
+  ])("Safari Load failed identifies the %s step without exposing signed URLs", async (step, message, count) => {
+    await withStorage(async (calls) => {
+      await expect(uploadAsset(photo(), "post")).rejects.toThrow(message);
+      expect(calls).toHaveLength(count);
+    }, { [step]: () => { throw new TypeError("Load failed"); } });
+  });
+  test("storage cancellation during transfer remains cancellation instead of a network error", async () => {
+    const controller = new AbortController();
+    await withStorage(async (calls) => {
+      await expect(uploadAsset(photo(), "post", undefined, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+      expect(calls).toHaveLength(2);
+    }, { put: () => { controller.abort(); throw new TypeError("Load failed"); } });
   });
 });

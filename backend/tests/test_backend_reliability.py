@@ -761,7 +761,6 @@ def test_uploaded_dimensions_alt_text_and_media_tenant_boundaries(client, owners
         "app.modules.media.service.client",
         lambda *_: SimpleNamespace(put_object=lambda **kwargs: {"ETag": "etag"}),
     )
-    monkeypatch.setattr("app.modules.media.service.scan_clamav", lambda *args: None)
     response = client.post(
         "/api/v1/media/attachments",
         headers=owners[0]["headers"],

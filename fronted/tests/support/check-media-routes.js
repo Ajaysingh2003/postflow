@@ -40,7 +40,7 @@ signedIn = false;
 assert.equal((await post("uploads")).status, 401);
 assert.equal(calls.length, before);
 signedIn = true;
-result = { detail: "Malware scanner is unavailable" }; status = 503;
+result = { detail: "Storage temporarily unavailable" }; status = 503;
 response = await post("uploads/asset/complete");
 assert.equal(response.status, 503);
 assert.equal((await response.json()).detail, result.detail);

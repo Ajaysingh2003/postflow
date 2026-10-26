@@ -10,8 +10,6 @@ from urllib.parse import urlencode, urlsplit
 import httpx
 from fastapi import HTTPException
 
-logger = logging.getLogger(__name__)
-
 from app.core.config import get_settings
 from app.modules.channels.adapters.management import ThreadsManagement
 from app.modules.channels.adapters.media import remote_urls, save_state
@@ -29,6 +27,7 @@ from app.modules.channels.oauth import decrypt_token, encrypt_token
 from app.modules.channels.support import AdapterHTTP
 
 API = "https://graph.threads.net"
+logger = logging.getLogger(__name__)
 
 
 class ThreadsAdapter(ThreadsManagement):
@@ -58,6 +57,75 @@ class ThreadsAdapter(ThreadsManagement):
 
     async def _get_client(self):
         return self._http_client or AdapterHTTP(self.platform)
+
+    @staticmethod
+    def _oauth_response(response: httpx.Response, operation: str) -> dict[str, Any]:
+        """Expose only numeric provider diagnostics, never token URLs or response text."""
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
+        if response.status_code != 200 or (isinstance(data, dict) and "error" in data):
+            error = data.get("error") if isinstance(data, dict) else None
+            error = error if isinstance(error, dict) else {}
+            code = error.get("code")
+            subcode = error.get("error_subcode")
+            code = code if type(code) is int else None
+            subcode = subcode if type(subcode) is int else None
+            logger.warning(
+                "Threads OAuth rejected operation=%s http_status=%s code=%s subcode=%s",
+                operation,
+                response.status_code,
+                code,
+                subcode,
+            )
+            diagnostics = f"HTTP {response.status_code}"
+            if code is not None:
+                diagnostics += f", code {code}"
+            if subcode is not None:
+                diagnostics += f", subcode {subcode}"
+            if response.status_code == 429:
+                status, hint = 429, "Threads is rate limiting requests. Please try again later."
+            elif response.status_code >= 500:
+                status, hint = 503, "Threads is temporarily unavailable. Please try again later."
+            elif code == 190:
+                status, hint = 400, "Threads rejected the token. Please start a new connection."
+            else:
+                status, hint = 400, (
+                    "Check that THREADS_APP_ID and THREADS_APP_SECRET are the matching Threads "
+                    "app credentials in Meta, then start a new connection."
+                )
+            raise HTTPException(
+                status, f"Threads {operation} failed ({diagnostics}). {hint}"
+            )
+        if not isinstance(data, dict):
+            raise HTTPException(502, f"Threads {operation} returned an invalid response")
+        return data
+
+    @classmethod
+    def _token_response(cls, response: httpx.Response, operation: str) -> dict[str, Any]:
+        data = cls._oauth_response(response, operation)
+        token = data.get("access_token")
+        if not isinstance(token, str) or not token.strip():
+            raise HTTPException(502, f"Threads {operation} returned an invalid token response")
+        return data
+
+    @staticmethod
+    def _token_lifetime(data: dict[str, Any]) -> int:
+        lifetime = data.get("expires_in")
+        if isinstance(lifetime, str) and lifetime.isascii() and lifetime.isdecimal():
+            try:
+                lifetime = int(lifetime)
+            except ValueError:
+                lifetime = None
+        # Reject bools, floats and lifetimes that cannot be represented as an expiry.
+        if type(lifetime) is not int or lifetime <= 0:
+            raise HTTPException(502, "Threads returned an invalid token expiry")
+        try:
+            datetime.now(UTC) + timedelta(seconds=lifetime)
+        except OverflowError:
+            raise HTTPException(502, "Threads returned an invalid token expiry") from None
+        return lifetime
 
     def _oauth_redirect_uri(self, opts: dict) -> str:
         uri = opts.get("redirect_uri") or self.redirect_base_url
@@ -118,6 +186,7 @@ class ThreadsAdapter(ThreadsManagement):
         # It must also be used for exchange if configuration changes mid-login.
         redirect_uri = self._oauth_redirect_uri(opts)
         client = await self._get_client()
+        operation = "authorization code exchange"
         try:
             response = await client.post(
                 API + "/oauth/access_token",
@@ -129,8 +198,8 @@ class ThreadsAdapter(ThreadsManagement):
                     "code": params["code"],
                 },
             )
-            response.raise_for_status()
-            short = response.json()
+            short = self._token_response(response, operation)
+            operation = "long-lived token exchange"
             response = await client.get(
                 API + "/access_token",
                 params={
@@ -139,8 +208,9 @@ class ThreadsAdapter(ThreadsManagement):
                     "access_token": short["access_token"],
                 },
             )
-            response.raise_for_status()
-            tokens = response.json()
+            tokens = self._token_response(response, operation)
+            lifetime = self._token_lifetime(tokens)
+            operation = "profile lookup"
             response = await client.get(
                 API + "/v1.0/me",
                 params={
@@ -148,18 +218,20 @@ class ThreadsAdapter(ThreadsManagement):
                     "access_token": tokens["access_token"],
                 },
             )
-            response.raise_for_status()
-            profile = response.json()
+            profile = self._oauth_response(response, operation)
+            profile_id = profile.get("id")
+            if type(profile_id) not in (str, int) or not str(profile_id).strip():
+                raise HTTPException(502, "Threads returned an invalid account profile")
             threads_pic = profile.get("threads_profile_picture_url")
             return ConnectedAccount(
                 workspace_id=workspace_id,
                 platform="threads",
-                external_account_id=str(profile["id"]),
-                display_name=profile.get("username", profile["id"]),
+                external_account_id=str(profile_id),
+                display_name=profile.get("username") or str(profile_id),
                 account_type="profile",
                 encrypted_access_token=encrypt_token(tokens["access_token"]),
                 token_expires_at=datetime.now(UTC)
-                + timedelta(seconds=tokens.get("expires_in", 5184000)),
+                + timedelta(seconds=lifetime),
                 granted_scopes=opts.get("oauth_metadata", {}).get(
                     "requested_scopes",
                     [
@@ -175,6 +247,11 @@ class ThreadsAdapter(ThreadsManagement):
                     "avatar_url": threads_pic,
                 },
             )
+        except httpx.RequestError:
+            logger.warning("Threads OAuth network failure operation=%s", operation)
+            raise HTTPException(
+                503, f"Threads {operation} could not reach Meta. Please start a new connection."
+            ) from None
         finally:
             if self._http_client is None:
                 await client.aclose()
@@ -189,12 +266,10 @@ class ThreadsAdapter(ThreadsManagement):
                     "access_token": decrypt_token(account.encrypted_access_token),
                 },
             )
-            response.raise_for_status()
-            tokens = response.json()
+            tokens = self._token_response(response, "token refresh")
+            lifetime = self._token_lifetime(tokens)
             account.encrypted_access_token = encrypt_token(tokens["access_token"])
-            account.token_expires_at = datetime.now(UTC) + timedelta(
-                seconds=tokens.get("expires_in", 5184000)
-            )
+            account.token_expires_at = datetime.now(UTC) + timedelta(seconds=lifetime)
             return account
         finally:
             if self._http_client is None:

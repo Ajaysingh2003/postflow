@@ -24,7 +24,7 @@ Run the publishing worker and maintenance scheduler in separate terminals:
 .venv/bin/python -c "from app.jobs.runner import run; run('scheduler')"
 ```
 
-Redis is required in production. Mock AI output is explicitly opt-in and prohibited in production. Real AI requires `LLM_PROVIDER_URL`, `LLM_PROVIDER_API_KEY` and `LLM_MODEL`. Uploads require R2/S3 and ClamAV. Verification, password-reset and invitation emails require Resend with a verified sender or SMTP with verified STARTTLS.
+Redis is required in production. Mock AI output is explicitly opt-in and prohibited in production. Real AI requires `LLM_PROVIDER_URL`, `LLM_PROVIDER_API_KEY` and `LLM_MODEL`. Uploads require R2/S3 and validate file contents, size, image dimensions and storage quotas before becoming ready. Verification, password-reset and invitation emails require Resend with a verified sender or SMTP with verified STARTTLS.
 
 Billing reconciliation uses durable keyset progress, a shared scheduler lease and
 per-subscription retries. See [billing recovery operations](docs/billing-reconciliation.md)

@@ -43,8 +43,6 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      clamav:
-        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
       interval: 15s
@@ -134,17 +132,9 @@ services:
         aliases:
           - redis
 
-  clamav:
-    image: clamav/clamav-debian:1.5.4
-    restart: unless-stopped
-    volumes:
-      - clamav_data:/var/lib/clamav
-    security_opt: *security_options
-
 volumes:
   postgres_data:
   redis_data:
-  clamav_data:
 
 networks:
   default:

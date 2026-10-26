@@ -21,7 +21,6 @@ def test_uploaded_attachments_survive_repeated_save_reorder_and_removal(
         "app.modules.media.service.client",
         lambda *_: SimpleNamespace(put_object=lambda **kwargs: {"ETag": "etag"}),
     )
-    monkeypatch.setattr("app.modules.media.service.scan_clamav", lambda *args: None)
     ids = []
     for i in range(2):
         response = client.post(

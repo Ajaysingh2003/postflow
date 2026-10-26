@@ -191,7 +191,6 @@ def audit(settings: Settings, deployment: Mapping[str, str | None]) -> list[Find
         "r2_secret_access_key",
         "r2_bucket_name",
         "r2_public_url",
-        "clamav_host",
     ):
         configured(field)
     for field in ("llm_provider_url", "r2_public_url"):

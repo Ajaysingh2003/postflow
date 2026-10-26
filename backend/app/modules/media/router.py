@@ -63,7 +63,7 @@ def upload_attachment(
     workspace: Workspace = Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ):
-    """Same-origin uploads avoid bucket CORS. No file is usable before scanning."""
+    """Validate file contents and size before making an upload usable."""
     settings = get_settings()
     if purpose not in {"post", "assistant"}:
         raise HTTPException(422, "Invalid upload purpose")
@@ -93,12 +93,6 @@ def upload_attachment(
         )
         db.add(asset)
         db.commit()
-        try:
-            service.scan_clamav(settings, data)
-        except Exception:
-            asset.status = "scan_failed"
-            db.commit()
-            raise
         lock_workspace(db, workspace.id)
         asset = _asset(db, workspace.id, asset.id)
         try:
@@ -234,10 +228,9 @@ def complete_upload(
             raise HTTPException(422, "Uploaded file is incomplete. Start a new upload")
         service.validate_contents(data, asset.content_type)
         asset.width, asset.height = service.dimensions(data, asset.content_type)
-        service.scan_clamav(settings, data)
         final_key = asset.object_key.replace("quarantine/", "media/", 1)
-        # A signed PUT can be replayed until expiry. Promote precisely the bytes scanned,
-        # rather than copying a quarantine object that could have changed during scanning.
+        # A signed PUT can be replayed until expiry. Promote precisely the bytes validated,
+        # rather than copying a quarantine object that could have changed during validation.
         stored = s3.put_object(
             Bucket=settings.r2_bucket_name,
             Key=final_key,
@@ -251,7 +244,7 @@ def complete_upload(
         asset.status = "ready"
         asset.rejection_reason = None
     except HTTPException as exc:
-        asset.status = "rejected" if exc.status_code == 422 else "scan_failed"
+        asset.status = "rejected" if exc.status_code == 422 else "upload_failed"
         asset.rejection_reason = str(exc.detail)
         db.commit()
         raise

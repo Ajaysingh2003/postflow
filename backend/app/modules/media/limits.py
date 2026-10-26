@@ -13,6 +13,7 @@ from app.modules.media import service
 from app.modules.media.models import MediaAsset
 
 logger = logging.getLogger(__name__)
+# Include the legacy failure value only so old reservations can still be cleaned up.
 PENDING = ("awaiting_upload", "uploading", "rejected", "scan_failed", "upload_failed")
 
 

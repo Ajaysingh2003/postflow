@@ -165,8 +165,6 @@ class Settings(BaseSettings):
     media_workspace_quota_bytes: int = Field(default=1073741824, ge=1048576)
     media_pending_ttl_hours: int = Field(default=24, ge=1, le=168)
     media_cleanup_batch_size: int = Field(default=100, ge=1, le=1000)
-    clamav_host: str | None = "clamav"
-    clamav_port: int = 3310
     rate_limit_enabled: bool = True
     billing_grace_days: int = 3
 

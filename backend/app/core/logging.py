@@ -10,10 +10,14 @@ _CREDENTIAL = re.compile(
     r"(?:\"[^\"]*\"|'[^']*'|[^\s&\"',;})]+)"
 )
 _AUTHORIZATION = re.compile(r"(?i)\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+")
+_OAUTH_QUERY = re.compile(r"(?i)([?&](?:code|state)=)[^\s&\"'<>]+")
 
 
 def redact_credentials(message: str) -> str:
     message = _AUTHORIZATION.sub(r"\1 [REDACTED]", message)
+    # OAuth callback codes/state are secrets too. Match query parameters only so
+    # numeric provider diagnostics such as "code=190" remain useful in logs.
+    message = _OAUTH_QUERY.sub(r"\1[REDACTED]", message)
     return _CREDENTIAL.sub(r"\1[REDACTED]", message)
 
 

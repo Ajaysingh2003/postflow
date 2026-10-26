@@ -101,7 +101,7 @@ keep their files but cannot upload more until they free space or the limit incre
 Both direct-upload tickets and `/media/attachments` reserve declared bytes under
 the same workspace database lock. Ready files use actual bytes; unfinished/failed
 uploads retain their reservation until deleted. Completion verifies actual size,
-type and malware scan; signing binds the declared Content-Length. Completion and
+type and image dimensions; signing binds the declared Content-Length. Completion and
 cleanup serialize on the workspace. An expired ticket cannot be completed.
 The attachment endpoint is limited to ten requests/minute; upload-ticket routes
 remain thirty/minute. These inbound limits supplement storage quotas and auth.

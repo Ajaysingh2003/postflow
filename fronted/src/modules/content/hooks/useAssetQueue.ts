@@ -8,7 +8,7 @@ export type QueuedAsset = {
   scope: string;
   file: File;
   asset?: SourceAsset;
-  stage: "uploading" | "scanning" | "ready" | "failed";
+  stage: "uploading" | "verifying" | "ready" | "failed";
   error?: string;
 };
 
@@ -25,7 +25,7 @@ export function useAssetQueue(scope: string) {
   }, [scope]);
   const queue = items.filter((item) => item.scope === scope);
   const busy = queue.some(
-    (item) => item.stage === "uploading" || item.stage === "scanning",
+    (item) => item.stage === "uploading" || item.stage === "verifying",
   );
   async function upload(item: QueuedAsset) {
     const controller = new AbortController();

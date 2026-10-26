@@ -10,7 +10,7 @@ No production database is reset. Keep existing databases, encryption keys and ba
 
 ## Architecture and prerequisites
 
-Only Nginx publishes host ports 80 and 443. The API, PostgreSQL, Redis and ClamAV
+Only Nginx publishes host ports 80 and 443. The API, PostgreSQL and Redis
 have no published host ports. Worker and scheduler use the same built application
 image without development source mounts. Nginx uses a separate Docker network and
 a reserved IP, and Uvicorn trusts forwarded headers only from that exact IP.
@@ -20,9 +20,9 @@ headers are forwarded unchanged.
 
 Use an Ubuntu 24.04 or 26.04 LTS VM with Docker Engine and Compose **2.24.4 or newer**.
 Follow the [official Docker Ubuntu installation guide](https://docs.docker.com/engine/install/ubuntu/).
-This stack includes ClamAV and PostgreSQL; allow at least **8 GiB RAM**, persistent
-SSD storage and room for image layers, database growth, scans and backups. Choose
-actual VM sizing after measuring your workload. No cloud resources have been purchased.
+Use persistent SSD storage and allow room for image layers, PostgreSQL growth and
+backups. Choose actual VM sizing after measuring your workload.
+No cloud resources have been purchased.
 
 Reserve a static public IP (Elastic IP on AWS or a static external IP on GCP).
 Create the DNS A record `api.draftva.com` pointing to it. Add an AAAA record only
@@ -100,7 +100,9 @@ header; the backend validates the signed relay. Do not trust user-supplied IP he
 Configure R2 CORS for `https://draftva.com` before testing uploads; see
 [direct uploads](direct-r2-uploads.md). R2 direct uploads bypass Nginx. The legacy
 attachment endpoint alone accepts up to 110 MiB at the proxy; the backend still
-validates the actual 20 MiB image / 100 MiB video limits and scans files.
+validates the actual 20 MiB image / 100 MiB video limits and file contents.
+See [upload verification and deployment](direct-r2-uploads.md#upload-verification-and-deployment)
+for the upload flow and removal of old scanner containers.
 
 ## 2. Build and run the offline preflight
 
@@ -137,8 +139,7 @@ sh scripts/compose-prod.sh ps
 
 Migrations run before the API, worker and scheduler. The API health check uses
 `/ready`, which checks PostgreSQL and Redis, while `/health` is only liveness.
-ClamAV's first signature download can take several minutes; wait for its daemon
-before testing uploads. Inspect logs if a dependency is not ready.
+Uploads have no external scanner dependency. Inspect logs if a dependency is not ready.
 
 Once DNS points at this VM and port 80 is reachable, obtain the certificate:
 
@@ -258,7 +259,7 @@ Before opening paid signups, perform these checks from the deployed frontend:
 
 - Register, receive OTP, verify, sign in, reset a password and confirm old sessions end.
 - Connect each enabled social channel and publish/schedule one controlled post with media.
-- Upload an image and a video through R2, wait for scanning, and confirm previews/publishing.
+- Upload an image and a video through R2, wait for verification, and confirm previews/publishing.
 - Complete a real checkout with the intended live product, verify webhook activation,
   included AI credits, billing portal, cancellation and renewal behavior. A live checkout
   charges money; complete this explicitly as the operator, not as an automated health probe.
@@ -266,7 +267,7 @@ Before opening paid signups, perform these checks from the deployed frontend:
 - Generate AI content and confirm durable credit deduction and monthly reset behavior.
 - Verify MCP authorization and streaming if you advertise that integration.
 - Test restore, off-VM backup scheduling and alerts; monitor `/ready`, failed jobs,
-  queue age, billing reconciliation, Redis memory, disk space, ClamAV and TLS expiry.
+  queue age, billing reconciliation, Redis memory, disk space and TLS expiry.
 
 Do not treat unit tests, a present API key or an HTTP 200 health page as proof that
 provider approvals, real payments, emails and scheduled posts work in production.

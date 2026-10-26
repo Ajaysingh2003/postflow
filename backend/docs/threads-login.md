@@ -1,5 +1,63 @@
 # Threads HTTPS login
 
+## Production token-exchange troubleshooting
+
+Use these environment variable names in the backend's private `.env`:
+
+```dotenv
+THREADS_APP_ID=<Threads App ID>
+THREADS_APP_SECRET=<Threads App Secret from the same app>
+THREADS_REDIRECT_URI=https://api.draftva.com/api/v1/channels/threads/callback
+```
+
+Register that exact production callback in the app's Threads settings. Threads has
+its own credential pair; do not substitute the Facebook/Instagram app secret.
+Rebuild and recreate the running API/worker services after deploying these changes
+and updating `.env`, using the same Compose project that runs the existing API and
+database. A container restart alone does not reload Compose environment values.
+
+An HTTP 400 at `GET /access_token` with `grant_type=th_exchange_token` means the
+authorization-code exchange has already succeeded, but Meta rejected the exchange
+of the short-lived token for a long-lived token. This is a provider response, not a
+frontend CORS or HTTPS reachability failure. The HTTP status alone does not identify
+the underlying reason. Do not bypass the failed exchange by saving the short-lived
+token or replaying the consumed authorization code.
+
+The adapter now returns only the operation, HTTP status, numeric Meta error code
+and numeric error subcode. It never returns the raw provider body or credential-bearing
+URL. Backend warnings use the same safe diagnostics, for example:
+
+```text
+Threads OAuth rejected operation=long-lived token exchange http_status=400 code=190 subcode=None
+```
+
+The example code is illustrative, not the code from the reported production failure.
+Code 190 is treated as a rejected token; retry authorization with a fresh connection.
+For other client errors, verify the matching Threads credentials and app access in
+Meta. Rate limits and provider outages return separate retry messages. Successful
+responses must contain a token and valid expiry; a failed refresh does not overwrite
+the stored token. Invalid profiles are also rejected before saving an account.
+
+Unexpected adapter exceptions no longer appear in browser redirect URLs, and HTTP
+logging redacts OAuth callback `code` and `state` query values as well as token and
+secret parameters. If an older error already exposed a secret or token, rotate the
+app secret in Meta, revoke the exposed token, update the server environment, and start
+a fresh connection. Do not paste a token-exchange URL into a browser or support chat.
+
+Run the regression tests without production credentials:
+
+```sh
+cd backend
+.venv/bin/ruff check .
+.venv/bin/python -m pytest
+```
+
+The token request contract follows [Meta's official Threads API collection](https://www.postman.com/meta/threads/documentation/dht3nzz/threads-api).
+Tests use mocked HTTP; a real connection after deployment is still required to
+confirm which error Meta returns for the production app.
+
+## Original local HTTPS callback setup
+
 Threads OAuth requires an HTTPS callback with a non-localhost hostname, including in development. The prior shared local callback (`http://localhost:18000/api/v1/channels/threads/callback`) caused Meta error 1349187, “Insecure login blocked.” Facebook and Instagram already used separate public HTTPS callbacks; Threads had no equivalent override.
 
 Set `THREADS_REDIRECT_URI` in `backend/.env` to the exact URI registered in the Threads API's Valid OAuth Redirect URIs. The existing local HTTPS tunnel was verified against `/health` and is configured as:

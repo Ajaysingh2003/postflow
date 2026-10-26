@@ -104,7 +104,7 @@ export function PendingAssetCards({
                   ? "Ready to send"
                   : item.stage === "uploading"
                     ? "Uploading…"
-                    : item.stage === "scanning"
+                    : item.stage === "verifying"
                       ? "Checking file…"
                       : "Upload failed"}{" "}
                 · {formatSize(item.file.size)}
